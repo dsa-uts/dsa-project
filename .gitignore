@@ -6,3 +6,4 @@ resource/*
 !resource/schema.json
 logs/*
 nginx/log/*
+backup/*
