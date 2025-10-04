@@ -1,0 +1,20 @@
+# ビルドステージを watchdog-builder から参照
+FROM watchdog-builder AS builder
+
+# 実行ステージ
+FROM ubuntu:24.10
+
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends gcc make libc6-dev && \
+    rm -rf /var/lib/apt/lists/*
+
+# ゲストユーザー(1002:1002)を作成
+RUN groupadd -g 1002 guest && \
+    useradd -m -s /bin/bash -u 1002 -g 1002 guest
+
+# builderステージからwatchdogをコピー
+COPY --from=builder /tmp/watchdog /home/watchdog
+RUN chown root:root /home/watchdog && \
+    chmod 700 /home/watchdog
+
+WORKDIR /home/guest

@@ -1,8 +1,4 @@
-.*
 !.gitignore
 !.gitmodules
-upload
-resource/*
-!resource/schema.json
 logs/*
 nginx/log/*

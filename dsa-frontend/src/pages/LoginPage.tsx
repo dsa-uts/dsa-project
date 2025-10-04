@@ -1,182 +1,137 @@
-import React, { useState, useEffect } from 'react';
-import styled, { createGlobalStyle } from 'styled-components';
-import { login } from '../api/PostAPI';
-import { LoginCredentials } from '../types/user';
-import { useAuth } from '../context/AuthContext';
-import useApiClient from '../hooks/useApiClient';
-import { validateToken } from '../api/PostAPI';
-import { Navigate, useNavigate } from 'react-router-dom';
-import PasswordBox from '../components/PasswordBox';
+import React, { useState, type ChangeEvent, type FormEvent } from "react";
+import { Navigate, useLocation, useSearchParams } from "react-router";
+import { useAuth, type LoginCredentials } from "../auth/hooks";
 
+// url: /login
 const LoginPage: React.FC = () => {
-    const [credentials, setCredentials] = useState<LoginCredentials>({ user_id: '', password: '' });
-    const [error, setError] = useState<string>('');
-    const [showPassword, setShowPassword] = useState<boolean>(false);
-    const { token, setToken, setUserId, setRole } = useAuth();
-    const { apiClient } = useApiClient();
-    const [isTokenValid, setIsTokenValid] = useState<boolean | null>(null); // トークンの有効性を保持
-    const navigate = useNavigate();
+  const [credentials, setCredentials] = useState<LoginCredentials>({ username: '', password: '' });
+  const location = useLocation();
 
-    useEffect(() => {
-        const validate = async () => {
-            if (token) {
-                try {
-                    const isValid = await apiClient({ apiFunc: validateToken });
-                    setIsTokenValid(isValid);
-                } catch (error) {
-                    console.error('トークン検証エラー:', error);
-                    setIsTokenValid(false); // 検証に失敗した場合は無効とする
-                }
-            } else {
-                setIsTokenValid(false); // トークンがない場合は無効とする
-            }
-        };
-        validate();
-    }, [token]);
+  // Read redirect query parameter
+  const [searchParams] = useSearchParams();
+  const redirectParam = searchParams.get('redirect');
+  // console.log("Redirect parameter:", redirectParam);
 
+  let decodedRedirectParam: string | null = null;
+  if (redirectParam) {
+    try {
+      decodedRedirectParam = decodeURIComponent(redirectParam);
+      // console.log("Decoded redirect parameter:", decodedRedirectParam);
+    } catch (e) {
+      console.error("Failed to decode redirect parameter:", e);
+    }
+  }
 
-    const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const { name, value } = e.target
-        // 入力時に記録されているユーザIDとパスワードを更新
-        // name: user_idまたはpassword
-        // value: 入力された値
-        setCredentials({ ...credentials, [name]: value });
-    };
+  // console.log("Location state:", location.state);
+  // console.log("Location state from:", location.state?.from);
+  // console.log("Location state from pathname:", location.state?.from?.pathname);
 
-    const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
-        e.preventDefault();
-        try {
-            const result = await login(credentials);
-            setError('');
-            setToken(result.access_token); 
-            setUserId(result.user_id);
-            setRole(result.role);
-            const redirectUrl = sessionStorage.getItem("redirectUrl");
+  const from = location.state?.from?.pathname || decodedRedirectParam || "/about";
 
-            // リダイレクトURLがあればそのページへ、なければホームへ
-            if (redirectUrl) {
-                navigate(redirectUrl);
-                sessionStorage.removeItem("redirectUrl"); // 使用後は削除
-            } else {
-                navigate("/");
-            }
-        } catch (error) {
-            console.error('Login failed:', error);
-            setError(`ログインに失敗しました。: ${(error as any).response.data.detail}`);
-        }
-    };
+  const { login: loginMutation, loginResponse, isLoginPending, loginError, isAuthenticated } = useAuth();
 
-    if (isTokenValid) {
-        // トークンが有効な場合、ホームページへリダイレクト
-        return <Navigate to="/" />;
+  const handleSubmit = (e: FormEvent<HTMLFormElement> | React.MouseEvent<HTMLButtonElement>): void => {
+    e.preventDefault();
+    if (credentials.username.trim().length === 0 || credentials.password.trim().length === 0) {
+      alert('ユーザーIDとパスワードを入力してください');
+      return;
     }
 
-    // トークンの検証中は何も表示しない
-    if (isTokenValid === null) {
-        return null; // ローディング中やスピナーを表示しても良い
-    }
+    loginMutation(credentials);
+  }
 
-    return (
-        <>
-            <GlobalStyle /> {/* ログイン画面用のグローバルスタイルを適用 */}
-            <PageContainer>
-                <FormContainer onSubmit={handleSubmit}>
-                    <h1>ログイン</h1>
-                    {error && <ErrorMessage>{error}</ErrorMessage>}
-                    <FormGroup>
-                        <Label htmlFor="user_id">学籍番号（例: 202312345）:</Label>
-                        <Input
-                            type="text"
-                            id="username"
-                            name="user_id"
-                            value={credentials.user_id}
-                            onChange={handleChange}
-                            autoComplete="username"
-                            required
-                        />
-                    </FormGroup>
-                    <FormGroup>
-                        <Label htmlFor="password">パスワード:</Label>
-                        <PasswordBox value={credentials.password} onChange={handleChange} />
-                    </FormGroup>
-                    <Button type="submit">ログイン</Button>
-                </FormContainer>
-            </PageContainer>
-        </>
-    );
-};
+  const handleInputChange = (e: ChangeEvent<HTMLInputElement>): void => {
+    const { name, value } = e.target;
+    setCredentials(prev => ({ ...prev, [name]: value }));
+  }
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>): void => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      handleSubmit(e as any);
+    }
+  }
+
+  // When login is successful, loginResponse is materialized, then navigate to /dashboard
+  if (!!loginResponse || isAuthenticated()) {
+    return <Navigate to={from} replace />;
+  }
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center px-4">
+      <div className="max-w-md w-full space-y-8">
+        <div className="bg-white rounded-2xl shadow-xl border outline-none p-8">
+          <div className="textcenter mb-8">
+            <h2 className="text-3xl font-bold text-gray-900">ログイン</h2>
+            <p className="mt-2 text-sm text-gray-600">アカウントにログインしてください</p>
+          </div>
+
+          <form onSubmit={handleSubmit} className="space-y-6">
+            <div>
+              <label htmlFor="username" className="block text-sm font-medium text-gray-700 mb-2">
+                ユーザーID
+              </label>
+
+              <input
+                id="username"
+                name="username"
+                type="text"
+                required
+                value={credentials.username}
+                onChange={handleInputChange}
+                placeholder="ユーザーIDを入力してください"
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none transition duration-200"
+                autoComplete="username"
+                disabled={isLoginPending}
+              />
+            </div>
+            <div>
+              <label
+                htmlFor="password"
+                className="block text-sm font-medium text-gray-700 mb-2"
+              >
+                パスワード
+              </label>
+              <input
+                id="password"
+                name="password"
+                type="password"
+                required
+                value={credentials.password}
+                onChange={handleInputChange}
+                placeholder="パスワードを入力してください"
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparen outline-none transition duration-200"
+                autoComplete="current-password"
+                onKeyDown={handleKeyDown}
+                disabled={isLoginPending}
+              />
+            </div>
+
+            <button
+              type="submit"
+              className="w-full py-3 px-4 bg-red-50 border border-red-200 rounded-lg"
+              disabled={isLoginPending}
+              onClick={handleSubmit}
+            >
+              {isLoginPending ? "ログイン中..." : "ログイン"}
+            </button>
+          </form>
+
+          {loginError && (
+            <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded-lg">
+              <p className="text-sm text-red-600">
+                {loginError?.message || "ログインに失敗しました。"}
+              </p>
+            </div>
+          )}
+        </div>
+
+        <div className="text-center">
+          <p className="text-sm text-gray-600">トークンの有効時間: 12時間</p>
+        </div>
+      </div>
+    </div>
+  )
+}
 
 export default LoginPage;
-
-const GlobalStyle = createGlobalStyle`
-  *, *::before, *::after {
-    box-sizing: border-box;
-    margin: 0;
-    padding: 0;
-    }
-
-    .app {
-        display: block; /* ログイン画面ではフレックスを解除 */
-        height: auto;
-    .content {
-        margin: 0; /* ログイン画面ではmarginをリセット */
-        padding: 0;
-        width: 100%; /* ログイン画面で幅を100%にする */
-    }
-`;
-
-
-const PageContainer = styled.div`
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    height: 100vh;
-    background-color: #f5f5f5;
-    padding: 0 20px; /* 左右に均等な余白を持たせる */
-`;
-
-
-const FormContainer = styled.form`
-    background-color: white;
-    padding: 2rem;
-    border-radius: 8px;
-    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
-    width: 300px;
-`;
-
-const FormGroup = styled.div`
-    margin-bottom: 1rem;
-`;
-
-const Label = styled.label`
-    display: block;
-    margin-bottom: 0.5rem;
-    font-weight: bold;
-`;
-
-const Input = styled.input`
-    width: 100%;
-    padding: 0.5rem;
-    border: 1px solid #ccc;
-    border-radius: 4px;
-`;
-
-const Button = styled.button`
-    width: 100%;
-    padding: 0.75rem;
-    background-color: #007bff;
-    color: white;
-    border: none;
-    border-radius: 4px;
-    cursor: pointer;
-    font-size: 1rem;
-
-    &:hover {
-        background-color: #0056b3;
-    }
-`;
-
-const ErrorMessage = styled.p`
-    color: red;
-    margin-bottom: 1rem;
-`;
