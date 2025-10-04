@@ -2,7 +2,7 @@
 FROM watchdog-builder AS builder
 
 # 実行ステージ
-FROM ubuntu:24.10
+FROM ubuntu:24.04
 
 # 出力をソート・整形したり、その他解析するために、python3をインストール
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \

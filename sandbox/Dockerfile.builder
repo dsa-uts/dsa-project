@@ -1,4 +1,4 @@
-FROM ubuntu:24.10
+FROM ubuntu:24.04
 
 # install curl
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \

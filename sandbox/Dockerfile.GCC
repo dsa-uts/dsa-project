@@ -2,7 +2,7 @@
 FROM watchdog-builder AS builder
 
 # 実行ステージ
-FROM ubuntu:24.10
+FROM ubuntu:24.04
 
 RUN apt-get update && \
     apt-get install -y --no-install-recommends gcc make libc6-dev && \
