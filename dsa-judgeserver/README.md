@@ -7,6 +7,164 @@
 サーバーがそのリクエストを検知し、リクエストに則ってコンパイル・実行・チェックを行う。その後、結果を
 DBサーバーに登録する。
 
+見づらい場合は、[pdf](schema.pdf)を参照
+
+TODO: スキーマの更新
+
+```mermaid 
+erDiagram
+	Lecture {
+		Int id PK "授業エントリのID"
+		String title "授業のタイトル名 e.g., 課題1, 課題2, ..."
+		TimeStamp start_date "課題ページの公開日"
+		TimeStamp end_date "課題ページの公開終了日"
+	}
+	Problem {
+		Int lecture_id PK "Lecture.idからの外部キー"
+		Int assignment_id PK "何番目の課題か, e.g., 1, 2, ..."
+		Boolean for_evaluation PK "課題採点用かどうか, True/False"
+		String title "課題名 e.g., 基本課題1"
+		String description_path "課題の説明文のファイルパス"
+		Int timeMS "ジャッジの制限時間[ms] e.g., 1000"
+		Int memoryMB "ジャッジの制限メモリ[MB] e.g., 1024"
+	}
+	Executables {
+		Int id PK "ID(auto increment)"
+		Int lecture_id PK "Lecture.idからの外部キー"
+		Int assignment_id PK "何番目の課題か, e.g., 1, 2, ..."
+		Boolean for_evaluation PK "課題採点用かどうか, True/False"
+		String name "実行ファイル名"
+	}
+	ArrangedFiles {
+		String str_id PK "ソースコードのID(auto increment)"
+		Int lecture_id FK "何回目の授業で出される課題か, e.g., 1, 2, ..."
+		Int assignment_id FK "何番目の課題か, e.g., 1, 2, ..."
+		Boolean for_evaluation FK "課題採点用かどうか, True/False"
+		String path "ファイルのパス(Makefileも全部含める)"
+	}
+	RequiredFiles {
+		Int id PK "ソースコードのID(auto increment)"
+		Int lecture_id FK "何回目の授業で出される課題か, e.g., 1, 2, ..."
+		Int assignment_id FK "何番目の課題か, e.g., 1, 2, ..."
+		Boolean for_evaluation FK "課題採点用かどうか, True/False"
+		String name "ファイル名(Makefileも全部含める)"
+	}
+	EvaluationItems {
+		String str_id PK "評価項目のID(auto increment)"
+		Int lecture_id FK "何回目の授業で出される課題か, e.g., 1, 2, ..."
+		Int assignment_id FK "何番目の課題か, e.g., 1, 2, ..."
+		Boolean for_evaluation FK "課題採点用かどうか, True/False"
+		String title "e.g., func1"
+		String description "説明"
+		Int score "評価点"
+		Enum type "Built, Judge"
+		Int arranged_files_id FK "紐づいているソースコードのID, NULLABLE"
+		String message_on_fail "失敗した場合のメッセージ(一行、10文字程度)"
+	}
+	TestCases {
+		Int id PK "テストケースのID(auto increment)"
+		Int eval_id FK "紐づいている評価項目のID"
+		String description "簡単な一行の説明"
+		String command "e.g., './run.sh', 'ls', ..."
+		String argument_path  "スクリプト/executableの引数のファイルパス"
+		String stdin_path "標準入力のパス, path/to/stdin.txt"
+		String stdout_path "想定される標準出力のパス, path/to/stdout.txt"
+		String stderr_path "想定される標準エラー出力のパス, path/to/stderr.txt"
+		Int exit_code "想定される戻り値"
+	}
+	Lecture ||--|{ Problem : "has many problems"
+	Problem ||--|{ RequiredFiles : "has many required files"
+	Problem ||--|{ ArrangedFiles : "has many arranged files"
+	Problem ||--|{ Executables : "has many executables"
+	Problem ||--|{ EvaluationItems : "has many evaluation items"
+	ArrangedFiles o|--|{ EvaluationItems : "has associated arranged files or none"
+	EvaluationItems ||--|{ TestCases : "has many test cases"
+
+	Users {
+		String user_id PK "ユーザID"
+		String username "ユーザ名"
+		String email "メールアドレス"
+		String hashed_password ""
+		Boolean is_admin ""
+		Boolean disabled
+		TimeStamp created_at
+		TimeStamp updated_at
+		TimeStamp active_start_date
+		TimeStamp active_end_date
+	}
+	BatchSubmission {
+		Int id PK "バッチ採点のID(auto increment)"
+		TimeStamp ts "バッチ採点のリクエスト時刻"
+		Int user_id FK "リクエストした管理者のID"
+	}
+	Submission {
+		Int id PK "提出されたジャッジリクエストのID(auto increment)"
+		TimeStamp ts "リクエストされた時刻"
+		Int batch_id FK "ジャッジリクエストが属しているバッチリクエストのID, 学生のフォーマットチェック提出ならNULL"
+		String user_id FK "採点対象のユーザのID"
+		Int lecture_id FK "何回目の授業で出される課題か, e.g., 1, 2, ..."
+		Int assignment_id FK "何番目の課題か, e.g., 1, 2, ..."
+		Boolean for_evaluation FK "課題採点用かどうか, True/False"
+		Enum progress "リクエストの処理状況, pending/queued/running/done"
+	}
+	UploadedFiles {
+		Int id PK "アップロードされたファイルのID(auto increment)"
+		TimeStamp ts "アップロードされた時刻"
+		Int submission_id FK "そのファイルが必要なジャッジリクエストのID"
+		String path "アップロードされたファイルのパス"
+	}
+	JudgeResult {
+		Int id PK "ジャッジ結果のID(auto increment)"
+		Timestamp ts "ジャッジ結果が出た時刻"
+		Int submission_id FK "ジャッジ結果に紐づいているジャッジリクエストのID"
+		Int testcase_id FK "ジャッジ結果に紐づいているテストケースのID"
+		Int timeMS "実行時間[ms]"
+		Int memoryKB "消費メモリ[KB]"
+		Enum result "実行結果のステータス、 AC/WA/TLE/MLE/RE/CE/OLE/IE"
+		String stdout "標準出力"
+		String stderr "標準エラー出力"
+		Int exit_code "戻り値"
+	}
+	EvaluationSummary {
+		Int id PK "挿入ID"
+		Int submission_id FK "対象のSubmissionリクエストのID"
+		Int batch_id FK "Submissionリクエストに紐づいたBatchリクエストのID"
+		String user_id FK "採点対象のユーザID"
+		Int lecture_id FK "何回目の授業で出される課題か, e.g., 1, 2, ..."
+		Int assignment_id FK "何番目の課題か, e.g., 1, 2, ..."
+		Boolean for_evaluation FK "課題採点用かどうか, True/False"
+		String eval_id FK "評価項目の文字列ID"
+		String arranged_files_id FK "評価項目に紐づいているソースコードのID"
+		Enum result "評価項目に含まれる全TestCaseの実行結果"
+		String message "メッセージ(5文字～10文字程度)"
+		String detail "詳細"
+		Int score "集計結果"
+	}
+
+	SubmissionSummary {
+		Int submission_id PK "対象のSubmissionリクエストのID"
+		Int batch_id FK "Submissionリクエストに紐づいたBatchリクエストのID"
+		String user_id FK "採点対象のユーザID"
+		Int lecture_id FK "何回目の授業で出される課題か, e.g., 1, 2, ..."
+		Int assignment_id FK "何番目の課題か, e.g., 1, 2, ..."
+		Boolean for_evaluation FK "課題採点用かどうか, True/False"
+		Enum result "評価項目に含まれる全TestCaseの実行結果"
+		String message "メッセージ(5文字～10文字程度)"
+		String detail "詳細"
+		Int score "集計結果"
+	}
+
+	Users ||--|{ BatchSubmission : "has many batch submissions"
+	Users ||--|{ Submission : "has many single submissions"
+	BatchSubmission ||--|{ Submission : "is composed of single submissions"
+	Problem ||--|{ Submission : "has many requested submissions"
+	Submission ||--|{ UploadedFiles : "has many associated uploaded files"
+	Submission ||--|| SubmissionSummary: ""
+	SubmissionSummary ||--|{ EvaluationSummary: ""
+	EvaluationSummary ||--|{ JudgeResult: ""
+	
+```
+
 * サンドボックス上で実行する処理として、(1) プログラムをコンパイルする「コンパイル」処理 (2) コンパイルしたプログラムを動作させてチェックする「ジャッジ」処理 (3) その他のファイルが存在するかチェックすることや、オブジェクトファイル解析などの「解析」処理 の3つに分けられる。ジャッジ処理は実行時間やメモリ使用量を指定できるが、コンパイル処理と解析処理は制限時間2秒、最大メモリ使用量512MBに固定する。
 * サンドボックス上で出力される標準出力(stdout)と標準エラー出力(stderr)の最大サイズは8000bytesとする。
 

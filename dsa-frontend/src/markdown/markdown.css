@@ -1,0 +1,24 @@
+.markdownContent table {
+  border-collapse: collapse;
+  margin: 1em 0;
+  width: 100%;
+}
+
+.markdownContent th,
+.markdownContent td {
+  border: 1px solid #0b0808;
+  padding: 8px;
+  text-align: left;
+}
+
+.markdownContent th {
+  background-color: #bdcddb;
+}
+
+.markdownContent tr:nth-child(even) {
+  background-color: #ffffff;
+}
+
+.markdownContent tr:hover {
+  background-color: #def3f9a5;
+}

@@ -1,7 +1,0 @@
-{
-  "note": "After the first initialization is done, the contents of this file should be empty due to security concern.",
-  "userid": "admin",
-  "username": "admin",
-  "password": "adminPassword",
-  "email(optional)": "admin@gmail.com"
-}

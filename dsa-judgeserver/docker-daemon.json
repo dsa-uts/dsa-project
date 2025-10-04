@@ -1,0 +1,9 @@
+{
+  "default-runtime": "crun",
+  "exec-opts": ["native.cgroupdriver=systemd"],    
+  "runtimes": {
+      "crun": {
+          "path": "/usr/local/bin/crun"
+      }
+  }
+}
