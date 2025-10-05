@@ -275,6 +275,50 @@ func (h *Handler) RegisterProblem(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusInternalServerError, response.NewError("failed to parse init.json: "+err.Error()))
 	}
 
+	// Validate config
+	// 1. Check MDfile exists
+	// 2. Check test files exists
+	// 3. Check Stdin, Stdout, Stderr files in test cases exist (if not empty)
+	{
+		// Check MDfile exists and is a file
+		mdFilePath := filepath.Join(extractedDir, config.MDfile)
+		if stat, err := os.Stat(mdFilePath); os.IsNotExist(err) || stat.IsDir() {
+			return echo.NewHTTPError(http.StatusBadRequest, response.NewError("md_file not found or is a directory: "+config.MDfile))
+		}
+
+		// Check test files exist and are files
+		for _, testFile := range config.TestFiles {
+			testFilePath := filepath.Join(extractedDir, testFile)
+			if stat, err := os.Stat(testFilePath); os.IsNotExist(err) || stat.IsDir() {
+				return echo.NewHTTPError(http.StatusBadRequest, response.NewError("test file not found or is a directory: "+testFile))
+			}
+		}
+
+		allTasks := append(config.Build, config.Judge...)
+
+		// Check Stdin, Stdout, Stderr files in tasks
+		for _, t := range allTasks {
+			if t.Stdin != "" {
+				stdinPath := filepath.Join(extractedDir, t.Stdin)
+				if stat, err := os.Stat(stdinPath); os.IsNotExist(err) || stat.IsDir() {
+					return echo.NewHTTPError(http.StatusBadRequest, response.NewError("stdin file not found or is a directory: "+t.Stdin))
+				}
+			}
+			if t.Stdout != "" {
+				stdoutPath := filepath.Join(extractedDir, t.Stdout)
+				if stat, err := os.Stat(stdoutPath); os.IsNotExist(err) || stat.IsDir() {
+					return echo.NewHTTPError(http.StatusBadRequest, response.NewError("stdout file not found or is a directory: "+t.Stdout))
+				}
+			}
+			if t.Stderr != "" {
+				stderrPath := filepath.Join(extractedDir, t.Stderr)
+				if stat, err := os.Stat(stderrPath); os.IsNotExist(err) || stat.IsDir() {
+					return echo.NewHTTPError(http.StatusBadRequest, response.NewError("stderr file not found or is a directory: "+t.Stderr))
+				}
+			}
+		}
+	}
+
 	// TODO: parse readme, and capture every link referencing image file in this zip file.
 	// e.g., [image1.png](image1.png)
 	// After that, we need to do those tasks below:
