@@ -16,10 +16,10 @@ import (
 )
 
 type LectureEntryRequest struct {
-	ID        int64     `json:"id" validate:"required" default:"0"`
-	Title     string    `json:"title" validate:"required"`
-	StartDate time.Time `json:"start_date" validate:"required" default:"2025-10-01T10:00:00+09:00"`
-	Deadline  time.Time `json:"deadline" validate:"required" default:"2025-12-01T10:00:00+09:00"`
+	ID        int64  `json:"id" validate:"required" default:"0"`
+	Title     string `json:"title" validate:"required"`
+	StartDate int64  `json:"start_date" validate:"required"`
+	Deadline  int64  `json:"deadline" validate:"required"`
 }
 
 func (le *LectureEntryRequest) bind(c echo.Context) error {
@@ -76,8 +76,8 @@ func (h *Handler) CreateLectureEntry(c echo.Context) error {
 	err := h.problemStore.CreateLectureEntry(ctx, &model.Lecture{
 		ID:        lectureEntry.ID,
 		Title:     lectureEntry.Title,
-		StartDate: lectureEntry.StartDate,
-		Deadline:  lectureEntry.Deadline,
+		StartDate: time.Unix(lectureEntry.StartDate, 0),
+		Deadline:  time.Unix(lectureEntry.Deadline, 0),
 	})
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, response.NewError("failed to create lecture entry: "+err.Error()))
@@ -120,8 +120,8 @@ func (h *Handler) UpdateLectureEntry(c echo.Context) error {
 	}
 
 	lectureEntryInDB.Title = lectureEntryRequest.Title
-	lectureEntryInDB.StartDate = lectureEntryRequest.StartDate
-	lectureEntryInDB.Deadline = lectureEntryRequest.Deadline
+	lectureEntryInDB.StartDate = time.Unix(lectureEntryRequest.StartDate, 0)
+	lectureEntryInDB.Deadline = time.Unix(lectureEntryRequest.Deadline, 0)
 
 	err = h.problemStore.UpdateLectureEntry(ctx, &lectureEntryInDB)
 	if err != nil {

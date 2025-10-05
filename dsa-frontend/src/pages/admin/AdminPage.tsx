@@ -7,11 +7,14 @@ const AdminPage: React.FC = () => {
 
       {/* List for pages Admin can visit. */}
       <ul className="list-disc list-inside space-y-2">
-        <li className="text-blue-600 hover:underline">
+        <li className="text-blue-600 text-xl hover:underline">
           <Link to="/admin/user/list" className="ml-4">User Management</Link>
         </li>
-        <li className="text-blue-600 hover:underline">
+        <li className="text-blue-600 text-xl hover:underline">
           <Link to="/admin/user/register/batch" className="ml-4">Batch User Registration</Link>
+        </li>
+        <li className="text-blue-600 text-xl hover:underline">
+          <Link to="/admin/problem/register" className="ml-4">Problem Registration</Link>
         </li>
       </ul>
     </div>

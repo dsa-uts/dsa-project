@@ -1865,16 +1865,14 @@
             ],
             "properties": {
                 "deadline": {
-                    "type": "string",
-                    "default": "2025-12-01T10:00:00+09:00"
+                    "type": "integer"
                 },
                 "id": {
                     "type": "integer",
                     "default": 0
                 },
                 "start_date": {
-                    "type": "string",
-                    "default": "2025-10-01T10:00:00+09:00"
+                    "type": "integer"
                 },
                 "title": {
                     "type": "string"

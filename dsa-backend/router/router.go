@@ -14,8 +14,11 @@ func New() *echo.Echo {
 	e.Use(middleware.Recover())
 
 	// CORS setting
+	// localhost:80 is for development with gateway server (nginx)
+	// localhost:5173 is for development with frontend server (vite)
+	// dsa.kde.cs.tsukuba.ac.jp is for production
 	e.Use(middleware.CORSWithConfig(middleware.CORSConfig{
-		AllowOrigins: []string{"http://localhost:80", "https://dsa.kde.cs.tsukuba.ac.jp"},
+		AllowOrigins: []string{"http://localhost:80", "http://localhost:5173", "https://dsa.kde.cs.tsukuba.ac.jp"},
 		AllowHeaders: []string{echo.HeaderOrigin, echo.HeaderContentType, echo.HeaderAccept, echo.HeaderAuthorization},
 		AllowMethods: []string{echo.GET, echo.HEAD, echo.PUT, echo.POST, echo.DELETE, echo.PATCH, echo.OPTIONS},
 	}))

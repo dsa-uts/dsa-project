@@ -236,14 +236,12 @@ definitions:
   problem.LectureEntryRequest:
     properties:
       deadline:
-        default: "2025-12-01T10:00:00+09:00"
-        type: string
+        type: integer
       id:
         default: 0
         type: integer
       start_date:
-        default: "2025-10-01T10:00:00+09:00"
-        type: string
+        type: integer
       title:
         type: string
     required:
