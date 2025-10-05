@@ -1,17 +1,27 @@
-# ベースイメージ
-FROM node:23.9.0-bookworm-slim
+FROM node:23.9.0-bookworm-slim AS builder
 
-# アプリケーションディレクトリを作成
 WORKDIR /app
 
-# アプリケーションの依存関係をインストール
-# COPY package*.json ./
-# RUN npm install
+COPY package.json package-lock.json ./
+# install dev dependencies
+RUN npm ci
+# install only production dependencies
+RUN npm install
 
-# アプリケーションのソースをバンドル (.venv, .vnodeenv, node_modulesフォルダを除く)
-# COPY . .
-# RUN rm -rf .venv .vnodeenv node_modules
+# build the app
+COPY . .
+RUN npm run build
 
-EXPOSE 3000
+FROM node:23.9.0-bookworm-slim AS runner
 
-CMD ["npm", "start"]
+WORKDIR /app
+
+COPY --from=builder /app/dist ./dist
+
+# install serve
+RUN npm install -g serve
+
+ENV PORT=80
+EXPOSE 80
+
+CMD ["serve", "-s", "dist", "-l", "80"]
