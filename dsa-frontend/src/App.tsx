@@ -13,6 +13,7 @@ import AdminRoute from './AdminRoute';
 import BatchedUserCreation from './pages/admin/BatchedUserCreation';
 import UserList from './pages/admin/UserList';
 import About from './pages/About';
+import AdminPage from './pages/admin/AdminPage';
 
 const queryClient = new QueryClient();
 
@@ -31,6 +32,7 @@ function App() {
             <Route path="/validation/batch" element={<BatchValidation />} />
           </Route>
           <Route path="admin" element={<AdminRoute><NavigationBarLayout /></AdminRoute>}>
+            <Route path="list" element={<AdminPage />} />
             <Route path="user/register/batch" element={<BatchedUserCreation />} />
             <Route path="user/list" element={<UserList />} />
           </Route>

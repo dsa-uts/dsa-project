@@ -1,5 +1,5 @@
 import { useLocation, useNavigate } from "react-router";
-import { useLogout } from "../auth/hooks";
+import { hasAdminScope, useLogout } from "../auth/hooks";
 
 const NavigationBar = (): React.JSX.Element => {
 
@@ -28,6 +28,10 @@ const NavigationBar = (): React.JSX.Element => {
     navigate("/login", { state: { from: location } });
   };
 
+  const handleAdminPageClick = () => {
+    navigate("/admin/list");
+  }
+
   return (
     <div className="bg-blue-500 text-white px-6 py-4 flex justify-between items-center">
       <div className="flex items-end space-x-10">
@@ -53,13 +57,24 @@ const NavigationBar = (): React.JSX.Element => {
           Results
         </button>
       </div>
-      <button
-        key="logout-button"
-        onClick={handleLogout}
-        className="hover:bg-blue-600 px-4 py-2  rounded transition-colors"
-      >
-        Logout
-      </button>
+      <div className="flex items-end space-x-4">
+        {hasAdminScope() && (
+          <button
+            key="admin-page-button"
+            onClick={handleAdminPageClick}
+            className="hover:bg-blue-600 px-4 py-2  rounded transition-colors"
+          >
+            Admin
+          </button>
+        )}
+        <button
+          key="logout-button"
+          onClick={handleLogout}
+          className="hover:bg-blue-600 px-4 py-2  rounded transition-colors"
+        >
+          Logout
+        </button>
+      </div>
     </div>
   )
 }

@@ -200,6 +200,7 @@ const BatchedUserCreation: React.FC = () => {
               <tr className="border-b">
                 <th className="text-left py-2 px-4">user_id</th>
                 <th className="text-left py-2 px-4">username</th>
+                <th className="text-left py-2 px-4">password</th>
                 <th className="text-left py-2 px-4">email</th>
                 <th className="text-left py-2 px-4">role</th>
               </tr>
@@ -208,12 +209,14 @@ const BatchedUserCreation: React.FC = () => {
               <tr className="border-b">
                 <td className="py-2 px-4">202201234</td>
                 <td className="py-2 px-4">john doe</td>
+                <td className="py-2 px-4">password123</td>
                 <td className="py-2 px-4">john.doe@example.com</td>
                 <td className="py-2 px-4">student</td>
               </tr>
               <tr className="border-b">
                 <td className="py-2 px-4">202201235</td>
                 <td className="py-2 px-4">jane smith</td>
+                <td className="py-2 px-4">(empty)</td>
                 <td className="py-2 px-4">jane.smith@example.com</td>
                 <td className="py-2 px-4">manager</td>
               </tr>
@@ -225,6 +228,7 @@ const BatchedUserCreation: React.FC = () => {
         <div className="space-y-2 text-sm">
           <p><span className="font-semibold">user_id:</span> 学籍番号あるいは任意の文字列 ("admin"以外)</p>
           <p><span className="font-semibold">username:</span> 任意の名前</p>
+          <p><span className="font-semibold">password:</span> 任意のパスワード。10文字以上。空欄の場合は自動生成される。</p>
           <p><span className="font-semibold">email:</span> 任意のメールアドレス (空欄可、これまで使ったことない)</p>
           <p><span className="font-semibold">role:</span> "student" or "manager"</p>
           <div className="ml-4 space-y-1">
