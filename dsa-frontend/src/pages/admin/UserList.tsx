@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { addAuthorizationHeader, useAuthQuery } from "../../auth/hooks";
-import { AlertCircle, Save, X } from "lucide-react";
+import { AlertCircle, Save, Trash2, X } from "lucide-react";
 import { axiosClient, type SuccessResponse } from "../../api/axiosClient";
 
 interface User {
@@ -131,6 +131,32 @@ const UserList: React.FC = () => {
     setEditingData(null);
   };
 
+  const deleteUser = async (userId: string) => {
+    if (!confirm(`Are you sure you want to delete user ${userId}?`)) {
+      return;
+    }
+
+    try {
+      const config = addAuthorizationHeader({});
+      const result = await axiosClient.delete<SuccessResponse>(
+        `/admin/delete/${userId}`,
+        config
+      );
+
+      if (result.data.message) {
+        console.log("Delete Success:", result.data.message);
+        // Remove user from the list
+        setUsers(users.filter(user => user.user_id !== userId));
+        // Show success message
+        setShowSuccess(true);
+        setTimeout(() => setShowSuccess(false), 3000);
+      }
+    } catch (error) {
+      console.error("Error deleting user:", error);
+      setErrorMessage((error as Error).message || 'Failed to delete user.');
+    }
+  };
+
   const handleInputChange = (field: keyof EditingUser, value: string | boolean) => {
     if (!editingData) return;
     setEditingData({ ...editingData, [field]: value });
@@ -215,8 +241,8 @@ const UserList: React.FC = () => {
                 <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
                   Status
                 </th>
-                <th className="px-6 py-4 text-right text-xs font-semibold text-gray-600 uppercase tracking-wider">
-                  Update
+                <th className="px-6 py-4 text-center text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                  Actions
                 </th>
               </tr>
             </thead>
@@ -333,16 +359,28 @@ const UserList: React.FC = () => {
                           </button>
                         </div>
                       ) : (
-                        <button
-                          onClick={() => startEditing(user)}
-                          disabled={isAdmin}
-                          className={`inline-flex items-center px-3 py-1 border text-sm font-medium rounded-md ${isAdmin
-                            ? 'border-gray-200 text-gray-400 bg-gray-100 cursor-not-allowed'
-                            : 'border-transparent text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-offset-2 focus:ring-blue-500'
-                            }`}
-                        >
-                          Edit
-                        </button>
+                        <div className="flex items-center justify-center space-x-2">
+                          <button
+                            onClick={() => startEditing(user)}
+                            disabled={isAdmin}
+                            className={`inline-flex items-center px-3 py-1 border text-sm font-medium rounded-md ${isAdmin
+                              ? 'border-gray-200 text-gray-400 bg-gray-100 cursor-not-allowed'
+                              : 'border-transparent text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-offset-2 focus:ring-blue-500'
+                              }`}
+                          >
+                            Edit
+                          </button>
+                          <button
+                            onClick={() => deleteUser(user.user_id)}
+                            disabled={isAdmin}
+                            className={`inline-flex items-center px-3 py-1 border text-sm font-medium rounded-md ${isAdmin
+                              ? 'border-gray-200 text-gray-400 bg-gray-100 cursor-not-allowed'
+                              : 'border-transparent text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-offset-2 focus:ring-red-500'
+                              }`}
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
                       )}
                     </td>
                   </tr>

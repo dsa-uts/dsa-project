@@ -2,6 +2,8 @@ package admin
 
 import (
 	"context"
+	"dsa-backend/handler/response"
+	"net/http"
 	"time"
 
 	"github.com/dsa-uts/dsa-project/database/model/userrole"
@@ -36,7 +38,7 @@ func (h *Handler) ListUsers(c echo.Context) error {
 	users, err := h.userStore.GetAllUserList(ctx)
 
 	if err != nil || users == nil {
-		return c.JSON(500, "Failed to get user list")
+		return c.JSON(http.StatusInternalServerError, response.NewError("Failed to get user list"))
 	}
 
 	response := make([]UserInfo, 0, len(*users))
@@ -61,5 +63,5 @@ func (h *Handler) ListUsers(c echo.Context) error {
 		})
 	}
 
-	return c.JSON(200, ListUserResponse{Users: response})
+	return c.JSON(http.StatusOK, ListUserResponse{Users: response})
 }
