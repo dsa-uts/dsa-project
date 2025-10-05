@@ -310,6 +310,11 @@ func (h *Handler) BatchValidation(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, response.NewError("Invalid zip file"))
 	}
 
+	// Check extension of the file
+	if !strings.HasSuffix(zipFile.Filename, ".zip") {
+		return echo.NewHTTPError(http.StatusBadRequest, response.NewError("Invalid zip file format"))
+	}
+
 	// check the size of zip file
 	if zipFile.Size > maxZipSize {
 		return echo.NewHTTPError(http.StatusBadRequest, response.NewError(fmt.Sprintf("Zip file size exceeds the limit of %d bytes", maxZipSize)))
@@ -803,6 +808,11 @@ func (h *Handler) BatchGrading(c echo.Context) error {
 	zipFile, err := c.FormFile("zipfile")
 	if err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, response.NewError("Invalid zip file"))
+	}
+
+	// Check extension of the file
+	if !strings.HasSuffix(zipFile.Filename, ".zip") {
+		return echo.NewHTTPError(http.StatusBadRequest, response.NewError("Invalid zip file format"))
 	}
 
 	// check the size of zip file
