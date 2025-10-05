@@ -32,5 +32,6 @@ func (h *Handler) RegisterRoutes(r *echo.Group) {
 	r.PATCH("/archive/:user_id", h.ArchiveUser)
 	r.PATCH("/activate/:user_id", h.ActivateUser)
 	r.PATCH("/modify/:user_id", h.ModifyUser)
+	r.DELETE("/delete/:user_id", h.DeleteUser)
 	r.GET("/users", h.ListUsers)
 }

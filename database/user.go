@@ -144,3 +144,8 @@ func (us *UserStore) ModifyUserDetails(ctx context.Context, userID string, name 
 	_, err := update.Exec(ctx)
 	return err
 }
+
+func (us *UserStore) DeleteUserByUserID(ctx context.Context, userID string) error {
+	_, err := us.db.NewDelete().Model((*model.UserList)(nil)).Where("userid = ?", userID).Exec(ctx)
+	return err
+}

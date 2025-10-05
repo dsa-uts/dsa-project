@@ -236,14 +236,12 @@ definitions:
   problem.LectureEntryRequest:
     properties:
       deadline:
-        default: "2025-12-01T10:00:00+09:00"
-        type: string
+        type: integer
       id:
         default: 0
         type: integer
       start_date:
-        default: "2025-10-01T10:00:00+09:00"
-        type: string
+        type: integer
       title:
         type: string
     required:
@@ -502,6 +500,44 @@ paths:
       - OAuth2Password:
         - admin
       summary: Archive a user
+      tags:
+      - Admin
+  /admin/delete/{user_id}:
+    delete:
+      description: Delete a user by their user ID. Cannot delete admin users.
+      parameters:
+      - description: User ID of the user to be deleted
+        in: path
+        name: user_id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: User deleted successfully
+          schema:
+            $ref: '#/definitions/response.Success'
+        "400":
+          description: Invalid request body or validation failed
+          schema:
+            $ref: '#/definitions/response.Error'
+        "403":
+          description: Cannot delete an admin user
+          schema:
+            $ref: '#/definitions/response.Error'
+        "404":
+          description: User not found
+          schema:
+            $ref: '#/definitions/response.Error'
+        "500":
+          description: Failed to delete user
+          schema:
+            $ref: '#/definitions/response.Error'
+      security:
+      - OAuth2Password:
+        - admin
+      summary: Delete a user
       tags:
       - Admin
   /admin/modify/{user_id}:

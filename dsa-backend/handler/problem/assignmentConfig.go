@@ -3,6 +3,7 @@ package problem
 import (
 	"encoding/json"
 	"errors"
+	"path/filepath"
 )
 
 type AssignmentConfig struct {
@@ -36,7 +37,42 @@ func (ac *AssignmentConfig) Decode(data []byte) error {
 
 	ac.setDefaults()
 
+	// Clean all path to avoid path traversal attack
+	ac.MDfile = CleanPath(ac.MDfile)
+	for i := range ac.TestFiles {
+		ac.TestFiles[i] = CleanPath(ac.TestFiles[i])
+	}
+
+	for i := range ac.Build {
+		if ac.Build[i].Stdin != "" {
+			ac.Build[i].Stdin = CleanPath(ac.Build[i].Stdin)
+		}
+		if ac.Build[i].Command != "" {
+			ac.Build[i].Stdout = CleanPath(ac.Build[i].Stdout)
+		}
+		if ac.Build[i].Stderr != "" {
+			ac.Build[i].Stderr = CleanPath(ac.Build[i].Stderr)
+		}
+	}
+
+	for i := range ac.Judge {
+		if ac.Judge[i].Stdin != "" {
+			ac.Judge[i].Stdin = CleanPath(ac.Judge[i].Stdin)
+		}
+		if ac.Judge[i].Stdout != "" {
+			ac.Judge[i].Stdout = CleanPath(ac.Judge[i].Stdout)
+		}
+		if ac.Judge[i].Stderr != "" {
+			ac.Judge[i].Stderr = CleanPath(ac.Judge[i].Stderr)
+		}
+	}
+
 	return nil
+}
+
+func CleanPath(p string) string {
+	new_p := filepath.Join("/", filepath.Clean(p))
+	return new_p[1:]
 }
 
 func (conf *AssignmentConfig) setDefaults() {
