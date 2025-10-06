@@ -360,6 +360,20 @@ func (h *Handler) BatchValidation(c echo.Context) error {
 	}
 
 	// ---------------------------------------------------------------------------
+	// Remove metadata files and directories like __MACOSX, .DS_Store, etc.
+	// ---------------------------------------------------------------------------
+	if err := fileutil.RemoveMetaData(uploadDir); err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, response.NewError("Failed to remove metadata files: "+err.Error()))
+	}
+
+	// ---------------------------------------------------------------------------
+	// Remove object files like .o, .obj, etc
+	// ---------------------------------------------------------------------------
+	if err := fileutil.RemoveObjectFiles(uploadDir); err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, response.NewError("Failed to remove object files: "+err.Error()))
+	}
+
+	// ---------------------------------------------------------------------------
 	// Check if the first level of extracted dir contains only one folder.
 	// In this case, unnest it.
 	//
@@ -857,6 +871,20 @@ func (h *Handler) BatchGrading(c echo.Context) error {
 	// Extract zip file **safely**
 	if err := fileutil.SafeExtractZip(tempFile.Name(), uploadDir); err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, response.NewError("Failed to extract zip file: "+err.Error()))
+	}
+
+	// ---------------------------------------------------------------------------
+	// Remove metadata files and directories like __MACOSX, .DS_Store, etc.
+	// ---------------------------------------------------------------------------
+	if err := fileutil.RemoveMetaData(uploadDir); err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, response.NewError("Failed to remove metadata files: "+err.Error()))
+	}
+
+	// ---------------------------------------------------------------------------
+	// Remove object files like .o, .obj, etc
+	// ---------------------------------------------------------------------------
+	if err := fileutil.RemoveObjectFiles(uploadDir); err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, response.NewError("Failed to remove object files: "+err.Error()))
 	}
 
 	// ---------------------------------------------------------------------------
