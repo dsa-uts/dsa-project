@@ -174,6 +174,13 @@ const renderProblemDetail = (detail: ProblemDetail, handleOnSubmit: (files: File
           <SubmitFormSection
             onSubmit={handleOnSubmit}
             isLoading={isUploading}
+            isValidFile={(file: File) => {
+              const invalid_types = ['application/zip', 'application/x-zip-compressed', 'multipart/x-zip'];
+              if (invalid_types.includes(file.type) || file.name.endsWith('.zip')) {
+                return { valid: false, errorMessage: 'このページはzipファイルをサポートしていません。"最終確認"ページでzipファイルをアップロードしてください。' };
+              }
+              return { valid: true, errorMessage: '' };
+            }}
           />
         </div>
       </div>

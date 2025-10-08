@@ -8,11 +8,12 @@ interface UploadedFile {
 
 interface SubmitFormSectionProps {
   onSubmit: (files: File[]) => Promise<void>;
+  isValidFile?: (file: File) => { valid: boolean; errorMessage: string };
   isLoading?: boolean;
   maxFiles?: number;
 }
 
-const SubmitFormSection: React.FC<SubmitFormSectionProps> = ({ onSubmit, isLoading = false, maxFiles }) => {
+const SubmitFormSection: React.FC<SubmitFormSectionProps> = ({ onSubmit, isValidFile, isLoading = false, maxFiles }) => {
   const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
   const [isDragging, setIsDragging] = useState<boolean>(false);
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
@@ -24,7 +25,17 @@ const SubmitFormSection: React.FC<SubmitFormSectionProps> = ({ onSubmit, isLoadi
     // Clear previous error message
     setErrorMessage("");
 
-    const filesArray = Array.from(files);
+    let errors: string[] = [];
+
+    const filesArray = Array.from(files)
+      .filter(file => {
+        if (!isValidFile) return true;
+        const { valid, errorMessage } = isValidFile(file);
+        if (!valid) {
+          errors.push(errorMessage);
+        }
+        return valid;
+      })
     const currentFileCount = uploadedFiles.length;
     const newFileCount = filesArray.length;
     const totalFileCount = currentFileCount + newFileCount;
@@ -33,7 +44,7 @@ const SubmitFormSection: React.FC<SubmitFormSectionProps> = ({ onSubmit, isLoadi
       const remainingSlots = maxFiles - currentFileCount;
 
       if (remainingSlots <= 0) {
-        setErrorMessage(`最大${maxFiles}ファイルまでアップロード可能です。すでに上限に達しています。`);
+        errors.push(`最大${maxFiles}ファイルまでアップロード可能です。すでに上限に達しています。`);
         if (inputElement) {
           inputElement.value = '';
         }
@@ -43,7 +54,7 @@ const SubmitFormSection: React.FC<SubmitFormSectionProps> = ({ onSubmit, isLoadi
       // Add only up to the maximum allowed files
       const filesToAdd = filesArray.slice(0, remainingSlots);
 
-      setErrorMessage(`最大${maxFiles}ファイルまでアップロード可能です。`);
+      errors.push(`最大${maxFiles}ファイルまでアップロード可能です。`);
 
       const newFiles: UploadedFile[] = filesToAdd.map(file => ({
         file,
@@ -58,6 +69,10 @@ const SubmitFormSection: React.FC<SubmitFormSectionProps> = ({ onSubmit, isLoadi
       }));
 
       setUploadedFiles(prev => [...prev, ...newFiles]);
+    }
+
+    if (errors.length > 0) {
+      setErrorMessage(errors.join(" "));
     }
 
     // Reset input values to allow re-selecting the same file
