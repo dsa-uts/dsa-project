@@ -223,6 +223,15 @@ const BatchValidation: React.FC = () => {
         <SubmitFormSection
           onSubmit={handleSubmit}
           maxFiles={1}
+          isValidFile={(file: File) => {
+            // Only allow zip files
+            const valid_types = ['application/zip', 'application/x-zip-compressed', 'multipart/x-zip'];
+            const isZip = valid_types.includes(file.type) || file.name.endsWith(".zip");
+            return {
+              valid: isZip,
+              errorMessage: isZip ? "" : "Only zip files are allowed."
+            };
+          }}
         />
       )}
     </div>

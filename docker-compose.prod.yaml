@@ -1,0 +1,58 @@
+services:
+  frontend:
+    build:
+      context: dsa-frontend
+      dockerfile: Dockerfile.prod
+
+  backend:
+    build:
+      context: .
+      dockerfile: dsa-backend/Dockerfile.prod
+    volumes:
+      - ./upload/prod:/app/upload
+    secrets:
+      - db_app_password
+      - admin_info_json
+
+  judge:
+    build:
+      context: .
+      dockerfile: dsa-judgeserver/Dockerfile.prod
+    volumes:
+      - ./upload/prod:/app/upload
+    secrets:
+      - db_app_password
+
+  nginx:
+    image: nginx:latest
+    ports:
+      - "0.0.0.0:3000:80"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/conf.d/:/etc/nginx/conf.d/:ro
+      - ./nginx/log/:/var/log/nginx/:rw
+    restart: always
+    depends_on:
+      frontend:
+        condition: service_started
+      backend:
+        condition: service_started
+
+  db:
+    secrets:
+      - db_app_password
+      - db_root_password
+    volumes:
+      - prod-db-data:/var/lib/postgresql/data
+
+volumes:
+  prod-db-data:
+
+
+secrets:
+  db_app_password:
+    file: ./config/db_app_password.txt
+  db_root_password:
+    file: ./config/db_root_password.txt
+  admin_info_json:
+    file: ./config/admin.json

@@ -118,7 +118,7 @@ func (h *Handler) Login(c echo.Context) error {
 	}
 
 	issuedAt := time.Now()
-	expiredAt := issuedAt.Add(time.Hour * 12) // 12 hours expiration
+	expiredAt := issuedAt.Add(time.Hour * 2) // 2 hours expiration
 
 	// register LoginHistory
 	{

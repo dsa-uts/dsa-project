@@ -263,7 +263,6 @@ func (h *Handler) GetValidationDetail(c echo.Context) error {
 	}
 
 	ctx := context.Background()
-	userID := claim.UserID
 
 	validationRequest, err := h.requestStore.GetValidationResultByID(ctx, props.ID)
 	if err != nil {
@@ -300,7 +299,7 @@ func (h *Handler) GetValidationDetail(c echo.Context) error {
 	detail := DetailOutput{
 		ID:           validationRequest.ID,
 		TS:           validationRequest.TS.Unix(),
-		UserID:       userID,
+		UserID:       validationRequest.User.UserID,
 		UserName:     validationRequest.User.Name,
 		LectureID:    validationRequest.LectureID,
 		ProblemID:    validationRequest.ProblemID,

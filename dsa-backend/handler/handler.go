@@ -40,8 +40,8 @@ func (h *Handler) RegisterRoutes(r *echo.Group) {
 }
 
 func generateSecretKey() string {
-	// generate random 32-byte key
-	key := make([]byte, 32)
+	// generate random 64-byte key
+	key := make([]byte, 64)
 	_, err := rand.Read(key)
 	if err != nil {
 		panic(fmt.Sprintf("failed to generate secret key: %v", err))

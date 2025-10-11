@@ -1,0 +1,78 @@
+services:
+  frontend:
+    build:
+      context: .
+      dockerfile: dsa-frontend/Dockerfile.dev
+    volumes:
+      - ./dsa-frontend:/app
+      - frontend-node-modules:/app/node_modules
+    ports:
+      - "127.0.0.1:5173:5173"
+    entrypoint: [ "sh", "-c", "npm install && npm run dev -- --host" ]
+
+  backend:
+    build:
+      context: .
+      dockerfile: dsa-backend/Dockerfile.dev
+    ports:
+      - "127.0.0.1:8000:8000"
+    volumes:
+      - ./dsa-backend:/app
+      - ./upload/dev:/app/upload
+      - ./database:/database # for sharing database module
+      - backend-go-modules:/go # for caching Go modules
+    secrets:
+      - db_app_password
+      - admin_info_json
+    restart: always
+    entrypoint: [ "dockerize", "-wait", "tcp://db:5432", "-timeout", "30s", "./start.sh" ]
+
+  judge:
+    build:
+      context: .
+      dockerfile: dsa-judgeserver/Dockerfile.dev
+    volumes:
+      # ホスト環境のDockerサービスにアクセスするためのDockerソケットのマウント
+      # 注) ホスト環境がUbuntuである必要あり
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./dsa-judgeserver:/app
+      - ./upload/dev:/app/upload
+      - ./database:/database # for sharing database module
+      - judge-go-modules:/go # for caching Go modules
+    secrets:
+      - db_app_password
+    entrypoint: [ "dockerize", "-wait", "tcp://db:5432", "-timeout", "30s", "./start.sh" ]
+
+  db:
+    ports:
+      # Just for debugging, not for production use
+      - "127.0.0.1:5432:5432"
+    secrets:
+      - db_app_password
+      - db_root_password
+    volumes:
+      - dev-db-data:/var/lib/postgresql/data
+
+  adminer:
+    image: adminer:5.3.0
+    restart: always
+    ports:
+      - "127.0.0.1:18080:8080"
+    depends_on:
+      db:
+        condition: service_started
+
+volumes:
+  frontend-node-modules:
+  backend-go-modules:
+  judge-go-modules:
+  dev-db-data:
+
+
+secrets:
+  db_app_password:
+    file: ./config/dev/db_app_password.txt
+  db_root_password:
+    file: ./config/dev/db_root_password.txt
+  admin_info_json:
+    file: ./config/dev/admin.json
