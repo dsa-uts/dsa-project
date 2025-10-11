@@ -1,0 +1,40 @@
+services:
+  frontend:
+    environment:
+      TZ: Asia/Tokyo
+
+  backend:
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      TZ: Asia/Tokyo
+    restart: always
+
+  judge:
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      # ホスト環境のDockerサービスにアクセスするためのDockerソケットのマウント
+      # 注) ホスト環境がUbuntuである必要あり
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      DOCKER_HOST: unix:///var/run/docker.sock
+      TZ: Asia/Tokyo
+    restart: always
+
+  db:
+    build: ./dsa-db
+    healthcheck:
+      test: [ "CMD", "pg_isready", "-U", "postgres", "-d", "postgres" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    environment:
+      - POSTGRES_PASSWORD_FILE=/run/secrets/db_root_password
+    volumes:
+      - ./dsa-db/init.sql:/docker-entrypoint-initdb.d/init.sql
+      # バックアップのための、ダンプファイル共有ディレクトリ
+      - ./backup:/backup

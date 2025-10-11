@@ -26,7 +26,6 @@ import (
 	"github.com/uptrace/bun"
 	"github.com/uptrace/bun/dialect/pgdialect"
 	"github.com/uptrace/bun/driver/pgdriver"
-	"github.com/uptrace/bun/extra/bundebug"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -66,7 +65,7 @@ func main() {
 	// create db instance
 	db := bun.NewDB(sqldb, pgdialect.New())
 	// For debugging purpose, print all queries to stdout.
-	db.AddQueryHook(bundebug.NewQueryHook(bundebug.WithVerbose(true)))
+	// db.AddQueryHook(bundebug.NewQueryHook(bundebug.WithVerbose(true)))
 
 	// Check and create admin user if necessary
 	if err := ensureAdminUser(db, r); err != nil {

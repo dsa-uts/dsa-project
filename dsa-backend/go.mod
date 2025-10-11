@@ -3,6 +3,7 @@ module dsa-backend
 go 1.24.5
 
 require (
+	github.com/dsa-uts/dsa-project/database v0.0.0
 	github.com/go-playground/validator/v10 v10.27.0
 	github.com/golang-jwt/jwt/v5 v5.3.0
 	github.com/labstack/echo-jwt/v4 v4.3.1
@@ -10,17 +11,14 @@ require (
 	github.com/labstack/gommon v0.4.2
 	github.com/swaggo/echo-swagger v1.4.1
 	github.com/swaggo/swag v1.16.6
-	github.com/dsa-uts/dsa-project/database v0.0.0
 	github.com/uptrace/bun v1.2.15
 	github.com/uptrace/bun/dialect/pgdialect v1.2.15
 	github.com/uptrace/bun/driver/pgdriver v1.2.15
-	github.com/uptrace/bun/extra/bundebug v1.2.15
 	golang.org/x/crypto v0.42.0
 )
 
 require (
 	github.com/KyleBanks/depth v1.2.1 // indirect
-	github.com/fatih/color v1.18.0 // indirect
 	github.com/gabriel-vasile/mimetype v1.4.10 // indirect
 	github.com/ghodss/yaml v1.0.0 // indirect
 	github.com/go-openapi/jsonpointer v0.22.0 // indirect
