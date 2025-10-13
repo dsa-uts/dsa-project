@@ -1029,6 +1029,47 @@ paths:
         entry.
       tags:
       - Submit
+  /problem/result/grading/entry/{lectureid}/{id}:
+    get:
+      description: Fetch a grading result by its ID.
+      parameters:
+      - description: Lecture ID
+        format: int64
+        in: path
+        name: lectureid
+        required: true
+        type: integer
+      - description: Grading Result ID
+        format: int64
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/problem.GradingResultPerProblem'
+        "400":
+          description: Invalid request
+          schema:
+            $ref: '#/definitions/response.Error'
+        "404":
+          description: Grading result not found
+          schema:
+            $ref: '#/definitions/response.Error'
+        "500":
+          description: Failed to get grading result
+          schema:
+            $ref: '#/definitions/response.Error'
+      security:
+      - OAuth2Password:
+        - grading
+      summary: Fetch Grading Result by ID
+      tags:
+      - Result
   /problem/result/grading/list/{lectureid}:
     get:
       description: List grading results for a specific lecture.

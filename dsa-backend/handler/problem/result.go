@@ -523,6 +523,61 @@ func (h *Handler) ListGradingResults(c echo.Context) error {
 	return c.JSON(http.StatusOK, output)
 }
 
+type GradingResultByIDProps struct {
+	LectureID int64 `param:"lectureid"`
+	ID        int64 `param:"id" validate:"required,min=0"`
+}
+
+// fetchGradingResultByID fetches a grading result by its ID.
+//
+//	@Summary		Fetch Grading Result by ID
+//	@Description	Fetch a grading result by its ID.
+//	@Tags			Result
+//	@Produce		json
+//	@Param			lectureid	path		int64	true	"Lecture ID"
+//	@Param			id			path		int64	true	"Grading Result ID"
+//	@Success		200			{object}	GradingResultPerProblem
+//	@Failure		400			{object}	response.Error	"Invalid request"
+//	@Failure		404			{object}	response.Error	"Grading result not found"
+//	@Failure		500			{object}	response.Error	"Failed to get grading result"
+//	@Security		OAuth2Password[grading]
+//	@Router			/problem/result/grading/entry/{lectureid}/{id} [get]
+func (h *Handler) fetchGradingResultByID(c echo.Context) error {
+	var props GradingResultByIDProps
+	if err := c.Bind(&props); err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, response.NewError("Invalid request"))
+	}
+	if err := c.Validate(&props); err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, response.NewError("Invalid request"))
+	}
+
+	ctx := context.Background()
+	// Get grading result by unique ID
+	gradingResult, err := h.requestStore.GetGradingResultByID(ctx, props.ID)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, response.NewError(fmt.Sprintf("Failed to get grading result: %v", err)))
+	}
+	if gradingResult == nil {
+		return echo.NewHTTPError(http.StatusNotFound, response.NewError("Grading result not found"))
+	}
+
+	if gradingResult.LectureID != props.LectureID {
+		return echo.NewHTTPError(http.StatusNotFound, response.NewError("Grading result not found"))
+	}
+
+	// Return summary information
+
+	ret := GradingResultPerProblem{
+		ID:        gradingResult.ID,
+		ProblemID: gradingResult.ProblemID,
+		ResultID:  int64(gradingResult.ResultID),
+		TimeMS:    gradingResult.Log.TimeMS,
+		MemoryKB:  gradingResult.Log.MemoryKB,
+	}
+
+	return c.JSON(http.StatusOK, ret)
+}
+
 type GradingDetailProps struct {
 	LectureID int64  `param:"lectureid"`
 	UserID    string `param:"userid"`

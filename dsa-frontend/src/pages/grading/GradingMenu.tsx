@@ -10,6 +10,9 @@ const GradingMenu: React.FC = () => {
         <li className="text-blue-600 text-xl hover:underline">
           <Link to="/grading/upload" className="ml-4">Grading Request (一括提出)</Link>
         </li>
+        <li className="text-blue-600 text-xl hover:underline">
+          <Link to="/grading/results" className="ml-4">Grading Results (採点結果一覧)</Link>
+        </li>
       </ul>
     </div>
   )

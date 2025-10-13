@@ -62,6 +62,7 @@ func (h *Handler) RegisterRoutes(r *echo.Group) {
 	resultRouter.GET("/validation/detail/:id", h.GetValidationDetail)
 
 	gradingResultRouter := resultRouter.Group("/grading", middleware.RequiredScopesMiddleware(auth.ScopeGrading))
+	gradingResultRouter.GET("/entry/:lectureid/:id", h.fetchGradingResultByID)
 	gradingResultRouter.GET("/list/:lectureid", h.ListGradingResults)
 	gradingResultRouter.GET("/summary/:lectureid/:userid", h.GetGradingResult)
 }
