@@ -19,6 +19,7 @@ import GradingRoute from './GradingRoute';
 import GradingUpload from './pages/grading/GradingUpload';
 import GradingMenu from './pages/grading/GradingMenu';
 import GradingResultsListing from './pages/grading/GradingResultsListing';
+import GradingDetail from './pages/grading/GradingDetail';
 
 const queryClient = new QueryClient();
 
@@ -46,6 +47,7 @@ function App() {
             <Route path="list" element={<GradingMenu />} />
             <Route path="upload" element={<GradingUpload />} />
             <Route path="results" element={<GradingResultsListing />} />
+            <Route path="detail/:lectureid/:userid" element={<GradingDetail />} />
           </Route>
           <Route path="/" element={<Navigate to="/login" />} />
           <Route path="*" element={<NotFoundPage />} />

@@ -1802,9 +1802,6 @@ const docTemplate = `{
         "problem.GradingDetailOutput": {
             "type": "object",
             "properties": {
-                "deadline": {
-                    "type": "integer"
-                },
                 "detail_list": {
                     "type": "array",
                     "items": {
@@ -1820,8 +1817,8 @@ const docTemplate = `{
                 "lecture_id": {
                     "type": "integer"
                 },
-                "lecture_title": {
-                    "type": "string"
+                "lecture_info": {
+                    "$ref": "#/definitions/util.LectureEntry"
                 },
                 "test_files_per_problem": {
                     "type": "array",
@@ -1863,9 +1860,6 @@ const docTemplate = `{
                 },
                 "problem_id": {
                     "type": "integer"
-                },
-                "problem_title": {
-                    "type": "string"
                 },
                 "request_user_id": {
                     "type": "string"

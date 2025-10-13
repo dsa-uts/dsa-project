@@ -585,8 +585,7 @@ type GradingDetailProps struct {
 
 type GradingDetailOutput struct {
 	LectureID           int64                     `json:"lecture_id"`
-	LectureTitle        string                    `json:"lecture_title"`
-	Deadline            int64                     `json:"deadline"`
+	LectureInfo         util.LectureEntry         `json:"lecture_info"`
 	UserID              string                    `json:"user_id"`
 	UserName            string                    `json:"user_name"`
 	FileGroups          []FileGroup               `json:"file_groups"`
@@ -597,7 +596,6 @@ type GradingDetailOutput struct {
 type GradingDetailPerProblem struct {
 	ID              int64             `json:"id"`
 	ProblemID       int64             `json:"problem_id"`
-	ProblemTitle    string            `json:"problem_title"`
 	RequestUserID   string            `json:"request_user_id"`
 	RequestUserName string            `json:"request_user_name"`
 	TS              int64             `json:"ts"`
@@ -659,6 +657,24 @@ func (h *Handler) GetGradingResult(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusInternalServerError, response.NewError("Failed to get lecture info"))
 	}
 
+	// create lecture entry
+	lectureEntry := util.LectureEntry{
+		LectureID: lectureData.ID,
+		Title:     lectureData.Title,
+		StartDate: lectureData.StartDate.Unix(),
+		Deadline:  lectureData.Deadline.Unix(),
+		Problems:  []util.ProblemEntry{},
+	}
+
+	for _, problem := range lectureData.Problems {
+		lectureEntry.Problems = append(lectureEntry.Problems, util.ProblemEntry{
+			LectureID:    problem.LectureID,
+			ProblemID:    problem.ProblemID,
+			RegisteredAt: problem.RegisteredAt.Unix(),
+			Title:        problem.Title,
+		})
+	}
+
 	problemDict := make(map[int64]model.Problem)
 	for _, problem := range lectureData.Problems {
 		problemDict[problem.ProblemID] = *problem
@@ -676,19 +692,18 @@ func (h *Handler) GetGradingResult(c echo.Context) error {
 	}
 
 	output := GradingDetailOutput{
-		LectureID:    props.LectureID,
-		LectureTitle: lectureData.Title,
-		Deadline:     lectureData.Deadline.Unix(),
-		UserID:       props.UserID,
-		UserName:     user.Name,
+		LectureID:   props.LectureID,
+		LectureInfo: lectureEntry,
+		UserID:      props.UserID,
+		UserName:    user.Name,
 		// TestFilesPerProblem to be filled later,
 		// FileGroups to be filled later,
 		// DetailList to be filled later
 	}
 
 	// Fill in TestFilesPerProblem
-	testFilesPerProblem := make([]TestFilesPerProblem, 0, len(lectureData.Problems))
-	for _, problem := range lectureData.Problems {
+	testFilesPerProblem := make([]TestFilesPerProblem, 0, len(lectureEntry.Problems))
+	for _, problem := range lectureEntry.Problems {
 		testFiles, err := util.FetchTestFielsInProblem(ctx, h.problemStore, problem.LectureID, problem.ProblemID)
 		if err != nil {
 			return echo.NewHTTPError(http.StatusInternalServerError, response.NewError("Failed to get problem info"))
@@ -742,7 +757,6 @@ func (h *Handler) GetGradingResult(c echo.Context) error {
 		detail := GradingDetailPerProblem{
 			ID:              grResult.ID,
 			ProblemID:       grResult.ProblemID,
-			ProblemTitle:    problemData.Title,
 			RequestUserID:   grResult.RequestUser.UserID,
 			RequestUserName: grResult.RequestUser.Name,
 			TS:              grResult.TS.Unix(),
