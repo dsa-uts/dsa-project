@@ -943,69 +943,6 @@
                 }
             }
         },
-        "/problem/result/grading/entry/{lectureid}/{id}": {
-            "get": {
-                "security": [
-                    {
-                        "OAuth2Password": [
-                            "grading"
-                        ]
-                    }
-                ],
-                "description": "Fetch a grading result by its ID.",
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Result"
-                ],
-                "summary": "Fetch Grading Result by ID",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "format": "int64",
-                        "description": "Lecture ID",
-                        "name": "lectureid",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "type": "integer",
-                        "format": "int64",
-                        "description": "Grading Result ID",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/problem.GradingResultPerProblem"
-                        }
-                    },
-                    "400": {
-                        "description": "Invalid request",
-                        "schema": {
-                            "$ref": "#/definitions/response.Error"
-                        }
-                    },
-                    "404": {
-                        "description": "Grading result not found",
-                        "schema": {
-                            "$ref": "#/definitions/response.Error"
-                        }
-                    },
-                    "500": {
-                        "description": "Failed to get grading result",
-                        "schema": {
-                            "$ref": "#/definitions/response.Error"
-                        }
-                    }
-                }
-            }
-        },
         "/problem/result/grading/list/{lectureid}": {
             "get": {
                 "security": [

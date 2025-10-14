@@ -1,7 +1,7 @@
 import { useParams, useSearchParams } from "react-router";
 import type { DetailedTaskLog } from "../../types/DetailedTaskLog";
 import { decompressFileData, decompressString, type CompressedFileData, type FileData } from "../../types/FileData";
-import { useEffect, useMemo, useState, type JSX } from "react";
+import { useEffect, useMemo, useRef, useState, type JSX } from "react";
 import { useAuthQuery } from "../../auth/hooks";
 import ResultBadge from "../../components/ResultBadge";
 import { formatTimestamp } from "../../util/timestamp";
@@ -210,6 +210,7 @@ const GradingDetail: React.FC = () => {
   const { lectureid, userid } = useParams<{ lectureid: string; userid: string }>();
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [lastUpdate, setLastUpdate] = useState<number>(Date.now());
+  const pollingIntervalRef = useRef<number | null>(null);
 
   const { data: apiResponse, isLoading: isLoadingApiResponse, isError: isErrorApiResponse } = useAuthQuery<APIResponse>({
     queryKey: ['gradingDetail', lastUpdate.toString()],
@@ -258,6 +259,51 @@ const GradingDetail: React.FC = () => {
 
     setSelectedId(id);
   }, []);
+
+  // Start or stop polling whenever pending results remain
+  useEffect(() => {
+    if (!apiResponse) {
+      // Clear any existing interval if apiResponse is not ready
+      if (pollingIntervalRef.current) {
+        clearInterval(pollingIntervalRef.current);
+        pollingIntervalRef.current = null;
+      }
+      return;
+    }
+
+    // Check if there are any pending results
+    const hasPending = apiResponse.detail_list.some(detail =>
+      detail.result_id === 9 || detail.result_id === 10);
+
+    if (hasPending) {
+      console.log("Found pending results, starting polling...");
+
+      // Clear any existing interval
+      if (pollingIntervalRef.current) {
+        clearInterval(pollingIntervalRef.current);
+      }
+
+      // Start polling every 5 seconds
+      pollingIntervalRef.current = setInterval(() => {
+        setLastUpdate(Date.now());
+      }, 5000);
+    } else {
+      // No pending results, clear interval if it exists
+      if (pollingIntervalRef.current) {
+        console.log("No pending results, stopping polling.");
+        clearInterval(pollingIntervalRef.current);
+        pollingIntervalRef.current = null;
+      }
+    }
+
+    // Cleanup on unmount
+    return () => {
+      if (pollingIntervalRef.current) {
+        clearInterval(pollingIntervalRef.current);
+        pollingIntervalRef.current = null;
+      }
+    };
+  }, [apiResponse]);
 
   if (!lectureid || !userid) {
     return <div className="container mx-auto px-8 py-6">Invalid parameters.</div>;

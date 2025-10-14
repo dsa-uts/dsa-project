@@ -74,88 +74,6 @@ const GradingResultsListing: React.FC = () => {
     }
   };
 
-  const fetchIndividualGradingResult = async (lectureId: number, resultId: number) => {
-    try {
-      const config = addAuthorizationHeader({});
-      const response = await axiosClient.get<GradingResult>(
-        `/problem/result/grading/entry/${lectureId}/${resultId}`,
-        config,
-      );
-      if (response.status !== 200) {
-        throw new Error(`Failed to fetch individual grading result: ${response.statusText}`);
-      }
-      return response.data;
-    } catch (error) {
-      console.error("Error fetching individual grading result:", error);
-    }
-    return null;
-  }
-
-  // Function to check and update pending results
-  const updatePendingResults = async () => {
-    if (!apiResponse || !lectureId) return;
-
-    const pendingResults: { userId: string; result: GradingResult }[] = [];
-
-    // Find all results with status 9 (Judging) or 10 (Wait for Judging)
-    apiResponse.detail.forEach(user => {
-      user.results.forEach(result => {
-        if (result.result_id === 9 || result.result_id === 10) {
-          pendingResults.push({ userId: user.user_id, result });
-        }
-      });
-    });
-
-    if (pendingResults.length === 0) {
-      // No pending results, stop polling
-      if (pollingIntervalRef.current) {
-        clearInterval(pollingIntervalRef.current);
-        pollingIntervalRef.current = null;
-        console.log("All results judged, stopping polling.");
-      }
-      return;
-    }
-
-    console.log(`Update ${pendingResults.length} pending results...`);
-
-    // Fetch updates for each pending result
-    const updates = await Promise.all(
-      pendingResults.map(async ({ userId, result }) => {
-        const updated = await fetchIndividualGradingResult(lectureId, result.id);
-        return { userId, originalId: result.id, updated };
-      })
-    );
-
-    setApiResponse(prev => {
-      if (!prev) return null;
-
-      const newDetail = prev.detail.map(user => {
-        const userUpdates = updates.filter(u => u.userId === user.user_id);
-
-        if (userUpdates.length === 0) return user;
-
-        const updatedResults = user.results.map(result => {
-          const update = userUpdates.find(u => u.originalId === result.id);
-          if (update && update.updated) {
-            // Keep the original id but update other fields
-            return {
-              ...result,
-              result_id: update.updated.result_id,
-              time_ms: update.updated.time_ms,
-              memory_kb: update.updated.memory_kb,
-            };
-          }
-
-          return result;
-        });
-
-        return { ...user, results: updatedResults };
-      });
-
-      return { ...prev, detail: newDetail };
-    });
-  };
-
   // Start or stop polling based on pending results
   useEffect(() => {
     if (!apiResponse || !lectureId) {
@@ -181,12 +99,9 @@ const GradingResultsListing: React.FC = () => {
       }
 
       // Start polling every 5 seconds
-      pollingIntervalRef.current = setInterval(() => {
-        updatePendingResults();
+      pollingIntervalRef.current = setInterval(async () => {
+        await fetchGradingResults(lectureId);
       }, 5000);
-
-      // Initial immediate check
-      updatePendingResults();
     } else {
       // No pending results, clear interval if exists
       if (pollingIntervalRef.current) {
