@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { addAuthorizationHeader, useAuthQuery } from "../../auth/hooks";
 import { axiosClient, type SuccessResponse } from "../../api/axiosClient";
-import { Check, ChevronDown, ChevronUp, Plus, Trash2, Upload, X } from "lucide-react";
+import { Check, ChevronDown, ChevronUp, Edit, Plus, Trash2, Upload, X } from "lucide-react";
 import { formatTimestamp } from "../../util/timestamp";
 
 interface Problem {
@@ -525,6 +525,22 @@ const ProblemRegistration: React.FC = () => {
                         </>
                       ) : (
                         <>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setEditingLecture(lecture.lecture_id);
+                              setEditFormData({
+                                id: lecture.lecture_id,
+                                title: lecture.title,
+                                start_date: lecture.start_date,
+                                deadline: lecture.deadline,
+                              });
+                            }}
+                            className="bg-blue-500 text-white px-3 py-1 rounded hover:bg-blue-600 transition-colors flex items-center gap-1"
+                          >
+                            <Edit className="w-4 h-4" />
+                            Edit
+                          </button>
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
