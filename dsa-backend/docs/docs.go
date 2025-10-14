@@ -1394,6 +1394,39 @@ const docTemplate = `{
                 }
             }
         },
+        "/user/grading/list": {
+            "get": {
+                "security": [
+                    {
+                        "OAuth2Password": [
+                            "grading"
+                        ]
+                    }
+                ],
+                "description": "List all users with their IDs and names",
+                "tags": [
+                    "User"
+                ],
+                "summary": "List all users",
+                "responses": {
+                    "200": {
+                        "description": "List of users",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/user.userInfoEntity"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/response.Error"
+                        }
+                    }
+                }
+            }
+        },
         "/user/login": {
             "post": {
                 "description": "User login with user ID and password. Returns a JWT token if successful.",
@@ -2004,6 +2037,17 @@ const docTemplate = `{
             "type": "object",
             "properties": {
                 "message": {
+                    "type": "string"
+                }
+            }
+        },
+        "user.userInfoEntity": {
+            "type": "object",
+            "properties": {
+                "id": {
+                    "type": "string"
+                },
+                "name": {
                     "type": "string"
                 }
             }

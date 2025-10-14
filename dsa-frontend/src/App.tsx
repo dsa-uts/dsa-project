@@ -16,10 +16,11 @@ import About from './pages/About';
 import AdminPage from './pages/admin/AdminPage';
 import ProblemRegistration from './pages/admin/ProblemRegistration';
 import GradingRoute from './GradingRoute';
-import GradingUpload from './pages/grading/GradingUpload';
+import BatchedGradingUpload from './pages/grading/BatchedGradingUpload';
 import GradingMenu from './pages/grading/GradingMenu';
 import GradingResultsListing from './pages/grading/GradingResultsListing';
 import GradingDetail from './pages/grading/GradingDetail';
+import SingleGradingUpload from './pages/grading/SingleGradingUpload';
 
 const queryClient = new QueryClient();
 
@@ -45,7 +46,8 @@ function App() {
           </Route>
           <Route path="grading" element={<GradingRoute><NavigationBarLayout /></GradingRoute>}>
             <Route path="list" element={<GradingMenu />} />
-            <Route path="upload" element={<GradingUpload />} />
+            <Route path="upload/batch" element={<BatchedGradingUpload />} />
+            <Route path="upload/single" element={<SingleGradingUpload />} />
             <Route path="results" element={<GradingResultsListing />} />
             <Route path="detail/:lectureid/:userid" element={<GradingDetail />} />
           </Route>

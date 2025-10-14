@@ -8,7 +8,10 @@ const GradingMenu: React.FC = () => {
       {/* List for pages Manager or Admin can visit. */}
       <ul className="list-disc list-inside space-y-2">
         <li className="text-blue-600 text-xl hover:underline">
-          <Link to="/grading/upload" className="ml-4">Grading Request (一括提出)</Link>
+          <Link to="/grading/upload/batch" className="ml-4">Grading Request (一括提出)</Link>
+        </li>
+        <li className="text-blue-600 text-xl hover:underline">
+          <Link to="/grading/upload/single" className="ml-4">Grading Request (個別提出)</Link>
         </li>
         <li className="text-blue-600 text-xl hover:underline">
           <Link to="/grading/results" className="ml-4">Grading Results (採点結果一覧)</Link>

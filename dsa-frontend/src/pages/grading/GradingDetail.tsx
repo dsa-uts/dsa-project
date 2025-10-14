@@ -168,7 +168,7 @@ const renderDetail = (detail: GradingDetailPerProblem, fileGroup: FileGroup, tes
       {/* Uploaded Files */}
       {fileGroup.files.length > 0 && (
         <div className="mb-8 bg-white rounded-lg shadow">
-          <h2 className="text-xl font-semibold p-4 border-b">Uploaded Files (id: {fileGroup.files.length})</h2>
+          <h2 className="text-xl font-semibold p-4 border-b">Uploaded Files (id: {fileGroup.id})</h2>
           <FileViewer files={fileGroup.files} />
         </div>
       )}

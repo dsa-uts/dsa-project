@@ -106,7 +106,7 @@ func (h *Handler) ListValidationResults(c echo.Context) error {
 		return int(b.ID - a.ID)
 	})
 
-	var outputResults []ValidationResult
+	outputResults := []ValidationResult{}
 	for _, result := range results {
 		outputResults = append(outputResults, ValidationResult{
 			ID:        result.ID,

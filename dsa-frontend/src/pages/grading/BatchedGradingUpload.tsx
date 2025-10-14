@@ -40,7 +40,7 @@ interface SubmissionProgress {
   isSubmitting: boolean;
 }
 
-const GradingUpload: React.FC = () => {
+const BatchedGradingUpload: React.FC = () => {
   const [submissions, setSubmissions] = useState<StudentSubmission[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
   const [uploadedFile, setUploadedFile] = useState<File | null>(null);
@@ -653,4 +653,4 @@ const GradingUpload: React.FC = () => {
   )
 }
 
-export default GradingUpload;
+export default BatchedGradingUpload;
