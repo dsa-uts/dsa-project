@@ -1,4 +1,4 @@
-import { useSearchParams } from "react-router";
+import { Link, useSearchParams } from "react-router";
 import { addAuthorizationHeader, useAuthQuery } from "../../auth/hooks";
 import { useEffect, useRef, useState } from "react";
 import ResultBadge from "../../components/ResultBadge";
@@ -310,41 +310,51 @@ const GradingResultsListing: React.FC = () => {
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
-              {userData.map(user => (
-                <tr key={user.user_id} className="hover:bg-gray-50">
-                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 border-r">
-                    {user.user_name} ({user.user_id})
-                  </td>
-                  {currentLecture.problems.map((problem, index) => {
-                    const results = getUserProblemResults(user, problem.problem_id);
-                    const isLast = index === currentLecture.problems.length - 1;
+              {userData.map(user => {
+                const detailLink = `/grading/detail/${currentLecture.lecture_id}/${user.user_id}`;
 
-                    return (
-                      <td key={problem.problem_id} className={`px-6 py-4 text-sm text-gray-500 ${isLast ? '' : 'border-r'}`}>
-                        {results.length === 0 ? (
-                          <div className="text-center">
-                            <span className="text-gray-400">-</span>
-                          </div>
-                        ) : (
-                          <div className="space-y-2">
-                            {results.map(result => (
-                              <div key={result.id} className="flex items-center gap-2">
-                                <ResultBadge resultID={result.result_id} />
-                                <span className={`text-xs ${result.submission_ts > currentLecture.deadline ? 'text-red-600' : 'text-gray-600'}`}>
-                                  {formatTimestamp(result.submission_ts)}
-                                  {result.submission_ts > currentLecture.deadline && (
-                                    <span className="ml-1">(Late)</span>
-                                  )}
-                                </span>
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                      </td>
-                    )
-                  })}
-                </tr>
-              ))}
+                return (
+                  <tr key={user.user_id} className="hover:bg-gray-50">
+                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 border-r">
+                      <Link to={detailLink} className="hover:underline">
+                        {user.user_name} ({user.user_id})
+                      </Link>
+                    </td>
+                    {currentLecture.problems.map((problem, index) => {
+                      const results = getUserProblemResults(user, problem.problem_id);
+                      const isLast = index === currentLecture.problems.length - 1;
+
+                      return (
+                        <td key={problem.problem_id} className={`px-6 py-4 text-sm text-gray-500 ${isLast ? '' : 'border-r'}`}>
+                          {results.length === 0 ? (
+                            <div className="text-center">
+                              <span className="text-gray-400">-</span>
+                            </div>
+                          ) : (
+                            <div className="space-y-2">
+                              {results.map(result => (
+                                <div key={result.id} className="flex items-center gap-2">
+                                  <Link to={`${detailLink}?id=${result.id}`} className="hover:underline">
+                                    <ResultBadge resultID={result.result_id} />
+                                  </Link>
+                                  <Link to={`${detailLink}?id=${result.id}`} className="hover:underline">
+                                    <span className={`text-xs ${result.submission_ts > currentLecture.deadline ? 'text-red-600' : 'text-gray-600'}`}>
+                                      {formatTimestamp(result.submission_ts)}
+                                      {result.submission_ts > currentLecture.deadline && (
+                                        <span className="ml-1">(Late)</span>
+                                      )}
+                                    </span>
+                                  </Link>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </td>
+                      )
+                    })}
+                  </tr>
+                )
+              })}
             </tbody>
           </table>
         </div>

@@ -1,4 +1,4 @@
-import { useParams } from "react-router";
+import { useParams, useSearchParams } from "react-router";
 import type { DetailedTaskLog } from "../../types/DetailedTaskLog";
 import { decompressFileData, decompressString, type CompressedFileData, type FileData } from "../../types/FileData";
 import { useEffect, useMemo, useState, type JSX } from "react";
@@ -204,8 +204,9 @@ const renderDetail = (detail: GradingDetailPerProblem, fileGroup: FileGroup, tes
   )
 }
 
-// url: grading/detail/:lectureid/:userid
+// url: grading/detail/:lectureid/:userid?id=123
 const GradingDetail: React.FC = () => {
+  const [searchParams, setSearchParams] = useSearchParams();
   const { lectureid, userid } = useParams<{ lectureid: string; userid: string }>();
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [lastUpdate, setLastUpdate] = useState<number>(Date.now());
@@ -245,6 +246,18 @@ const GradingDetail: React.FC = () => {
   useEffect(() => {
     processedData.then(setDecompressedData);
   }, [processedData]);
+
+  // Initialize selectedId from URL query parameter
+  useEffect(() => {
+    const idParam = searchParams.get('id');
+    if (!idParam) return;
+
+    const id = parseInt(idParam, 10);
+
+    if (isNaN(id)) return;
+
+    setSelectedId(id);
+  }, []);
 
   if (!lectureid || !userid) {
     return <div className="container mx-auto px-8 py-6">Invalid parameters.</div>;
@@ -328,7 +341,10 @@ const GradingDetail: React.FC = () => {
                             key={result.id}
                             className={`flex items-center gap-2 hover:border-2 hover:border-blue-300 rounded-lg px-1 py-1 ${selectedId === result.id ? 'bg-blue-100 border-2 border-blue-400' : 'cursor-pointer'
                               }`}
-                            onClick={() => setSelectedId(result.id)}
+                            onClick={() => {
+                              setSelectedId(result.id);
+                              setSearchParams({ id: result.id.toString() });
+                            }}
                           >
                             <ResultBadge resultID={result.result_id} />
                             <span className={`text-xs ${isDelay ? 'text-red-600' : 'text-gray-600'}`}>
