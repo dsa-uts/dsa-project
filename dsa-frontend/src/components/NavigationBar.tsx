@@ -1,5 +1,5 @@
 import { useLocation, useNavigate } from "react-router";
-import { hasAdminScope, useLogout } from "../auth/hooks";
+import { hasAdminScope, hasGradingScope, useLogout } from "../auth/hooks";
 
 const NavigationBar = (): React.JSX.Element => {
 
@@ -32,6 +32,10 @@ const NavigationBar = (): React.JSX.Element => {
     navigate("/admin/list");
   }
 
+  const handleGradingMenuClick = () => {
+    navigate("/grading/list");
+  }
+
   return (
     <div className="bg-blue-500 text-white px-6 py-4 flex justify-between items-center">
       <div className="flex items-end space-x-10">
@@ -58,6 +62,16 @@ const NavigationBar = (): React.JSX.Element => {
         </button>
       </div>
       <div className="flex items-end space-x-4">
+        {hasGradingScope() && (
+          <button
+            key="grading-menu-button"
+            onClick={handleGradingMenuClick}
+            className="hover:bg-blue-600 px-4 py-2 rounded transition-colors"
+          >
+            Grading
+          </button>
+        )
+        }
         {hasAdminScope() && (
           <button
             key="admin-page-button"

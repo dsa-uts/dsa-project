@@ -128,6 +128,15 @@ func (r *RequestStore) GetGradingResultsByLectureIDAndUserCode(ctx context.Conte
 	return results, err
 }
 
+func (r *RequestStore) GetGradingResultByID(ctx context.Context, id int64) (*model.GradingRequest, error) {
+	var result model.GradingRequest
+	err := r.db.NewSelect().Model(&result).Where("grading_request.id = ?", id).Scan(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
 func NewRequestStore(db *bun.DB) *RequestStore {
 	return &RequestStore{
 		db: db,

@@ -310,9 +310,14 @@ func (h *Handler) GetValidationDetail(c echo.Context) error {
 		TimeMS:       validationRequest.Log.TimeMS,
 		MemoryKB:     validationRequest.Log.MemoryKB,
 		// Fill in UploadedFiles later
+		// NOTE: initialize with empty slice to avoid null encoding in JSON
+		UploadedFiles: []util.FileData{},
 		// Fill in TestFiles later
+		TestFiles: []util.FileData{},
 		// Fill in BuildLogs later
+		BuildLogs: []DetailedTaskLog{},
 		// Fill in JudgeLogs later
+		JudgeLogs: []DetailedTaskLog{},
 	}
 
 	// Fill in uploaded files
@@ -530,8 +535,7 @@ type GradingDetailProps struct {
 
 type GradingDetailOutput struct {
 	LectureID           int64                     `json:"lecture_id"`
-	LectureTitle        string                    `json:"lecture_title"`
-	Deadline            int64                     `json:"deadline"`
+	LectureInfo         util.LectureEntry         `json:"lecture_info"`
 	UserID              string                    `json:"user_id"`
 	UserName            string                    `json:"user_name"`
 	FileGroups          []FileGroup               `json:"file_groups"`
@@ -542,7 +546,6 @@ type GradingDetailOutput struct {
 type GradingDetailPerProblem struct {
 	ID              int64             `json:"id"`
 	ProblemID       int64             `json:"problem_id"`
-	ProblemTitle    string            `json:"problem_title"`
 	RequestUserID   string            `json:"request_user_id"`
 	RequestUserName string            `json:"request_user_name"`
 	TS              int64             `json:"ts"`
@@ -596,12 +599,34 @@ func (h *Handler) GetGradingResult(c echo.Context) error {
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, response.NewError("Failed to get user info"))
 	}
+	if user == nil {
+		return echo.NewHTTPError(http.StatusNotFound, response.NewError("Grading result not found"))
+	}
 	userCode := user.ID
 
 	// Get lecture and problem info
 	lectureData, err := h.problemStore.GetLectureAndAllProblems(ctx, props.LectureID)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, response.NewError("Failed to get lecture info"))
+	}
+
+	// create lecture entry
+	lectureEntry := util.LectureEntry{
+		LectureID: lectureData.ID,
+		Title:     lectureData.Title,
+		StartDate: lectureData.StartDate.Unix(),
+		Deadline:  lectureData.Deadline.Unix(),
+		// NOTE: initialize with empty slice to avoid null encoding in JSON
+		Problems: []util.ProblemEntry{},
+	}
+
+	for _, problem := range lectureData.Problems {
+		lectureEntry.Problems = append(lectureEntry.Problems, util.ProblemEntry{
+			LectureID:    problem.LectureID,
+			ProblemID:    problem.ProblemID,
+			RegisteredAt: problem.RegisteredAt.Unix(),
+			Title:        problem.Title,
+		})
 	}
 
 	problemDict := make(map[int64]model.Problem)
@@ -621,19 +646,22 @@ func (h *Handler) GetGradingResult(c echo.Context) error {
 	}
 
 	output := GradingDetailOutput{
-		LectureID:    props.LectureID,
-		LectureTitle: lectureData.Title,
-		Deadline:     lectureData.Deadline.Unix(),
-		UserID:       props.UserID,
-		UserName:     user.Name,
+		LectureID:   props.LectureID,
+		LectureInfo: lectureEntry,
+		UserID:      props.UserID,
+		UserName:    user.Name,
 		// TestFilesPerProblem to be filled later,
+		// NOTE: initialize with empty slice to avoid null encoding in JSON
+		TestFilesPerProblem: []TestFilesPerProblem{},
 		// FileGroups to be filled later,
+		FileGroups: []FileGroup{},
 		// DetailList to be filled later
+		DetailList: []GradingDetailPerProblem{},
 	}
 
 	// Fill in TestFilesPerProblem
-	testFilesPerProblem := make([]TestFilesPerProblem, 0, len(lectureData.Problems))
-	for _, problem := range lectureData.Problems {
+	testFilesPerProblem := make([]TestFilesPerProblem, 0, len(lectureEntry.Problems))
+	for _, problem := range lectureEntry.Problems {
 		testFiles, err := util.FetchTestFielsInProblem(ctx, h.problemStore, problem.LectureID, problem.ProblemID)
 		if err != nil {
 			return echo.NewHTTPError(http.StatusInternalServerError, response.NewError("Failed to get problem info"))
@@ -687,17 +715,19 @@ func (h *Handler) GetGradingResult(c echo.Context) error {
 		detail := GradingDetailPerProblem{
 			ID:              grResult.ID,
 			ProblemID:       grResult.ProblemID,
-			ProblemTitle:    problemData.Title,
 			RequestUserID:   grResult.RequestUser.UserID,
 			RequestUserName: grResult.RequestUser.Name,
 			TS:              grResult.TS.Unix(),
 			SubmissionTS:    grResult.SubmissionTS.Unix(),
-			ResultID:        int64(grResult.Log.ResultID),
+			ResultID:        int64(grResult.ResultID),
 			FileGroupID:     grResult.UploadDirID,
 			TimeMS:          grResult.Log.TimeMS,
 			MemoryKB:        grResult.Log.MemoryKB,
 			// BuildLogs to be filled later
+			// NOTE: initialize with empty slice to avoid null encoding in JSON
+			BuildLogs: []DetailedTaskLog{},
 			// JudgeLogs to be filled later
+			JudgeLogs: []DetailedTaskLog{},
 		}
 
 		buildTaskDict := make(map[int64]model.TestCase)

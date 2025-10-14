@@ -681,6 +681,10 @@ func (h *Handler) RequestGrading(c echo.Context) error {
 		RequestUserCode: userCodeOfRequester,
 		UploadDirID:     fileLocation.ID,
 		ResultID:        requeststatus.WJ,
+		// Initialize empty RequestLog, to delete old logs.
+		Log: model.RequestLog{
+			ResultID: requeststatus.WJ,
+		},
 	}
 
 	// Register request
@@ -932,6 +936,10 @@ func (h *Handler) BatchGrading(c echo.Context) error {
 			RequestUserCode: userCodeOfRequester,
 			UploadDirID:     fileLocation.ID,
 			ResultID:        requeststatus.WJ,
+			// Initialize empty RequestLog, to delete old logs.
+			Log: model.RequestLog{
+				ResultID: requeststatus.WJ,
+			},
 		}
 
 		// Fetch the resource path for this problem

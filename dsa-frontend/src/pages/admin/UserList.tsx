@@ -249,7 +249,7 @@ const UserList: React.FC = () => {
             <tbody className="bg-white divide-y divide-gray-200">
               {users.map((user) => {
                 const isEditing = editingUserId === user.user_id;
-                const isAdmin = user.user_id === 'admin';
+                const isAdmin = user.role === 'admin';
 
                 return (
                   <tr key={user.user_id} className={`${isEditing ? 'bg-blue-50' : 'hover:bg-gray-50'} transition-colors`}>

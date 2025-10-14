@@ -153,8 +153,6 @@ definitions:
     type: object
   problem.GradingDetailOutput:
     properties:
-      deadline:
-        type: integer
       detail_list:
         items:
           $ref: '#/definitions/problem.GradingDetailPerProblem'
@@ -165,8 +163,8 @@ definitions:
         type: array
       lecture_id:
         type: integer
-      lecture_title:
-        type: string
+      lecture_info:
+        $ref: '#/definitions/util.LectureEntry'
       test_files_per_problem:
         items:
           $ref: '#/definitions/problem.TestFilesPerProblem'
@@ -194,8 +192,6 @@ definitions:
         type: integer
       problem_id:
         type: integer
-      problem_title:
-        type: string
       request_user_id:
         type: string
       request_user_name:

@@ -57,7 +57,7 @@ const BatchedUserCreation: React.FC = () => {
 
     return data.map(row => ({
       user_id: String(row.user_id || ''),
-      name: String(row.username || ''),
+      name: String(row.name || ''),
       email: String(row.email || ''),
       role: (row.role === 'manager' ? 'manager' : 'student') as 'student' | 'manager',
       password: String(row.password || generatePassword()),
@@ -72,7 +72,7 @@ const BatchedUserCreation: React.FC = () => {
 
     return data.map(row => ({
       user_id: String(row.user_id || ''),
-      name: String(row.username || ''),
+      name: String(row.name || ''),
       email: String(row.email || ''),
       role: (row.role === 'manager' ? 'manager' : 'student') as 'student' | 'manager',
       password: String(row.password || generatePassword()),
@@ -199,7 +199,7 @@ const BatchedUserCreation: React.FC = () => {
             <thead>
               <tr className="border-b">
                 <th className="text-left py-2 px-4">user_id</th>
-                <th className="text-left py-2 px-4">username</th>
+                <th className="text-left py-2 px-4">name</th>
                 <th className="text-left py-2 px-4">password</th>
                 <th className="text-left py-2 px-4">email</th>
                 <th className="text-left py-2 px-4">role</th>
@@ -227,7 +227,7 @@ const BatchedUserCreation: React.FC = () => {
         {/* Explanation */}
         <div className="space-y-2 text-sm">
           <p><span className="font-semibold">user_id:</span> 学籍番号あるいは任意の文字列 ("admin"以外)</p>
-          <p><span className="font-semibold">username:</span> 任意の名前</p>
+          <p><span className="font-semibold">name:</span> 任意の名前</p>
           <p><span className="font-semibold">password:</span> 任意のパスワード。10文字以上。空欄の場合は自動生成される。</p>
           <p><span className="font-semibold">email:</span> 任意のメールアドレス (空欄可、これまで使ったことない)</p>
           <p><span className="font-semibold">role:</span> "student" or "manager"</p>
@@ -296,7 +296,7 @@ const BatchedUserCreation: React.FC = () => {
                 <thead className="bg-gray-50 sticky top-0">
                   <tr>
                     <th className="text-left py-2 px-4">user_id</th>
-                    <th className="text-left py-2 px-4">username</th>
+                    <th className="text-left py-2 px-4">name</th>
                     <th className="text-left py-2 px-4">email</th>
                     <th className="text-left py-2 px-4">role</th>
                     <th className="text-left py-2 px-4">password</th>
