@@ -4,6 +4,7 @@ import { addAuthorizationHeader, useAuthQuery } from "../../auth/hooks";
 import * as XLSX from 'xlsx';
 import JSZip from "jszip";
 import { AlertCircle, CheckCircle, File as FileIcon, FileArchive, FileText, Folder, Loader2, Upload, X, XCircle } from "lucide-react";
+import { Link } from "react-router";
 
 interface Problem {
   lecture_id: number;
@@ -530,10 +531,12 @@ const GradingUpload: React.FC = () => {
             ) : (
               <AlertCircle className="h-5 w-5 text-yellow-600 mr-3" />
             )}
-            <span className={`text-lg font-medium ${submissionProgress.failed === 0 ? 'text-green-900' : 'text-yellow-900'
-              }`}>
-              Submission Complete
-            </span>
+            <Link to={`/grading/results?lectureid=${selectedLecture}`} className="hover:underline">
+              <span className={`text-lg font-medium ${submissionProgress.failed === 0 ? 'text-green-900' : 'text-yellow-900'
+                }`}>
+                Submission Complete (Click to view results)
+              </span>
+            </Link>
           </div>
           <div className="text-sm text-gray-700">
             {submissionProgress.successful} succeeded
