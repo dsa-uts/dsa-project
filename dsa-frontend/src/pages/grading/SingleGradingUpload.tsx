@@ -4,6 +4,7 @@ import { addAuthorizationHeader, useAuthQuery } from "../../auth/hooks";
 import { axiosClient, type SuccessResponse } from "../../api/axiosClient";
 import { formatTimestamp } from "../../util/timestamp";
 import SubmitFormSection from "../../components/SubmitFormSection";
+import { FileArchive, FileText } from "lucide-react";
 
 interface RequiredFiles {
   lecture_id: number;
@@ -149,12 +150,42 @@ const SingleGradingUpload: React.FC = () => {
     return { valid: false, errorMessage: "Invalid file type. Only zip files are allowed." };
   }
 
+  // Tree item component for file structure visualization
+  const TreeItem: React.FC<{ name: string; isLast?: boolean; depth?: number }> = ({
+    name,
+    isLast = false,
+    depth = 0
+  }) => {
+    return (
+      <div className="flex items-center text-sm leading-none">
+        <div className="flex items-center">
+          {depth > 0 && (
+            <span className="text-gray-400 ml-4 mr-2">
+              {isLast ? '└──' : '├──'}
+            </span>
+          )}
+          {depth === 0 ? (
+            <FileArchive className="w-4 h-4 text-yellow-500 mr-2" />
+          ) : (
+            <FileText className="w-4 h-4 text-gray-500 mr-2" />
+          )}
+          <span className={depth === 0 ? 'font-medium text-gray-900' : 'text-gray-700'}>
+            {name}
+          </span>
+        </div>
+      </div>
+    )
+  };
+
   return (
     <div className="container mx-auto px-8 py-6">
       <h1 className="text-3xl font-semibold mb-6">Grading Request (個別提出)</h1>
 
       {/* Dropdown selection (lecture) */}
       <div className="mb-8">
+        <div className="mb-2 font-semibold text-xl">
+          1. Select Lecture (採点対象の課題)
+        </div>
         <select
           onChange={handleLectureSelect}
           className="w-full bg-white px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -174,6 +205,9 @@ const SingleGradingUpload: React.FC = () => {
       {/* Dropdown selection (user) */}
       {/* TODO: Improve ux by adding search functionality */}
       <div className="mb-8">
+        <div className="mb-2 font-semibold text-xl">
+          2. Select User (採点対象ユーザ)
+        </div>
         <select
           onChange={handleUserSelect}
           className="w-full bg-white px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -192,7 +226,9 @@ const SingleGradingUpload: React.FC = () => {
 
       {/* Timestamp input */}
       <div className="mb-8">
-        <label className="block text-gray-700 mb-2">Submission Timestamp:</label>
+        <div className="mb-2 font-semibold text-xl">
+          3. Submission Timestamp (提出日時)
+        </div>
         <input
           type="datetime-local"
           onChange={handleTimestampChange}
@@ -200,6 +236,24 @@ const SingleGradingUpload: React.FC = () => {
           defaultValue={formatTimestamp(submissionTs)}
         />
       </div>
+
+      {/* File Structure Display */}
+      {selectedLecture && (
+        <div className="mb-6 bg-white rounded-lg shadow-sm border border-gray-200 p-4">
+          <h3 className="text-lg font-semibold text-gray-900 mb-3">Expected File Structure</h3>
+          <div className="font-mono text-sm">
+            <TreeItem name={`class${selectedLecture.lecture_id}.zip`} />
+            {selectedLecture.files.map((file, index) => (
+              <TreeItem
+                key={file}
+                name={file}
+                isLast={index === selectedLecture.files.length - 1}
+                depth={1}
+              />
+            ))}
+          </div>
+        </div>
+      )}
 
       {errorMessage && (
         <div className="mb-4 text-red-600">
