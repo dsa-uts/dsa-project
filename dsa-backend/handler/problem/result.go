@@ -310,9 +310,14 @@ func (h *Handler) GetValidationDetail(c echo.Context) error {
 		TimeMS:       validationRequest.Log.TimeMS,
 		MemoryKB:     validationRequest.Log.MemoryKB,
 		// Fill in UploadedFiles later
+		// NOTE: initialize with empty slice to avoid null encoding in JSON
+		UploadedFiles: []util.FileData{},
 		// Fill in TestFiles later
+		TestFiles: []util.FileData{},
 		// Fill in BuildLogs later
+		BuildLogs: []DetailedTaskLog{},
 		// Fill in JudgeLogs later
+		JudgeLogs: []DetailedTaskLog{},
 	}
 
 	// Fill in uploaded files
@@ -649,6 +654,9 @@ func (h *Handler) GetGradingResult(c echo.Context) error {
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, response.NewError("Failed to get user info"))
 	}
+	if user == nil {
+		return echo.NewHTTPError(http.StatusNotFound, response.NewError("Grading result not found"))
+	}
 	userCode := user.ID
 
 	// Get lecture and problem info
@@ -663,7 +671,8 @@ func (h *Handler) GetGradingResult(c echo.Context) error {
 		Title:     lectureData.Title,
 		StartDate: lectureData.StartDate.Unix(),
 		Deadline:  lectureData.Deadline.Unix(),
-		Problems:  []util.ProblemEntry{},
+		// NOTE: initialize with empty slice to avoid null encoding in JSON
+		Problems: []util.ProblemEntry{},
 	}
 
 	for _, problem := range lectureData.Problems {
@@ -697,8 +706,12 @@ func (h *Handler) GetGradingResult(c echo.Context) error {
 		UserID:      props.UserID,
 		UserName:    user.Name,
 		// TestFilesPerProblem to be filled later,
+		// NOTE: initialize with empty slice to avoid null encoding in JSON
+		TestFilesPerProblem: []TestFilesPerProblem{},
 		// FileGroups to be filled later,
+		FileGroups: []FileGroup{},
 		// DetailList to be filled later
+		DetailList: []GradingDetailPerProblem{},
 	}
 
 	// Fill in TestFilesPerProblem
@@ -766,7 +779,10 @@ func (h *Handler) GetGradingResult(c echo.Context) error {
 			TimeMS:          grResult.Log.TimeMS,
 			MemoryKB:        grResult.Log.MemoryKB,
 			// BuildLogs to be filled later
+			// NOTE: initialize with empty slice to avoid null encoding in JSON
+			BuildLogs: []DetailedTaskLog{},
 			// JudgeLogs to be filled later
+			JudgeLogs: []DetailedTaskLog{},
 		}
 
 		buildTaskDict := make(map[int64]model.TestCase)
