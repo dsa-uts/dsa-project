@@ -329,6 +329,13 @@ definitions:
       message:
         type: string
     type: object
+  user.userInfoEntity:
+    properties:
+      id:
+        type: string
+      name:
+        type: string
+    type: object
   user.userLoginResponse:
     properties:
       access_token:
@@ -1326,6 +1333,26 @@ paths:
       summary: Request validation for all problems in a specific lecture entry.
       tags:
       - Submit
+  /user/grading/list:
+    get:
+      description: List all users with their IDs and names
+      responses:
+        "200":
+          description: List of users
+          schema:
+            items:
+              $ref: '#/definitions/user.userInfoEntity'
+            type: array
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/response.Error'
+      security:
+      - OAuth2Password:
+        - grading
+      summary: List all users
+      tags:
+      - User
   /user/login:
     post:
       consumes:

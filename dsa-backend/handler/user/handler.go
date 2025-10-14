@@ -60,8 +60,12 @@ func NewUserHandler(jwtSecret string, db *bun.DB) *Handler {
 func (h *Handler) RegisterRoutes(r *echo.Group) {
 	r.POST("/login", h.Login)
 
-	r.GET("/me", h.GetCurrentUser, middleware.JWTMiddleware(h.jwtSecret), middleware.CheckValidityOfJWTMiddleware(h.db))
-	r.POST("/logout", h.Logout, middleware.JWTMiddleware(h.jwtSecret), middleware.CheckValidityOfJWTMiddleware(h.db))
+	authedRouter := r.Group("", middleware.JWTMiddleware(h.jwtSecret), middleware.CheckValidityOfJWTMiddleware(h.db))
+
+	authedRouter.GET("/me", h.GetCurrentUser, middleware.JWTMiddleware(h.jwtSecret), middleware.CheckValidityOfJWTMiddleware(h.db))
+	authedRouter.POST("/logout", h.Logout, middleware.JWTMiddleware(h.jwtSecret), middleware.CheckValidityOfJWTMiddleware(h.db))
+
+	authedRouter.GET("/grading/list", h.ListUsers, middleware.RequiredScopesMiddleware(auth.ScopeGrading))
 }
 
 // Login godoc
@@ -215,4 +219,43 @@ func (h *Handler) Logout(c echo.Context) error {
 	}
 
 	return c.JSON(http.StatusOK, response.NewSuccess("logout successful"))
+}
+
+type userInfoEntity struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
+}
+
+// ListUsers godoc
+//
+//	@Summary		List all users
+//	@Description	List all users with their IDs and names
+//	@Tags			User
+//	@Product		json
+//	@Success		200	{array}		userInfoEntity[]	"List of users"
+//	@Failure		500	{object}	response.Error		"Internal server error"
+//	@Security		OAuth2Password[grading]
+//	@Router			/user/grading/list [get]
+func (h *Handler) ListUsers(c echo.Context) error {
+	ctx := context.Background()
+
+	users, err := h.userStore.GetAllUserList(ctx)
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, response.NewError("failed to get users: "+err.Error()))
+	}
+	if users == nil {
+		return c.JSON(http.StatusInternalServerError, response.NewError("no users found"))
+	}
+
+	// Convert to userInfoEntity slice
+
+	userInfos := make([]userInfoEntity, len(*users))
+	for i, user := range *users {
+		userInfos[i] = userInfoEntity{
+			ID:   user.UserID,
+			Name: user.Name,
+		}
+	}
+
+	return c.JSON(http.StatusOK, userInfos)
 }
