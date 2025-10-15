@@ -8,6 +8,10 @@ import { useAuthMutation, useAuthQuery } from "../auth/hooks";
 import type { JSX } from "react";
 import SubmitFormSection from "../components/SubmitFormSection";
 import type { CompressedFileData } from "../types/FileData";
+import 'katex/dist/katex.min.css';
+import remarkMath from 'remark-math';
+import rehypeKatex from 'rehype-katex';
+import rehypeRaw from 'rehype-raw';
 
 interface ProblemDetail {
   lecture_id: number;
@@ -87,7 +91,8 @@ const renderProblemDetail = (detail: ProblemDetail, handleOnSubmit: (files: File
                                 prose-ol:list-decimal prose-ol:pl-6 prose-ol:my-4
                                 prose-li:text-gray-700 prose-li:my-1">
                 <Markdown
-                  remarkPlugins={[remarkGfm]}
+                  remarkPlugins={[remarkGfm, remarkMath]}
+                  rehypePlugins={[rehypeKatex, rehypeRaw]}
                   components={{
                     // Customization of code block
                     pre: ({ children }) => (
