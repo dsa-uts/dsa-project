@@ -53,7 +53,12 @@ flowchart LR
     ./docker.py dev build
     ```
 
-5. config設定
+5. Sandboxコンテナイメージのビルド
+    ```bash
+    ./sandbox/build.sh
+    ```
+
+6. config設定
     ```bash
     cp config/dev/db_root_password.txt.example config/dev/db_root_password.txt # データベースのrootパスワード
     cp config/dev/db_app_password.txt.example config/dev/db_app_password.txt # アプリケーション用データベースのパスワード
@@ -61,7 +66,7 @@ flowchart LR
     ```
     必要に応じて、各ファイルの中身を編集する。
 
-6. コンテナの起動
+7. コンテナの起動
     ```bash
     ./docker.py dev
     ```
