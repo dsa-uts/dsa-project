@@ -27,6 +27,18 @@ const DetailedTaskLogTable: React.FC<DetailedTaskLogTableProps> = ({ logs }) => 
     setDiffMode((prev) => ({ ...prev, [key]: !prev[key] }));
   };
 
+  const exitCodeColor = (exitCode: number, expectedExitCode: number) => {
+    if (exitCode === 0 && expectedExitCode !== 0) {
+      // Expected failure but got success
+      return "text-red-600";
+    }
+    if (exitCode !== 0 && expectedExitCode === 0) {
+      // Expected success but got failure
+      return "text-red-600";
+    }
+    return "text-green-600";
+  }
+
   return (
     <div className="w-full">
       <table className="w-full border-collapse">
@@ -73,7 +85,7 @@ const DetailedTaskLogTable: React.FC<DetailedTaskLogTableProps> = ({ logs }) => 
                         </div>
                         <div>
                           <span className="font-semibold">Exit code: </span>
-                          <span className={log.exit_code === log.expected_exit_code ? "text-green-600" : "text-red-600"}>
+                          <span className={exitCodeColor(log.exit_code, log.expected_exit_code)}>
                             {log.exit_code} (expected: {log.expected_exit_code})
                           </span>
                         </div>
