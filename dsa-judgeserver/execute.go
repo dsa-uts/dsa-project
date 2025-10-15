@@ -302,8 +302,8 @@ func (executor *JobExecutor) executeBuildTasks(ctx context.Context, job *model.J
 			// If the expected exit code is 0 (successful execution), but the actual exit code is not 0, mark it as CE
 			resultStatus = resultStatus.Max(requeststatus.CE)
 		}
-		if buildTask.ExitCode != 0 && *watchdogOutput.ExitCode != buildTask.ExitCode {
-			// If the exit code is different from the expected one, mark it as RE
+		if buildTask.ExitCode != 0 && *watchdogOutput.ExitCode == 0 {
+			// If the exit code is not 0 (expected failure), but the actual exit code is 0, mark it as RE (Runtime Error)
 			resultStatus = resultStatus.Max(requeststatus.RE)
 		}
 
@@ -543,8 +543,8 @@ func (executor *JobExecutor) executeJudgeTasks(ctx context.Context, job *model.J
 			// If the expected exit code is 0 (successful execution), but the actual exit code is not 0, mark it as RE (Runtime Error)
 			resultStatus = resultStatus.Max(requeststatus.RE)
 		}
-		if judgeTask.ExitCode != 0 && *watchdogOutput.ExitCode != judgeTask.ExitCode {
-			// Expected non-zero exit code, but the actual exit code is different, mark it as WA (Wrong Answer)
+		if judgeTask.ExitCode != 0 && *watchdogOutput.ExitCode == 0 {
+			// Expected non-zero exit code (expected failure), but the actual exit code is 0, mark it as WA (Wrong Answer)
 			resultStatus = resultStatus.Max(requeststatus.WA)
 		}
 
