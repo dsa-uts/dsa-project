@@ -10,6 +10,9 @@ services:
       dockerfile: dsa-backend/Dockerfile.prod
     volumes:
       - ./upload/prod:/app/upload
+      - ./dsa-backend/.env.production:/app/.env.production
+    environment:
+      - APP_ENV=production
     secrets:
       - db_app_password
       - admin_info_json

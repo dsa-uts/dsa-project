@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"dsa-backend/background"
+	"dsa-backend/config"
 	"dsa-backend/handler"
 	"dsa-backend/router"
 	"encoding/json"
@@ -42,6 +43,12 @@ import (
 // @scope.manager							Grants any rights related to manager user
 // @scope.admin							Grants any rights related to admin user
 func main() {
+	// Load configuration
+	if err := config.Load(); err != nil {
+		log.Fatalf("Failed to load config: %v", err)
+		return
+	}
+
 	r := router.New()
 
 	// Setting up Swagger documentation

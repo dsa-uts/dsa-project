@@ -21,6 +21,9 @@ services:
       - ./upload/dev:/app/upload
       - ./database:/database # for sharing database module
       - backend-go-modules:/go # for caching Go modules
+      - ./dsa-backend/.env.development:/app/.env.development
+    environment:
+      - APP_ENV=development
     secrets:
       - db_app_password
       - admin_info_json
