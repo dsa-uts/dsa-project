@@ -78,7 +78,13 @@ flowchart LR
     ```env
     VITE_API_BASE_URL=https://your.domain.name/api
     ```
-2. docker-compose.prod.yamlを編集し、外部からアクセスされるポート番号に合わせてnginxのポートbindingを変更する。
+
+2. backendの[.env.production](./dsa-backend/.env.production)を、実際のドメイン名に合わせて書き換える。
+    ```env
+    CORS_ALLOWED_ORIGINS=https://your.domain.name
+    ```
+
+3. docker-compose.prod.yamlを編集し、外部からアクセスされるポート番号に合わせてnginxのポートbindingを変更する。
     ```yaml
     services:
       nginx:
@@ -86,9 +92,9 @@ flowchart LR
           - "0.0.0.0:80:80"  # ← ここの"0.0.0.0:XX:80"のXXを変更
     ```
 
-3. docker.py prod buildを実行し、コンテナイメージをビルドする。
+4. docker.py prod buildを実行し、コンテナイメージをビルドする。
 
-4. config設定
+5. config設定
     ```bash
     cp config/db_root_password.txt.example config/db_root_password.txt
     cp config/db_app_password.txt.example config/db_app_password.txt
@@ -96,4 +102,4 @@ flowchart LR
     ```
     必要に応じて、各ファイルの中身を編集する。
 
-5. docker.py prodを実行し、コンテナを起動する。
+6. docker.py prodを実行し、コンテナを起動する。
