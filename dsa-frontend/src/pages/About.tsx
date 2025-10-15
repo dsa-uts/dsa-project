@@ -7,6 +7,7 @@ import { oneDark } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import remarkMath from 'remark-math';
 import rehypeKatex from 'rehype-katex';
 import 'katex/dist/katex.min.css';
+import rehypeRaw from 'rehype-raw';
 
 const About: React.FC = () => {
   return (
@@ -31,7 +32,7 @@ const About: React.FC = () => {
                       rose-td:p-2 prose-td:border-t prose-td:border-gray-200">
           <Markdown
             remarkPlugins={[remarkGfm, remarkMath]}
-            rehypePlugins={[rehypeKatex]}
+            rehypePlugins={[rehypeKatex, rehypeRaw]}
             components={{
               // Customization of code block
               pre: ({ children }) => (
