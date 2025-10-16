@@ -84,7 +84,7 @@ CREATE TABLE IF NOT EXISTS ResultValues (
     name VARCHAR(255) NOT NULL
 );
 
-INSERT INTO ResultValues (value, name) VALUES (0, 'AC'), (1, 'WA'), (2, 'TLE'), (3, 'MLE'), (4, 'RE'), (5, 'CE'), (6, 'OLE'), (7, 'IE'), (8, 'FN'), (9, 'Judging'), (10, 'WJ');
+INSERT INTO ResultValues (value, name) VALUES (0, 'AC'), (1, 'WA'), (2, 'RE'), (3, 'TLE'), (4, 'MLE'), (5, 'OLE'), (6, 'CE'), (7, 'IE'), (8, 'FN'), (9, 'Judging'), (10, 'WJ');
 
 CREATE TABLE IF NOT EXISTS ValidationRequest (
     id SERIAL PRIMARY KEY,
