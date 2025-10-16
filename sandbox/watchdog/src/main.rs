@@ -136,12 +136,17 @@ fn execute_task(task: TaskInput) -> TaskOutput {
         };
     }
 
+    let final_command = format!(
+        "stdbuf -oL -eL sh -c '{}'",
+        task.command.replace("'", "'\\''")
+    );
+
     // Spawn child process with specified uid/gid
     // Use process_group(0) to create a new process group with the child as leader
     let mut child = match unsafe {
         Command::new("/bin/sh")
             .arg("-c")
-            .arg(&task.command)
+            .arg(&final_command)
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
