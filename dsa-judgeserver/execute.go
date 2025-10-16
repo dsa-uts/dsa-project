@@ -356,8 +356,8 @@ func (executor *JobExecutor) executeJudgeTasks(ctx context.Context, job *model.J
 				Ulimits: []*container.Ulimit{
 					{
 						Name: "nofile", // limit max number of open files
-						Hard: 64,
-						Soft: 64,
+						Hard: 128,
+						Soft: 128,
 					},
 					{
 						Name: "nproc", // limit max number of processes
@@ -365,9 +365,9 @@ func (executor *JobExecutor) executeJudgeTasks(ctx context.Context, job *model.J
 						Soft: pidLimit,
 					},
 					{
-						Name: "fsize",                   // limit max size of files that can be created, the unit is file-blocks (assumes 4kB = 4096 bytes)
-						Hard: (10 * 1024 * 1024) / 4096, // 10 MB
-						Soft: (10 * 1024 * 1024) / 4096, // 10 MB
+						Name: "fsize",                    // limit max size of files that can be created, the unit is file-blocks (assumes 4kB = 4096 bytes)
+						Hard: (100 * 1024 * 1024) / 4096, // 100 MB
+						Soft: (100 * 1024 * 1024) / 4096, // 100 MB
 					},
 					{
 						Name: "stack",     // limit max stack size, the unit is kB (1024 bytes)
