@@ -6,11 +6,11 @@ type State int64
 const (
 	AC State = iota
 	WA
+	RE
 	TLE
 	MLE
-	RE
-	CE
 	OLE
+	CE
 	IE
 	FN
 	Judging
