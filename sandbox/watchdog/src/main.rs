@@ -1,6 +1,6 @@
 use std::{
     io::{self, Read, Write},
-    os::unix::process::CommandExt,
+    os::unix::process::{CommandExt, ExitStatusExt},
     process::{Command, Stdio},
     sync::{Arc, Mutex},
     thread,
@@ -89,7 +89,7 @@ fn monitor_output<R: Read + Send + 'static>(
                         let allowed = max_bytes.saturating_sub(buf.len());
                         let to_copy = n.min(allowed);
                         buf.extend_from_slice(&local_buffer[..to_copy]);
-                        break;
+                        // Don't break here - continue reading to prevent blocking
                     } else {
                         buf.extend_from_slice(&local_buffer[..n]);
                     }
@@ -235,6 +235,7 @@ fn execute_task(task: TaskInput) -> TaskOutput {
 
     let monitoring_start = Instant::now();
     let mut process_killed = false;
+    let mut kill_reason = None;
 
     loop {
         // Check if process has exited
@@ -250,8 +251,39 @@ fn execute_task(task: TaskInput) -> TaskOutput {
                 let stdout = String::from_utf8_lossy(&stdout_buffer.lock().unwrap()).to_string();
                 let stderr = String::from_utf8_lossy(&stderr_buffer.lock().unwrap()).to_string();
 
+                // Determine exit code
+                let exit_code = if let Some(code) = status.code() {
+                    // Normal exit
+                    Some(code)
+                } else if let Some(signal) = status.signal() {
+                    // Killed by signal
+                    if process_killed {
+                        // Process are killed due to resource limits
+                        // Use conventional exit codes:
+                        // 124 for timeout (like GNU timeout command)
+                        // 137 for SIGKILL (128 + 9)
+                        // 143 for SIGTERM (128 + 15)
+                        match kill_reason.as_deref() {
+                            Some("TLE") => Some(124),
+                            Some("MLE") => Some(137),
+                            Some("OLE") => Some(137),
+                            _ => Some(128 + signal as i32),
+                        }
+                    } else {
+                        // Killed by external signal or crash
+                        Some(128 + signal as i32)
+                    }
+                } else {
+                    // This should not happen, but handle it gracefully
+                    if process_killed {
+                        Some(137) // Assume killed by SIGKILL
+                    } else {
+                        None
+                    }
+                };
+
                 return TaskOutput {
-                    exit_code: status.code(),
+                    exit_code,
                     stdout,
                     stderr,
                     time_ms: elapsed.as_millis() as u64,
@@ -283,6 +315,7 @@ fn execute_task(task: TaskInput) -> TaskOutput {
             // Check timeout
             if monitoring_start.elapsed() > timeout {
                 tle = true;
+                kill_reason = Some("TLE");
                 kill_process_group(pid);
                 process_killed = true;
                 continue;
@@ -293,6 +326,7 @@ fn execute_task(task: TaskInput) -> TaskOutput {
                 max_memory_kb = max_memory_kb.max(memory_kb);
                 if memory_kb > memory_limit_kb {
                     mle = true;
+                    kill_reason = Some("MLE");
                     kill_process_group(pid);
                     process_killed = true;
                     continue;
@@ -301,6 +335,7 @@ fn execute_task(task: TaskInput) -> TaskOutput {
 
             // Check output limit exceeded
             if *ole.lock().unwrap() {
+                kill_reason = Some("OLE");
                 kill_process_group(pid);
                 process_killed = true;
                 continue;
