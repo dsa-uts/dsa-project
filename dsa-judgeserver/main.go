@@ -81,7 +81,7 @@ func main() {
 		}
 
 		if len(jobs) == 0 {
-			logger.Info("No pending jobs found. Sleeping for a while...")
+			// logger.Info("No pending jobs found. Sleeping for a while...")
 			// Sleep for a while before checking again
 			time.Sleep(5 * time.Second) // Uncomment this line to add a delay
 			continue

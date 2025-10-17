@@ -81,7 +81,7 @@ func (executor *JobExecutor) executeBuildTasks(ctx context.Context, job *model.J
 
 	cpuSet := CPU_SET
 	timeout := TIMEOUT_BEFORE_CONTAINER_STOP
-	pidLimit := int64(128) // allow more processes for build tasks
+	pidLimit := int64(256) // allow more processes for build tasks
 	// add 32MB for overhead
 	totalMemoryInBytes := min(
 		(job.MemoryMB+32)*1024*1024, MAX_MEMORY_LIMIT_MB*1024*1024)
@@ -108,8 +108,8 @@ func (executor *JobExecutor) executeBuildTasks(ctx context.Context, job *model.J
 				Ulimits: []*container.Ulimit{
 					{
 						Name: "nofile", // limit max number of open files
-						Hard: 128,
-						Soft: 128,
+						Hard: 1024,
+						Soft: 1024,
 					},
 					{
 						Name: "nproc", // limit max number of processes
