@@ -1,7 +1,7 @@
 import type React from "react";
 import type { DetailedTaskLog } from "../types/DetailedTaskLog";
 import { decompressFileData, decompressString, type CompressedFileData, type FileData } from "../types/FileData";
-import { useParams } from "react-router";
+import { Link, useParams } from "react-router";
 import { useAuthQuery } from "../auth/hooks";
 import { useEffect, useMemo, useState } from "react";
 import FileViewer from "../components/FileViewer";
@@ -134,7 +134,12 @@ const ValidationDetail: React.FC = () => {
             <tr className="border-b">
               <td className="px-4 py-2 font-semibold bg-gray-100">問題</td>
               <td className="px-4 py-2">
-                {data.lecture_title}・{data.problem_title}
+                <Link
+                  to={`/problem/${data.lecture_id}/${data.problem_id}`}
+                  className="text-blue-500 hover:text-blue-700 underline"
+                >
+                  {data.lecture_title}・{data.problem_title}
+                </Link>
               </td>
             </tr>
             <tr className="border-b">
