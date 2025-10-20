@@ -88,7 +88,7 @@ func (executor *JobExecutor) executeBuildTasks(ctx context.Context, job *model.J
 
 	buildContainer_createResponse, err := executor.client.ContainerCreate(ctx,
 		&container.Config{
-			User:  "guest",
+			User:  "root",
 			Cmd:   []string{"/bin/sh", "-c", "sleep 3600"},
 			Image: "checker-lang-gcc",
 			Volumes: map[string]struct{}{
@@ -162,7 +162,11 @@ func (executor *JobExecutor) executeBuildTasks(ctx context.Context, job *model.J
 		Timeout: &timeoutBeforeStop, // do not wait before killing the container
 	})
 
+	// ---------------------------------------------------------------------------
 	// Copy test files and user submitted files to the build container
+	// to /home/guest/, with guest:guest ownership
+	// ---------------------------------------------------------------------------
+
 	// Copy test files
 	for _, testFile := range job.TestFiles {
 		testFilePath := filepath.Join(job.ResourceDir, testFile)
@@ -177,6 +181,17 @@ func (executor *JobExecutor) executeBuildTasks(ctx context.Context, job *model.J
 	err = executor.CopyContentsToContainer(ctx, userSubmittedFolderPath, buildContainer_createResponse.ID, "/home/guest/")
 	if err != nil {
 		return nil, err
+	}
+
+	// modify ownership of all files under /home/guest to guest:guest
+	res, err := executor.ExecuteSimpleCommand(ctx, buildContainer_createResponse.ID, []string{
+		"chown", "-R", "guest:guest", "/home/guest/",
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to change ownership of /home/guest: %s, stderr: %s", err.Error(), res.Stderr)
+	}
+	if res.ExitCode != 0 {
+		return nil, fmt.Errorf("failed to change ownership of /home/guest, exit code: %d, stderr: %s", res.ExitCode, res.Stderr)
 	}
 
 	buildLog := []model.TaskLog{}
@@ -336,7 +351,7 @@ func (executor *JobExecutor) executeJudgeTasks(ctx context.Context, job *model.J
 
 	judgeContainer_createResponse, err := executor.client.ContainerCreate(ctx,
 		&container.Config{
-			User:  "guest",
+			User:  "root",
 			Cmd:   []string{"/bin/sh", "-c", "sleep 3600"},
 			Image: "binary-runner",
 			Volumes: map[string]struct{}{
