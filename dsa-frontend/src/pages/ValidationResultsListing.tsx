@@ -4,7 +4,7 @@ import ResultBadge from "../components/ResultBadge";
 import { addAuthorizationHeader, useAuthQuery } from "../auth/hooks";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { axiosClient } from "../api/axiosClient";
-import { useNavigate } from "react-router";
+import { Link } from "react-router";
 
 interface ValidationResult {
   id: number;
@@ -43,7 +43,6 @@ const ValidationResultsListing: React.FC = () => {
   const [direction, setDirection] = useState<"next" | "prev">("next");
   const [currentData, setCurrentData] = useState<APIResponse | null>(null);
   const intervalRef = useRef<number | null>(null);
-  const navigation = useNavigate();
 
   // API call using useAuthQuery
   const { data, isLoading, error } = useAuthQuery<APIResponse>({
@@ -166,10 +165,6 @@ const ValidationResultsListing: React.FC = () => {
     // Refetch will be triggered automatically by useAuthQuery due to queryKey change
   };
 
-  const handleDetailClick = (id: number) => {
-    navigation(`/validation/detail/${id}`);
-  }
-
   if (isLoading && !currentData) {
     return (
       <div className="container mx-auto px-8 py-6">
@@ -252,7 +247,9 @@ const ValidationResultsListing: React.FC = () => {
                   {formatTimestamp(result.ts)}
                 </td>
                 <td className="border-r border-gray-400 px-4 py-3 text-sm">
-                  {getProblemTitle(result.lecture_id, result.problem_id)}
+                  <Link to={`/problem/${result.lecture_id}/${result.problem_id}`} className="text-blue-500 hover:text-blue-700 underline">
+                    {getProblemTitle(result.lecture_id, result.problem_id)}
+                  </Link>
                 </td>
                 <td className="border-r border-gray-400 px-4 py-3 text-sm">
                   {result.user_name} ({result.user_id})
@@ -270,11 +267,11 @@ const ValidationResultsListing: React.FC = () => {
                 </td>
                 <td className="px-4 py-3 text-center">
                   {/* Link to detail page /validation/detail/:id */}
-                  <button
-                    onClick={() => handleDetailClick(result.id)}
+                  <Link
+                    to={`/validation/detail/${result.id}`}
                     className="text-blue-500 hover:text-blue-700 underline text-sm">
                     詳細
-                  </button>
+                  </Link>
                 </td>
               </tr>
             ))}

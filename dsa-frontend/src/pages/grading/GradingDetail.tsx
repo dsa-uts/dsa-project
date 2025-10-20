@@ -1,4 +1,4 @@
-import { useParams, useSearchParams } from "react-router";
+import { Link, useParams, useSearchParams } from "react-router";
 import type { DetailedTaskLog } from "../../types/DetailedTaskLog";
 import { decompressFileData, decompressString, type CompressedFileData, type FileData } from "../../types/FileData";
 import { useEffect, useMemo, useRef, useState, type JSX } from "react";
@@ -137,7 +137,15 @@ const renderDetail = (detail: GradingDetailPerProblem, fileGroup: FileGroup, tes
             <tr className="border-b">
               <td className="px-4 py-2 font-semibold bg-gray-100">問題
               </td>
-              <td className="px-4 py-2">{problemInfo ? `${lectureInfo.title}・${problemInfo.title}` : '(null)'}</td>
+              <td className="px-4 py-2">{
+                problemInfo ?
+                  <Link
+                    to={`/problem/${lectureInfo.lecture_id}/${problemInfo.problem_id}`}
+                    className="text-blue-500 hover:text-blue-700 underline"
+                    target="_blank" rel="noopener noreferrer">
+                    {`${lectureInfo.title}・${problemInfo.title}`}
+                  </Link> : '(null)'
+              }</td>
             </tr>
             <tr className="border-b">
               <td className="px-4 py-2 font-semibold bg-gray-100">採点対象ユーザ</td>

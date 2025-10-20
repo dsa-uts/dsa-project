@@ -231,7 +231,7 @@ const GradingResultsListing: React.FC = () => {
                 return (
                   <tr key={user.user_id} className="hover:bg-gray-50">
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 border-r">
-                      <Link to={detailLink} className="hover:underline">
+                      <Link to={detailLink} className="hover:underline" target="_blank" rel="noopener noreferrer">
                         {user.user_name} ({user.user_id})
                       </Link>
                     </td>
@@ -249,10 +249,10 @@ const GradingResultsListing: React.FC = () => {
                             <div className="space-y-2">
                               {results.map(result => (
                                 <div key={result.id} className="flex items-center gap-2">
-                                  <Link to={`${detailLink}?id=${result.id}`} className="hover:underline">
+                                  <Link to={`${detailLink}?id=${result.id}`} className="hover:underline" target="_blank" rel="noopener noreferrer">
                                     <ResultBadge resultID={result.result_id} />
                                   </Link>
-                                  <Link to={`${detailLink}?id=${result.id}`} className="hover:underline">
+                                  <Link to={`${detailLink}?id=${result.id}`} className="hover:underline" target="_blank" rel="noopener noreferrer">
                                     <span className={`text-xs ${result.submission_ts > currentLecture.deadline ? 'text-red-600' : 'text-gray-600'}`}>
                                       {formatTimestamp(result.submission_ts)}
                                       {result.submission_ts > currentLecture.deadline && (
