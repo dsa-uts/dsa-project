@@ -4,7 +4,6 @@ import (
 	"context"
 	"dsa-backend/fileutil"
 	"dsa-backend/handler/response"
-	"io"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -13,6 +12,7 @@ import (
 
 	"github.com/dsa-uts/dsa-project/database/model"
 	"github.com/labstack/echo/v4"
+	"github.com/spf13/afero"
 )
 
 type LectureEntryRequest struct {
@@ -204,68 +204,50 @@ func (h *Handler) RegisterProblem(c echo.Context) error {
 	}
 
 	// Read zip file
-	file, err := c.FormFile("file")
+	zipFile, err := c.FormFile("file")
 	if err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, response.NewError("failed to read file: "+err.Error()))
 	}
-	src, err := file.Open()
+	src, err := zipFile.Open()
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, response.NewError("failed to open file: "+err.Error()))
 	}
 	defer src.Close()
 
-	// Create a temporary directory to extract the zip file
-	tempDir, err := os.MkdirTemp("", "upload-*")
-	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, response.NewError("failed to create temp dir: "+err.Error()))
-	}
-	defer os.RemoveAll(tempDir)
+	// Create temporary in-memory fs
+	memFs := afero.NewMemMapFs()
 
-	// Save the uploaded file to the temp directory
-	zipPath := filepath.Join(tempDir, "uploaded.zip")
-	out, err := os.Create(zipPath)
-	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, response.NewError("failed to create temp file: "+err.Error()))
-	}
-	defer out.Close()
-
-	if _, err := io.Copy(out, src); err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, response.NewError("failed to copy file: "+err.Error()))
-	}
-
-	// Extract the zip file
-	extractedDir := filepath.Join(tempDir, "extracted")
-	err = fileutil.SafeExtractZip(zipPath, extractedDir)
-	if err != nil {
+	// Extract zip file to temporary fs
+	if err = fileutil.SafeExtractZip(memFs, src, zipFile.Size, "/"); err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, response.NewError("failed to unzip file: "+err.Error()))
 	}
 
 	// Check if the first level contains only one folder
-	files, err := os.ReadDir(extractedDir)
+	baseDirInMemFs := "/"
+	files, err := afero.ReadDir(memFs, baseDirInMemFs)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, response.NewError("failed to read extracted directory: "+err.Error()))
 	}
 
 	if len(files) == 1 && files[0].IsDir() {
 		// Unnest the folder
-		unnestedDir := filepath.Join(extractedDir, files[0].Name())
-		extractedDir = unnestedDir
+		baseDirInMemFs = filepath.Join("/", files[0].Name())
 	}
 
 	// Check if init.json exists
-	initPath := filepath.Join(extractedDir, "init.json")
-	if _, err := os.Stat(initPath); os.IsNotExist(err) {
-		return echo.NewHTTPError(http.StatusBadRequest, response.NewError("init.json not found"))
+	initPath := filepath.Join(baseDirInMemFs, "init.json")
+	if stat, err := memFs.Stat(initPath); os.IsNotExist(err) || stat.IsDir() {
+		return echo.NewHTTPError(http.StatusBadRequest, response.NewError("init.json not found or is a directory"))
 	}
 
 	// Parse init.json into AssignmentConfig
-	initFile, err := os.Open(initPath)
+	initFile, err := memFs.Open(initPath)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, response.NewError("failed to open init.json: "+err.Error()))
 	}
 	defer initFile.Close()
 
-	initData, err := io.ReadAll(initFile)
+	initData, err := afero.ReadAll(initFile)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, response.NewError("failed to read init.json: "+err.Error()))
 	}
@@ -281,14 +263,14 @@ func (h *Handler) RegisterProblem(c echo.Context) error {
 	// 3. Check Stdin, Stdout, Stderr files in test cases exist (if not empty)
 	{
 		// Check MDfile exists and is a file
-		mdFilePath := filepath.Join(extractedDir, config.MDfile)
+		mdFilePath := filepath.Join(baseDirInMemFs, config.MDfile)
 		if stat, err := os.Stat(mdFilePath); os.IsNotExist(err) || stat.IsDir() {
 			return echo.NewHTTPError(http.StatusBadRequest, response.NewError("md_file not found or is a directory: "+config.MDfile))
 		}
 
 		// Check test files exist and are files
 		for _, testFile := range config.TestFiles {
-			testFilePath := filepath.Join(extractedDir, testFile)
+			testFilePath := filepath.Join(baseDirInMemFs, testFile)
 			if stat, err := os.Stat(testFilePath); os.IsNotExist(err) || stat.IsDir() {
 				return echo.NewHTTPError(http.StatusBadRequest, response.NewError("test file not found or is a directory: "+testFile))
 			}
@@ -299,19 +281,19 @@ func (h *Handler) RegisterProblem(c echo.Context) error {
 		// Check Stdin, Stdout, Stderr files in tasks
 		for _, t := range allTasks {
 			if t.Stdin != "" {
-				stdinPath := filepath.Join(extractedDir, t.Stdin)
+				stdinPath := filepath.Join(baseDirInMemFs, t.Stdin)
 				if stat, err := os.Stat(stdinPath); os.IsNotExist(err) || stat.IsDir() {
 					return echo.NewHTTPError(http.StatusBadRequest, response.NewError("stdin file not found or is a directory: "+t.Stdin))
 				}
 			}
 			if t.Stdout != "" {
-				stdoutPath := filepath.Join(extractedDir, t.Stdout)
+				stdoutPath := filepath.Join(baseDirInMemFs, t.Stdout)
 				if stat, err := os.Stat(stdoutPath); os.IsNotExist(err) || stat.IsDir() {
 					return echo.NewHTTPError(http.StatusBadRequest, response.NewError("stdout file not found or is a directory: "+t.Stdout))
 				}
 			}
 			if t.Stderr != "" {
-				stderrPath := filepath.Join(extractedDir, t.Stderr)
+				stderrPath := filepath.Join(baseDirInMemFs, t.Stderr)
 				if stat, err := os.Stat(stderrPath); os.IsNotExist(err) || stat.IsDir() {
 					return echo.NewHTTPError(http.StatusBadRequest, response.NewError("stderr file not found or is a directory: "+t.Stderr))
 				}
@@ -334,23 +316,36 @@ func (h *Handler) RegisterProblem(c echo.Context) error {
 	// destDir: upload/resource/{lectureID}/{problemID}/{YYYY-MM-DD-HH-mm-ss}/
 	// ---------------------------------------------------------------------------
 	destDir := filepath.Join(RESOURCE_DIR, lectureIDstr, problemIDstr, timestamp)
+	absDestDir, err := filepath.Abs(destDir)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, response.NewError("failed to get absolute path of destination directory: "+err.Error()))
+	}
 
 	// Check if the destination directory already exists
-	if _, err := os.Stat(destDir); !os.IsNotExist(err) {
-		return echo.NewHTTPError(http.StatusConflict, response.NewError("destination directory already exists"))
+	if info, err := os.Stat(destDir); err != nil {
+		if os.IsNotExist(err) {
+			// Directory does not exist, which is expected
+		} else if info.IsDir() {
+			// Directory already exists
+			return echo.NewHTTPError(http.StatusInternalServerError, response.NewError("destination directory already exists: "+destDir))
+		} else {
+			return echo.NewHTTPError(http.StatusInternalServerError, response.NewError("Failed to check upload directory"))
+		}
 	}
 
-	// Make parent directory
-	parentDir := filepath.Dir(destDir)
-	err = os.MkdirAll(parentDir, os.ModePerm)
-	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, response.NewError("failed to create parent directory: "+err.Error()))
+	// Make destination directory
+	if err := os.MkdirAll(absDestDir, 0755); err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, response.NewError("failed to create destination directory: "+err.Error()))
 	}
 
-	// Move to the extracted directory to the destination
-	err = fileutil.CopyContents(extractedDir, destDir)
+	osFs := afero.NewOsFs()
+	// restrict access to destDir only, cannot access outside of it
+	jailedFs := afero.NewBasePathFs(osFs, absDestDir)
+
+	// Copy contents from in-memory fs to destination directory
+	err = fileutil.CopyContentsBetweenAferoFs(memFs, baseDirInMemFs, jailedFs, "/")
 	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, response.NewError("failed to move directory: "+err.Error()))
+		return echo.NewHTTPError(http.StatusInternalServerError, response.NewError("failed to copy files to destination directory: "+err.Error()))
 	}
 
 	// Register file location

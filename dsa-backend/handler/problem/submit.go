@@ -6,7 +6,6 @@ import (
 	"dsa-backend/handler/auth"
 	"dsa-backend/handler/response"
 	"fmt"
-	"io"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -18,6 +17,7 @@ import (
 	"github.com/dsa-uts/dsa-project/database/model/queuetype"
 	"github.com/dsa-uts/dsa-project/database/model/requeststatus"
 	"github.com/labstack/echo/v4"
+	"github.com/spf13/afero"
 )
 
 // TODO: Discuss file size limits
@@ -83,6 +83,12 @@ func (h *Handler) RequestValidation(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, response.NewError(fmt.Sprintf("Total file size exceeds the maximum limit (%d MB)", maxUncompressedSize/(1024*1024))))
 	}
 
+	for _, file := range files {
+		if file.Size > maxFileSize {
+			return echo.NewHTTPError(http.StatusBadRequest, response.NewError(fmt.Sprintf("File size exceeds the maximum limit (%d MB)", maxFileSize/(1024*1024))))
+		}
+	}
+
 	// get user info from jwt
 	claim, err := auth.GetJWTClaims(&c)
 	if err != nil {
@@ -98,12 +104,11 @@ func (h *Handler) RequestValidation(c echo.Context) error {
 	// store files at dir: upload/validation/{userID}/{lectureID}/{problemID}/{YYYY-MM-DD-HH-mm-ss}/file
 	// ---------------------------------------------------------------------------------------------
 	basePath := filepath.Join(VALIDATION_DIR, fmt.Sprintf("%s/%d/%d/%s", userID, req.LectureID, req.ProblemID, requestTime.Format("2006-01-02-15-04-05")))
-	uploadDir := filepath.Join(basePath, "file")
 
-	// Check the existence of directory
-	if info, err := os.Stat(uploadDir); err != nil {
+	// Check the existence of basePath directory
+	if info, err := os.Stat(basePath); err != nil {
 		if os.IsNotExist(err) {
-			// Directory does not exist
+			// Directory does not exist, proceed
 		} else if info.IsDir() {
 			// Directory exists
 			return echo.NewHTTPError(http.StatusConflict, response.NewError("your must not request validation for the same problem twice at the same time, please try again later"))
@@ -112,19 +117,23 @@ func (h *Handler) RequestValidation(c echo.Context) error {
 		}
 	}
 
-	// Make directory
-	if err := os.MkdirAll(uploadDir, os.ModePerm); err != nil {
+	realFileDir := filepath.Join(basePath, "file")
+	absFileDir, err := filepath.Abs(realFileDir)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, response.NewError("Failed to resolve file directory path"))
+	}
+
+	// Make file directory
+	if err := os.MkdirAll(absFileDir, 0755); err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, response.NewError("Failed to create upload directory"))
 	}
 
+	osFs := afero.NewOsFs()
+	// restrict access to fileDir only, cannot access outside of fileDir
+	jailedFs := afero.NewBasePathFs(osFs, absFileDir)
+
 	// Store files
 	for _, file := range files {
-		if file.Size > maxFileSize {
-			// delete directory
-			_ = os.RemoveAll(uploadDir)
-			return echo.NewHTTPError(http.StatusBadRequest, response.NewError(fmt.Sprintf("File size exceeds the maximum limit (%d MB)", maxFileSize/(1024*1024))))
-		}
-
 		// Source
 		src, err := file.Open()
 		if err != nil {
@@ -133,29 +142,19 @@ func (h *Handler) RequestValidation(c echo.Context) error {
 		defer src.Close()
 
 		// Sanitize file name to prevent path traversal attacks.
-		cleanedPath := filepath.Join("/", filepath.Clean(file.Filename)) // resolve all "../" to prevent path traversal
-
-		// Destination
-		dstPath := filepath.Join(uploadDir, cleanedPath)
-		// Ensure the destination path is within the uploadDir to prevent path traversal attacks
-		if !strings.HasPrefix(dstPath, uploadDir) {
-			return echo.NewHTTPError(http.StatusBadRequest, response.NewError("Invalid file name"))
-		}
-		dst, err := os.Create(dstPath)
-		if err != nil {
-			return echo.NewHTTPError(http.StatusInternalServerError, response.NewError("Failed to create destination file"))
-		}
-		defer dst.Close()
+		cleanedPath := fileutil.SanitizeRelPath(file.Filename) // resolve all "../" to prevent path traversal
+		dstPath := filepath.Join("/", cleanedPath)
 
 		// Copy
-		if _, err := io.Copy(dst, src); err != nil {
+		err = afero.WriteReader(jailedFs, dstPath, src)
+		if err != nil {
 			return echo.NewHTTPError(http.StatusInternalServerError, response.NewError("Failed to copy uploaded file"))
 		}
 	}
 
 	// register file location
 	fileLocation := model.FileLocation{
-		Path: uploadDir,
+		Path: realFileDir,
 		Ts:   requestTime,
 	}
 	err = h.fileStore.RegisterFileLocation(ctx, &fileLocation)
@@ -224,7 +223,7 @@ func (h *Handler) RequestValidation(c echo.Context) error {
 			MemoryMB:    problem.Detail.MemoryMB,
 			TestFiles:   problem.Detail.TestFiles,
 			ResourceDir: resourcePath, // resource files for this problem
-			FileDir:     uploadDir,
+			FileDir:     realFileDir,
 			ResultDir:   resultDir,
 			BuildTasks:  filteredBuildTasks,
 			JudgeTasks:  filteredJudgeTasks,
@@ -321,19 +320,33 @@ func (h *Handler) BatchValidation(c echo.Context) error {
 	}
 
 	basePath := filepath.Join(VALIDATION_DIR, fmt.Sprintf("%s/%d/%s", userID, req.LectureID, requestTime.Format("2006-01-02-15-04-05")))
-	uploadDir := filepath.Join(basePath, "file")
 
-	// Check the existence of directory
-	if info, err := os.Stat(uploadDir); err != nil {
+	// Check the existence of basePath directory
+	if info, err := os.Stat(basePath); err != nil {
 		if os.IsNotExist(err) {
-			// Directory does not exist
+			// Directory does not exist, proceed
 		} else if info.IsDir() {
 			// Directory exists
-			return echo.NewHTTPError(http.StatusConflict, response.NewError("you must not request grading for the same problem twice at the same time, please try again later"))
+			return echo.NewHTTPError(http.StatusConflict, response.NewError("you must not request validation for the same problem twice at the same time, please try again later"))
 		} else {
 			return echo.NewHTTPError(http.StatusInternalServerError, response.NewError("Failed to check upload directory"))
 		}
 	}
+
+	realFileDir := filepath.Join(basePath, "file")
+	absFileDir, err := filepath.Abs(realFileDir)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, response.NewError("Failed to resolve base path"))
+	}
+
+	// Make file directory
+	if err := os.MkdirAll(absFileDir, 0755); err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, response.NewError("Failed to create upload directory"))
+	}
+
+	osFs := afero.NewOsFs()
+	// restrict access to fileDir only, cannot access outside of fileDir
+	jailedFs := afero.NewBasePathFs(osFs, absFileDir)
 
 	// Open zip file
 	src, err := zipFile.Open()
@@ -342,34 +355,25 @@ func (h *Handler) BatchValidation(c echo.Context) error {
 	}
 	defer src.Close()
 
-	// move to temporary directory
-	tempFile, err := os.CreateTemp("", "upload-*.zip")
-	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, response.NewError("Failed to create temporary file"))
-	}
-	defer os.Remove(tempFile.Name())
-	defer tempFile.Close()
+	// create temporary in-memory fs to extract zip file
+	memFs := afero.NewMemMapFs()
 
-	if _, err := io.Copy(tempFile, src); err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, response.NewError("Failed to copy zip file to temporary file"))
-	}
-
-	// Extract zip file **safely**
-	if err := fileutil.SafeExtractZip(tempFile.Name(), uploadDir); err != nil {
+	// Extract zip file **safely** to the in-memory fs
+	if err := fileutil.SafeExtractZip(memFs, src, zipFile.Size, "/"); err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, response.NewError("Failed to extract zip file: "+err.Error()))
 	}
 
 	// ---------------------------------------------------------------------------
 	// Remove metadata files and directories like __MACOSX, .DS_Store, etc.
 	// ---------------------------------------------------------------------------
-	if err := fileutil.RemoveMetaData(uploadDir); err != nil {
+	if err := fileutil.RemoveMetaData(memFs, "/"); err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, response.NewError("Failed to remove metadata files: "+err.Error()))
 	}
 
 	// ---------------------------------------------------------------------------
 	// Remove object files like .o, .obj, etc
 	// ---------------------------------------------------------------------------
-	if err := fileutil.RemoveObjectFiles(uploadDir); err != nil {
+	if err := fileutil.RemoveObjectFiles(memFs, "/"); err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, response.NewError("Failed to remove object files: "+err.Error()))
 	}
 
@@ -384,20 +388,25 @@ func (h *Handler) BatchValidation(c echo.Context) error {
 	//        |- Makefile
 	//        |- Report.pdf
 	// ---------------------------------------------------------------------------
-	files, err := os.ReadDir(uploadDir)
+	baseDirInMemFs := "/"
+	files, err := afero.ReadDir(memFs, baseDirInMemFs)
 	if err != nil {
-		defer os.RemoveAll(uploadDir)
 		return echo.NewHTTPError(http.StatusInternalServerError, response.NewError("Failed to read upload directory"))
 	}
 	if len(files) == 1 && files[0].IsDir() {
 		// Unnest the folder
-		unnestDir := fmt.Sprintf("%s/%s", uploadDir, files[0].Name())
-		uploadDir = unnestDir
+		baseDirInMemFs = filepath.Join("/", files[0].Name())
+	}
+
+	// Write files from in-memory fs to the jailed fs
+	err = fileutil.CopyContentsBetweenAferoFs(memFs, baseDirInMemFs, jailedFs, "/")
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, response.NewError("Failed to store extracted files: "+err.Error()))
 	}
 
 	// Register file location
 	fileLocation := model.FileLocation{
-		Path: uploadDir,
+		Path: realFileDir,
 		Ts:   requestTime,
 	}
 	err = h.fileStore.RegisterFileLocation(ctx, &fileLocation)
@@ -471,7 +480,7 @@ func (h *Handler) BatchValidation(c echo.Context) error {
 				MemoryMB:    problem.Detail.MemoryMB,
 				TestFiles:   problem.Detail.TestFiles,
 				ResourceDir: resourcePath,
-				FileDir:     uploadDir,
+				FileDir:     realFileDir,
 				ResultDir:   resultDir,
 				BuildTasks:  filteredBuildTasks,
 				JudgeTasks:  filteredJudgeTasks,
@@ -585,6 +594,12 @@ func (h *Handler) RequestGrading(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, response.NewError(fmt.Sprintf("Total file size exceeds the maximum limit (%d MB)", maxUncompressedSize/(1024*1024))))
 	}
 
+	for _, file := range files {
+		if file.Size > maxFileSize {
+			return echo.NewHTTPError(http.StatusBadRequest, response.NewError(fmt.Sprintf("File size exceeds the maximum limit (%d MB)", maxFileSize/(1024*1024))))
+		}
+	}
+
 	// get user info from jwt
 	claim, err := auth.GetJWTClaims(&c)
 	if err != nil {
@@ -605,10 +620,9 @@ func (h *Handler) RequestGrading(c echo.Context) error {
 	// Second {YYYY-MM-DD-HH-mm-ss} is the request timestamp.
 	// ---------------------------------------------------------------------------------------------
 	basePath := filepath.Join(GRADING_DIR, fmt.Sprintf("%s/%d/%d/%s/%s", req.TargetUserID, req.LectureID, req.ProblemID, submissionTS.Format("2006-01-02-15-04-05"), requestTime.Format("2006-01-02-15-04-05")))
-	uploadDir := filepath.Join(basePath, "file")
 
 	// Check the existence of directory
-	if info, err := os.Stat(uploadDir); err != nil {
+	if info, err := os.Stat(basePath); err != nil {
 		if os.IsNotExist(err) {
 			// Directory does not exist
 		} else if info.IsDir() {
@@ -619,19 +633,23 @@ func (h *Handler) RequestGrading(c echo.Context) error {
 		}
 	}
 
-	// Make directory
-	if err := os.MkdirAll(uploadDir, os.ModePerm); err != nil {
+	realFileDir := filepath.Join(basePath, "file")
+	absFileDir, err := filepath.Abs(realFileDir)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, response.NewError("Failed to resolve file directory path"))
+	}
+
+	// Make file directory
+	if err := os.MkdirAll(absFileDir, 0755); err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, response.NewError("Failed to create upload directory"))
 	}
 
+	osFs := afero.NewOsFs()
+	// restrict access to fileDir only, cannot access outside of fileDir
+	jailedFs := afero.NewBasePathFs(osFs, absFileDir)
+
 	// Store files
 	for _, file := range files {
-		if file.Size > maxFileSize {
-			// delete directory
-			_ = os.RemoveAll(uploadDir)
-			return echo.NewHTTPError(http.StatusBadRequest, response.NewError(fmt.Sprintf("File size exceeds the maximum limit (%d MB)", maxFileSize/(1024*1024))))
-		}
-
 		// Source
 		src, err := file.Open()
 		if err != nil {
@@ -639,31 +657,19 @@ func (h *Handler) RequestGrading(c echo.Context) error {
 		}
 		defer src.Close()
 
-		// Destination
-
 		// Sanitize file name to prevent path traversal attacks.
-		cleanedPath := filepath.Join("/", filepath.Clean(file.Filename)) // resolve all "../" to prevent path traversal
-
-		dstPath := filepath.Join(uploadDir, cleanedPath)
-		// Ensure the destination path is within the uploadDir to prevent path traversal attacks
-		if !strings.HasPrefix(dstPath, uploadDir) {
-			return echo.NewHTTPError(http.StatusBadRequest, response.NewError("Invalid file name"))
-		}
-		dst, err := os.Create(dstPath)
-		if err != nil {
-			return echo.NewHTTPError(http.StatusInternalServerError, response.NewError("Failed to create destination file"))
-		}
-		defer dst.Close()
+		cleanedPath := fileutil.SanitizeRelPath(file.Filename) // resolve all "../" to prevent path traversal
+		dstPath := filepath.Join("/", cleanedPath)
 
 		// Copy
-		if _, err := io.Copy(dst, src); err != nil {
+		if err = afero.WriteReader(jailedFs, dstPath, src); err != nil {
 			return echo.NewHTTPError(http.StatusInternalServerError, response.NewError("Failed to copy uploaded file"))
 		}
 	}
 
 	// register file location
 	fileLocation := model.FileLocation{
-		Path: uploadDir,
+		Path: realFileDir,
 		Ts:   requestTime,
 	}
 	err = h.fileStore.RegisterFileLocation(ctx, &fileLocation)
@@ -716,7 +722,7 @@ func (h *Handler) RequestGrading(c echo.Context) error {
 			MemoryMB:    problem.Detail.MemoryMB,
 			TestFiles:   problem.Detail.TestFiles,
 			ResourceDir: resourcePath, // resource files for this problem
-			FileDir:     uploadDir,
+			FileDir:     realFileDir,
 			ResultDir:   resultDir,
 			BuildTasks:  problem.Detail.BuildTasks, // We do not any filtering here, because only manager or admin can access this endpoint.
 			JudgeTasks:  problem.Detail.JudgeTasks,
@@ -839,10 +845,9 @@ func (h *Handler) BatchGrading(c echo.Context) error {
 	}
 
 	basePath := filepath.Join(GRADING_DIR, fmt.Sprintf("%s/%d/%s/%s", req.TargetUserID, req.LectureID, submissionTS.Format("2006-01-02-15-04-05"), requestTime.Format("2006-01-02-15-04-05")))
-	uploadDir := filepath.Join(basePath, "file")
 
-	// Check the existence of directory
-	if info, err := os.Stat(uploadDir); err != nil {
+	// Check the existence of basePath directory
+	if info, err := os.Stat(basePath); err != nil {
 		if os.IsNotExist(err) {
 			// Directory does not exist
 		} else if info.IsDir() {
@@ -853,6 +858,21 @@ func (h *Handler) BatchGrading(c echo.Context) error {
 		}
 	}
 
+	realFileDir := filepath.Join(basePath, "file")
+	absFileDir, err := filepath.Abs(realFileDir)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, response.NewError("Failed to resolve base path"))
+	}
+
+	// Make file directory
+	if err := os.MkdirAll(absFileDir, 0755); err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, response.NewError("Failed to create upload directory"))
+	}
+
+	osFs := afero.NewOsFs()
+	// restrict access to fileDir only, cannot access outside of fileDir
+	jailedFs := afero.NewBasePathFs(osFs, absFileDir)
+
 	// Open zip file
 	src, err := zipFile.Open()
 	if err != nil {
@@ -860,34 +880,25 @@ func (h *Handler) BatchGrading(c echo.Context) error {
 	}
 	defer src.Close()
 
-	// move to temporary directory
-	tempFile, err := os.CreateTemp("", "upload-*.zip")
-	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, response.NewError("Failed to create temporary file"))
-	}
-	defer os.Remove(tempFile.Name())
-	defer tempFile.Close()
+	// create temporary in-memory fs to extract zip file
+	memFs := afero.NewMemMapFs()
 
-	if _, err := io.Copy(tempFile, src); err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, response.NewError("Failed to copy zip file to temporary file"))
-	}
-
-	// Extract zip file **safely**
-	if err := fileutil.SafeExtractZip(tempFile.Name(), uploadDir); err != nil {
+	// Extract zip file **safely** to the in-memory fs
+	if err := fileutil.SafeExtractZip(memFs, src, zipFile.Size, "/"); err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, response.NewError("Failed to extract zip file: "+err.Error()))
 	}
 
 	// ---------------------------------------------------------------------------
 	// Remove metadata files and directories like __MACOSX, .DS_Store, etc.
 	// ---------------------------------------------------------------------------
-	if err := fileutil.RemoveMetaData(uploadDir); err != nil {
+	if err := fileutil.RemoveMetaData(memFs, "/"); err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, response.NewError("Failed to remove metadata files: "+err.Error()))
 	}
 
 	// ---------------------------------------------------------------------------
 	// Remove object files like .o, .obj, etc
 	// ---------------------------------------------------------------------------
-	if err := fileutil.RemoveObjectFiles(uploadDir); err != nil {
+	if err := fileutil.RemoveObjectFiles(memFs, "/"); err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, response.NewError("Failed to remove object files: "+err.Error()))
 	}
 
@@ -902,20 +913,25 @@ func (h *Handler) BatchGrading(c echo.Context) error {
 	//        |- Makefile
 	//        |- Report.pdf
 	// ---------------------------------------------------------------------------
-	files, err := os.ReadDir(uploadDir)
+	baseDirInMemFs := "/"
+	files, err := afero.ReadDir(memFs, baseDirInMemFs)
 	if err != nil {
-		defer os.RemoveAll(uploadDir)
 		return echo.NewHTTPError(http.StatusInternalServerError, response.NewError("Failed to read upload directory"))
 	}
 	if len(files) == 1 && files[0].IsDir() {
 		// Unnest the folder
-		unnestDir := fmt.Sprintf("%s/%s", uploadDir, files[0].Name())
-		uploadDir = unnestDir
+		baseDirInMemFs = filepath.Join("/", files[0].Name())
+	}
+
+	// Write files from in-memory fs to the jailed fs
+	err = fileutil.CopyContentsBetweenAferoFs(memFs, baseDirInMemFs, jailedFs, "/")
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, response.NewError("Failed to store extracted files: "+err.Error()))
 	}
 
 	// Register file location
 	fileLocation := model.FileLocation{
-		Path: uploadDir,
+		Path: realFileDir,
 		Ts:   requestTime,
 	}
 	err = h.fileStore.RegisterFileLocation(ctx, &fileLocation)
@@ -975,7 +991,7 @@ func (h *Handler) BatchGrading(c echo.Context) error {
 				MemoryMB:    problem.Detail.MemoryMB,
 				TestFiles:   problem.Detail.TestFiles,
 				ResourceDir: resourcePath,
-				FileDir:     uploadDir,
+				FileDir:     realFileDir,
 				ResultDir:   resultDir,
 				BuildTasks:  problem.Detail.BuildTasks, // We do not any filtering here, because only manager or admin can access this endpoint.
 				JudgeTasks:  problem.Detail.JudgeTasks,

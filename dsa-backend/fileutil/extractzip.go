@@ -7,6 +7,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/spf13/afero"
 )
 
 // TODO: Discuss file size limits
@@ -20,6 +22,10 @@ const (
 	MaxFiles = 500
 )
 
+type baseReader interface {
+	io.ReaderAt
+}
+
 // Extracts zip file with validation of size constraints.
 // We check those constraints before/during extracting.
 //
@@ -31,22 +37,22 @@ const (
 //
 // When all checks pass, extract the zip file to the specified destination directory.
 // Otherwise, remove the destination directory and return an error.
-func SafeExtractZip(zipPath, destDir string) error {
+func SafeExtractZip(fs afero.Fs, reader baseReader, size int64, destDir string) error {
 	// Open the zip file.
-	reader, err := zip.OpenReader(zipPath)
+	zipReader, err := zip.NewReader(reader, size)
 	if err != nil {
 		return fmt.Errorf("failed to open zip file: %w", err)
 	}
-	defer reader.Close()
+	// No need to close zipReader as it does not hold any resources itself.
 
 	// Check the number of files in the zip file.
-	if len(reader.File) > MaxFiles {
+	if len(zipReader.File) > MaxFiles {
 		return fmt.Errorf("zip file contains too many files (max: %d)", MaxFiles)
 	}
 
 	// Check the total expected size of uncompressed files, before extracting.
 	var totalUncompressed uint64
-	for _, file := range reader.File {
+	for _, file := range zipReader.File {
 		totalUncompressed += file.UncompressedSize64
 		if totalUncompressed > MaxUncompressedSize {
 			return fmt.Errorf("uncompressed size too large (max: %d MB)", MaxUncompressedSize/(1024*1024))
@@ -54,15 +60,15 @@ func SafeExtractZip(zipPath, destDir string) error {
 	}
 
 	// Make destination directory.
-	if err := os.MkdirAll(destDir, 0755); err != nil {
+	if err := fs.MkdirAll(destDir, 0755); err != nil {
 		return fmt.Errorf("failed to create destination directory: %w", err)
 	}
 
 	// Extract files.
-	for _, file := range reader.File {
-		if err := extractFile(file, destDir); err != nil {
+	for _, file := range zipReader.File {
+		if err := extractFile(fs, file, destDir); err != nil {
 			// When error occurs, remove destination directory
-			os.RemoveAll(destDir)
+			fs.RemoveAll(destDir)
 			return err
 		}
 	}
@@ -70,10 +76,9 @@ func SafeExtractZip(zipPath, destDir string) error {
 	return nil
 }
 
-func extractFile(file *zip.File, destDir string) error {
+func extractFile(fs afero.Fs, file *zip.File, destDir string) error {
 	// Sanitize file name to prevent path traversal attacks.
-	cleanPath := filepath.Clean(file.Name)
-	cleanPath = filepath.Join("/", cleanPath) // resolve all "../" to prevent path traversal
+	cleanPath := SanitizeRelPath(file.Name)
 	if strings.Contains(cleanPath, "..") {
 		return fmt.Errorf("invalid file path: %s", file.Name)
 	}
@@ -93,12 +98,12 @@ func extractFile(file *zip.File, destDir string) error {
 	// In the case of "file" is a directory
 	if file.FileInfo().IsDir() {
 		// make directory
-		return os.MkdirAll(targetPath, file.Mode())
+		return fs.MkdirAll(targetPath, 0755)
 	}
 
 	// In the case of "file" is a regular file
 	// Make parent directory
-	if err := os.MkdirAll(filepath.Dir(targetPath), 0755); err != nil {
+	if err := fs.MkdirAll(filepath.Dir(targetPath), 0755); err != nil {
 		return fmt.Errorf("failed to create directory for %s: %w", targetPath, err)
 	}
 
@@ -110,7 +115,7 @@ func extractFile(file *zip.File, destDir string) error {
 	defer rc.Close()
 
 	// Create output file
-	outFile, err := os.OpenFile(targetPath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, file.Mode())
+	outFile, err := fs.OpenFile(targetPath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, file.Mode())
 	if err != nil {
 		return fmt.Errorf("failed to create output file %s: %w", targetPath, err)
 	}

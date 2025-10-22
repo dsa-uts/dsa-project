@@ -5,11 +5,14 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
+
+	"github.com/spf13/afero"
 )
 
 // RemoveObjectFiles removes object files (e.g., .o, .obj) from the specified directory and its subdirectories.
-func RemoveObjectFiles(destDir string) error {
+func RemoveObjectFiles(fs afero.Fs, destDir string) error {
 	objectExtensions := []string{
 		".o",     // Unix/Linux object file
 		".obj",   // Windows object file
@@ -38,7 +41,7 @@ func RemoveObjectFiles(destDir string) error {
 	var errs []error
 	removedCount := 0
 
-	err := filepath.Walk(destDir, func(path string, info os.FileInfo, err error) error {
+	err := afero.Walk(fs, destDir, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			// If there is an error accessing the path, record it and continue.
 			errs = append(errs, fmt.Errorf("access error at %s: %w", path, err))
@@ -52,18 +55,11 @@ func RemoveObjectFiles(destDir string) error {
 
 		// Check the file extension
 		ext := strings.ToLower(filepath.Ext(path))
-		shouldRemove := false
-
-		for _, objExt := range objectExtensions {
-			if ext == objExt {
-				shouldRemove = true
-				break
-			}
-		}
+		shouldRemove := slices.Contains(objectExtensions, ext)
 
 		if shouldRemove {
 			// Remove the file
-			if removeErr := os.Remove(path); removeErr != nil {
+			if removeErr := fs.Remove(path); removeErr != nil {
 				errs = append(errs, fmt.Errorf("failed to remove %s: %w", path, removeErr))
 			} else {
 				removedCount++
