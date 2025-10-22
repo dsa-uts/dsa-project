@@ -6,11 +6,13 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/spf13/afero"
 )
 
 // Remove all metadata files and directories like __MACOSX, .DS_Store, etc.
 // under the given directory.
-func RemoveMetaData(destDir string) error {
+func RemoveMetaData(fs afero.Fs, destDir string) error {
 	metaPatterns := []string{
 		"__MACOSX",
 		".DS_Store",
@@ -28,7 +30,7 @@ func RemoveMetaData(destDir string) error {
 	var errs []error
 
 	// Walk through all files and directories
-	err := filepath.Walk(destDir, func(path string, info os.FileInfo, err error) error {
+	err := afero.Walk(fs, destDir, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			errs = append(errs, fmt.Errorf("access error at %s: %w", path, err))
 			return nil
@@ -62,9 +64,9 @@ func RemoveMetaData(destDir string) error {
 			// Remove file or directory
 			var removeErr error
 			if info.IsDir() {
-				removeErr = os.RemoveAll(path)
+				removeErr = fs.RemoveAll(path)
 			} else {
-				removeErr = os.Remove(path)
+				removeErr = fs.Remove(path)
 			}
 
 			if removeErr != nil {
