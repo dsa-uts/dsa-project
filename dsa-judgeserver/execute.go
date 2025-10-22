@@ -81,7 +81,7 @@ func (executor *JobExecutor) executeBuildTasks(ctx context.Context, job *model.J
 
 	cpuSet := CPU_SET
 	timeout := TIMEOUT_BEFORE_CONTAINER_STOP
-	pidLimit := int64(256) // allow more processes for build tasks
+	pidLimit := int64(128) // allow more processes for build tasks
 	// add 32MB for overhead
 	totalMemoryInBytes := min(
 		(job.MemoryMB+32)*1024*1024, MAX_MEMORY_LIMIT_MB*1024*1024)
@@ -108,8 +108,8 @@ func (executor *JobExecutor) executeBuildTasks(ctx context.Context, job *model.J
 				Ulimits: []*container.Ulimit{
 					{
 						Name: "nofile", // limit max number of open files
-						Hard: 1024,
-						Soft: 1024,
+						Hard: 512,
+						Soft: 512,
 					},
 					{
 						Name: "nproc", // limit max number of processes
@@ -117,14 +117,14 @@ func (executor *JobExecutor) executeBuildTasks(ctx context.Context, job *model.J
 						Soft: pidLimit,
 					},
 					{
-						Name: "fsize",                  // limit max size of files that can be created, the unit is file-blocks (assumes 512 bytes)
-						Hard: (50 * 1024 * 1024) / 512, // 50 MB
-						Soft: (50 * 1024 * 1024) / 512, // 50 MB
+						Name: "fsize",          // limit max size of files that can be created, the unit is bytes
+						Hard: 10 * 1024 * 1024, // 10 MB
+						Soft: 10 * 1024 * 1024, // 10 MB
 					},
 					{
-						Name: "stack",      // limit max stack size, the unit is kB (1024 bytes)
-						Hard: (128 * 1024), // 128 MB
-						Soft: (128 * 1024), // 128 MB
+						Name: "stack",           // limit max stack size, the unit is bytes
+						Hard: (8 * 1024 * 1024), // 8 MB
+						Soft: (8 * 1024 * 1024), // 8 MB
 					},
 				},
 			},
@@ -380,14 +380,14 @@ func (executor *JobExecutor) executeJudgeTasks(ctx context.Context, job *model.J
 						Soft: pidLimit,
 					},
 					{
-						Name: "fsize",                  // limit max size of files that can be created, the unit is file-blocks (assumes 512 bytes)
-						Hard: (10 * 1024 * 1024) / 512, // 10 MB
-						Soft: (10 * 1024 * 1024) / 512, // 10 MB
+						Name: "fsize",          // limit max size of files that can be created, the unit is bytes
+						Hard: 10 * 1024 * 1024, // 10 MB
+						Soft: 10 * 1024 * 1024, // 10 MB
 					},
 					{
-						Name: "stack",     // limit max stack size, the unit is kB (1024 bytes)
-						Hard: (32 * 1024), // 32 MB
-						Soft: (32 * 1024), // 32 MB
+						Name: "stack",           // limit max stack size, the unit is bytes
+						Hard: (8 * 1024 * 1024), // 8 MB
+						Soft: (8 * 1024 * 1024), // 8 MB
 					},
 				},
 			},
