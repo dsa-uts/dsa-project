@@ -264,14 +264,14 @@ func (h *Handler) RegisterProblem(c echo.Context) error {
 	{
 		// Check MDfile exists and is a file
 		mdFilePath := filepath.Join(baseDirInMemFs, config.MDfile)
-		if stat, err := os.Stat(mdFilePath); os.IsNotExist(err) || stat.IsDir() {
+		if stat, err := memFs.Stat(mdFilePath); os.IsNotExist(err) || stat.IsDir() {
 			return echo.NewHTTPError(http.StatusBadRequest, response.NewError("md_file not found or is a directory: "+config.MDfile))
 		}
 
 		// Check test files exist and are files
 		for _, testFile := range config.TestFiles {
 			testFilePath := filepath.Join(baseDirInMemFs, testFile)
-			if stat, err := os.Stat(testFilePath); os.IsNotExist(err) || stat.IsDir() {
+			if stat, err := memFs.Stat(testFilePath); os.IsNotExist(err) || stat.IsDir() {
 				return echo.NewHTTPError(http.StatusBadRequest, response.NewError("test file not found or is a directory: "+testFile))
 			}
 		}
@@ -282,19 +282,19 @@ func (h *Handler) RegisterProblem(c echo.Context) error {
 		for _, t := range allTasks {
 			if t.Stdin != "" {
 				stdinPath := filepath.Join(baseDirInMemFs, t.Stdin)
-				if stat, err := os.Stat(stdinPath); os.IsNotExist(err) || stat.IsDir() {
+				if stat, err := memFs.Stat(stdinPath); os.IsNotExist(err) || stat.IsDir() {
 					return echo.NewHTTPError(http.StatusBadRequest, response.NewError("stdin file not found or is a directory: "+t.Stdin))
 				}
 			}
 			if t.Stdout != "" {
 				stdoutPath := filepath.Join(baseDirInMemFs, t.Stdout)
-				if stat, err := os.Stat(stdoutPath); os.IsNotExist(err) || stat.IsDir() {
+				if stat, err := memFs.Stat(stdoutPath); os.IsNotExist(err) || stat.IsDir() {
 					return echo.NewHTTPError(http.StatusBadRequest, response.NewError("stdout file not found or is a directory: "+t.Stdout))
 				}
 			}
 			if t.Stderr != "" {
 				stderrPath := filepath.Join(baseDirInMemFs, t.Stderr)
-				if stat, err := os.Stat(stderrPath); os.IsNotExist(err) || stat.IsDir() {
+				if stat, err := memFs.Stat(stderrPath); os.IsNotExist(err) || stat.IsDir() {
 					return echo.NewHTTPError(http.StatusBadRequest, response.NewError("stderr file not found or is a directory: "+t.Stderr))
 				}
 			}
