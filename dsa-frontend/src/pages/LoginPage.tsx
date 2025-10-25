@@ -54,6 +54,7 @@ const LoginPage: React.FC = () => {
 
   // When login is successful, loginResponse is materialized, then navigate to /dashboard
   if (!!loginResponse || isAuthenticated()) {
+    console.log("Login successful, redirecting to:", from);
     return <Navigate to={from} replace />;
   }
 
