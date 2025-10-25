@@ -16,8 +16,8 @@ const AdminRoute: React.FC<AdminRouteProps> = ({ children }) => {
   }
 
   if (!hasAdminScope()) {
-    clearStoredToken();
     // If the user is authenticated but does not have admin scope, redirect to home page.
+    console.log("User lacks admin scope, redirecting to /about");
     return <Navigate to="/about" replace />;
   }
 

@@ -15,8 +15,8 @@ const GradingRoute: React.FC<GradingRouteProps> = ({ children }) => {
   }
 
   if (!hasGradingScope()) {
-    clearStoredToken();
     // If the user is authenticated but does not have grading scope, redirect to home page.
+    console.log("User lacks grading scope, redirecting to /about");
     return <Navigate to="/about" replace />;
   }
 
