@@ -16,10 +16,10 @@ FROM node:24.10.0-bookworm-slim AS runner
 
 WORKDIR /app
 
-COPY --from=builder /app/dist ./dist
-
 # install serve
 RUN npm install -g serve
+
+COPY --from=builder /app/dist ./dist
 
 ENV PORT=80
 EXPOSE 80
