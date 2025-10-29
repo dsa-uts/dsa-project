@@ -14,10 +14,10 @@ import (
 // TODO: Discuss file size limits
 // TODO: Make this configuration be configurable via env file, or admin API.
 const (
-	// Maximum uncompressed size for uploaded files (10MB)
-	MaxUncompressedSize = 10 * 1024 * 1024
-	// Maximum size for a single uploaded file (5MB)
-	MaxFileSize = 5 * 1024 * 1024
+	// Maximum uncompressed size for uploaded files (15MB)
+	MaxUncompressedSize = 15 * 1024 * 1024
+	// Maximum size for a single uploaded file (15MB)
+	MaxFileSize = 15 * 1024 * 1024
 	// Maximum number of uploaded files
 	MaxFiles = 500
 )
