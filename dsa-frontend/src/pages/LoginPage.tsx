@@ -128,7 +128,7 @@ const LoginPage: React.FC = () => {
         </div>
 
         <div className="text-center">
-          <p className="text-sm text-gray-600">トークンの有効時間: 2時間</p>
+          <p className="text-sm text-gray-600">トークンの有効時間: 4時間</p>
         </div>
       </div>
     </div>
