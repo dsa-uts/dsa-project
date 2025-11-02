@@ -565,13 +565,13 @@ func (executor *JobExecutor) executeJudgeTasks(ctx context.Context, job *model.J
 
 		// Check stdout and stderr if expected files are provided
 
-		if len(expectedStdoutContent) != 0 {
+		if judgeTask.StdoutPath != "" {
 			if !match.Match(string(expectedStdoutContent), watchdogOutput.Stdout) {
 				resultStatus = resultStatus.Max(requeststatus.WA)
 			}
 		}
 
-		if len(expectedStderrContent) != 0 {
+		if judgeTask.StderrPath != "" {
 			if !match.Match(string(expectedStderrContent), watchdogOutput.Stderr) {
 				resultStatus = resultStatus.Max(requeststatus.WA)
 			}
