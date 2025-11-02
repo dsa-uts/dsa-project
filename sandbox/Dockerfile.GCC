@@ -4,8 +4,10 @@ FROM watchdog-builder AS builder
 # 実行ステージ
 FROM ubuntu:24.04
 
+# libc6-dev: for glibc
+# libasan8: for AddressSanitizer
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends gcc make libc6-dev && \
+    apt-get install -y --no-install-recommends gcc make libc6-dev libasan8 && \
     rm -rf /var/lib/apt/lists/*
 
 # ゲストユーザー(1002:1002)を作成
