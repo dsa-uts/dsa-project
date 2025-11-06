@@ -7,16 +7,19 @@ import (
 	"log"
 	"log/slog"
 	"os"
+	"os/signal"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/dsa-uts/dsa-project/database"
 	"github.com/dsa-uts/dsa-project/database/model"
-	"github.com/dsa-uts/dsa-project/database/model/queuestatus"
 	"github.com/uptrace/bun"
 	"github.com/uptrace/bun/dialect/pgdialect"
 	"github.com/uptrace/bun/driver/pgdriver"
 )
+
+const NUM_WORKERS = 3
 
 func main() {
 	db_user := "dsa_app"
@@ -35,9 +38,28 @@ func main() {
 
 	jobQueueStore := database.NewJobQueueStore(db)
 
-	ctx := context.Background()
+	// context with graceful shutdown
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	// Signal handling for graceful shutdown
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
+
+	// Initialize logger
 	textHandler := slog.NewTextHandler(os.Stdout, nil)
 	logger := slog.New(textHandler)
+
+	// Start background worker to reset stale jobs
+	go func() {
+		ticker := time.NewTicker(5 * time.Minute)
+		defer ticker.Stop()
+		for range ticker.C {
+			if err := ResetStaleJobs(ctx, jobQueueStore, logger); err != nil {
+				logger.Error("Error resetting stale jobs", slog.String("error", err.Error()))
+			}
+		}
+	}()
 
 	// Create Docker Client
 	jobExecutor, err := NewJobExecutor()
@@ -69,80 +91,62 @@ func main() {
 	}
 	logger.Info("Docker image 'binary-runners' exists.")
 
-	for {
-		// Infinite loop to keep the program running
+	jobChan := make(chan *model.JobQueue, NUM_WORKERS*4)
 
-		// Fetch Pending tasks from JobQueue
-		jobs, err := jobQueueStore.FetchJobs(ctx, queuestatus.Pending, 1)
-
-		if err != nil {
-			logger.Error("Failed to fetch jobs", slog.String("error", err.Error()))
-			continue
+	// Start Job Workers
+	for i := range NUM_WORKERS {
+		worker := &JobWorker{
+			id:       i,
+			jobChan:  jobChan,
+			executor: jobExecutor,
+			jobStore: jobQueueStore,
+			logger:   logger,
 		}
-
-		if len(jobs) == 0 {
-			// logger.Info("No pending jobs found. Sleeping for a while...")
-			// Sleep for a while before checking again
-			time.Sleep(5 * time.Second) // Uncomment this line to add a delay
-			continue
-		}
-
-		// Pick the first job
-		job := jobs[0]
-		logger.Info("Processing job", slog.Int64("job_id", job.ID))
-
-		// Update the job status to "processing"
-		err = jobQueueStore.UpdateJobStatus(ctx, job.ID, queuestatus.Processing)
-
-		if err != nil {
-			logger.Error("Failed to update job status to processing", slog.String("error", err.Error()))
-			panic(err)
-		}
-
-		// Execute the job
-		result, err := jobExecutor.ExecuteJob(ctx, &job.Detail)
-		if err != nil {
-			logger.Error("Failed to execute job", slog.String("error", err.Error()))
-			// Update the job status to "failed"
-			err = jobQueueStore.UpdateJobStatus(ctx, job.ID, queuestatus.Failed)
-			if err != nil {
-				logger.Error("Failed to update job status to failed", slog.String("error", err.Error()))
-				panic(err)
-			}
-			// Skip to the next job
-			continue
-		}
-
-		// Update the job status to "done" and store the result
-		err = jobQueueStore.UpdateJobStatus(ctx, job.ID, queuestatus.Done)
-		if err != nil {
-			logger.Error("Failed to update job status to done", slog.String("error", err.Error()))
-			panic(err)
-		}
-		if result == nil {
-			logger.Error("Job execution returned nil result")
-			continue
-		}
-
-		// Register the result in ResultQueue
-		resultEntry := &model.ResultQueue{
-			JobID:     job.ID,
-			CreatedAt: time.Now(),
-			ResultID:  result.ResultID,
-			Log:       *result,
-		}
-
-		// Insert the result into the database
-		err = jobQueueStore.InsertResult(ctx, resultEntry)
-		if err != nil {
-			logger.Error("Failed to insert result", slog.String("error", err.Error()))
-			panic(err)
-		} else {
-			logger.Info("Result inserted successfully", slog.Int64("result_id", resultEntry.ID))
-		}
-
-		logger.Info("Job completed", slog.Int64("job_id", job.ID), slog.Any("result", result))
+		worker.Start(ctx)
 	}
+
+	// Main loop to fetch and assign jobs
+	go func() {
+		for {
+			select {
+			case <-ctx.Done():
+				close(jobChan)
+				return
+			default:
+				// Fetch Pending tasks from JobQueue
+				jobs, err := jobQueueStore.FetchPendingJobsAndMarkFetched(ctx, NUM_WORKERS)
+				if err != nil {
+					logger.Error("Failed to fetch jobs", slog.String("error", err.Error()))
+					time.Sleep(3 * time.Second)
+					continue
+				}
+
+				if len(jobs) == 0 {
+					// No pending jobs found. Sleep for a while.
+					time.Sleep(3 * time.Second)
+					continue
+				}
+
+				// Assign jobs to workers
+				for _, job := range jobs {
+					select {
+					case jobChan <- &job:
+					case <-ctx.Done():
+						return
+					}
+				}
+			}
+		}
+	}()
+
+	// Wait for termination signal
+	sig := <-sigChan
+	logger.Info("Received signal, shutting down...", slog.String("signal", sig.String()))
+	cancel()
+
+	// Give some time for cleanup
+	time.Sleep(5 * time.Second)
+	logger.Info("Shutdown complete")
 }
 
 func read_db_password() string {
