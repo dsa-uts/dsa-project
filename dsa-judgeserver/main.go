@@ -52,6 +52,10 @@ func main() {
 
 	// Start background worker to reset stale jobs
 	go func() {
+		if err := ResetStaleJobs(ctx, jobQueueStore, logger); err != nil {
+			logger.Error("Error resetting stale jobs on startup", slog.String("error", err.Error()))
+		}
+
 		ticker := time.NewTicker(5 * time.Minute)
 		defer ticker.Stop()
 		for range ticker.C {

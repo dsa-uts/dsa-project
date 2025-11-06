@@ -12,7 +12,7 @@ import (
 
 // Resets stale jobs in the job queue.
 func ResetStaleJobs(ctx context.Context, jobQueueStore *database.JobQueueStore, logger *slog.Logger) error {
-	const staleTimeout = 10 * time.Minute
+	const staleTimeout = 3 * time.Minute
 
 	jobs, err := jobQueueStore.ResetStaleJobs(ctx, queuestatus.Processing, queuestatus.Pending, staleTimeout)
 	if err != nil {
