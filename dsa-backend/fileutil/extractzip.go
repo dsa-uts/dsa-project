@@ -77,8 +77,11 @@ func SafeExtractZip(fs afero.Fs, reader baseReader, size int64, destDir string) 
 }
 
 func extractFile(fs afero.Fs, file *zip.File, destDir string) error {
+	// Normalize file name to use "/" as separator
+	normalizedFileName := NormalizePath(file.Name)
+
 	// Sanitize file name to prevent path traversal attacks.
-	cleanPath := SanitizeRelPath(file.Name)
+	cleanPath := SanitizeRelPath(normalizedFileName)
 	if strings.Contains(cleanPath, "..") {
 		return fmt.Errorf("invalid file path: %s", file.Name)
 	}
