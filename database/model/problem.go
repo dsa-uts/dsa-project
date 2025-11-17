@@ -45,10 +45,26 @@ type TestCase struct {
 	Description string `json:"description"`
 	Command     string `json:"command"`
 	Evaluation  bool   `json:"eval_only"`
-	StdinPath   string `json:"stdin,omitempty"`
-	StdoutPath  string `json:"stdout,omitempty"`
-	StderrPath  string `json:"stderr,omitempty"`
-	ExitCode    int64  `json:"exit,omitempty"`
+	StdinPath   string `json:"stdin"`
+	StdoutPath  string `json:"stdout"`
+	StderrPath  string `json:"stderr"`
+	ExitCode    int64  `json:"exit"`
+	IgnoreExit  bool   `json:"ignore_exit"`
+}
+
+func MakeTestCase(id int64, title, description, command string, evalOnly bool, stdinPath, stdoutPath, stderrPath string, exitCode int64, ignoreExit bool) TestCase {
+	return TestCase{
+		ID:          id,
+		Title:       title,
+		Description: description,
+		Command:     command,
+		Evaluation:  evalOnly,
+		StdinPath:   stdinPath,
+		StdoutPath:  stdoutPath,
+		StderrPath:  stderrPath,
+		ExitCode:    exitCode,
+		IgnoreExit:  ignoreExit,
+	}
 }
 
 var _ bun.BeforeAppendModelHook = (*Lecture)(nil)

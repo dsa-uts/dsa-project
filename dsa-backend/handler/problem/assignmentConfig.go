@@ -1,9 +1,9 @@
 package problem
 
 import (
+	"dsa-backend/fileutil"
 	"encoding/json"
 	"errors"
-	"path/filepath"
 )
 
 type AssignmentConfig struct {
@@ -38,41 +38,36 @@ func (ac *AssignmentConfig) Decode(data []byte) error {
 	ac.setDefaults()
 
 	// Clean all path to avoid path traversal attack
-	ac.MDfile = CleanPath(ac.MDfile)
+	ac.MDfile = fileutil.SanitizeRelPath(ac.MDfile)
 	for i := range ac.TestFiles {
-		ac.TestFiles[i] = CleanPath(ac.TestFiles[i])
+		ac.TestFiles[i] = fileutil.SanitizeRelPath(ac.TestFiles[i])
 	}
 
 	for i := range ac.Build {
 		if ac.Build[i].Stdin != "" {
-			ac.Build[i].Stdin = CleanPath(ac.Build[i].Stdin)
+			ac.Build[i].Stdin = fileutil.SanitizeRelPath(ac.Build[i].Stdin)
 		}
 		if ac.Build[i].Command != "" {
-			ac.Build[i].Stdout = CleanPath(ac.Build[i].Stdout)
+			ac.Build[i].Stdout = fileutil.SanitizeRelPath(ac.Build[i].Stdout)
 		}
 		if ac.Build[i].Stderr != "" {
-			ac.Build[i].Stderr = CleanPath(ac.Build[i].Stderr)
+			ac.Build[i].Stderr = fileutil.SanitizeRelPath(ac.Build[i].Stderr)
 		}
 	}
 
 	for i := range ac.Judge {
 		if ac.Judge[i].Stdin != "" {
-			ac.Judge[i].Stdin = CleanPath(ac.Judge[i].Stdin)
+			ac.Judge[i].Stdin = fileutil.SanitizeRelPath(ac.Judge[i].Stdin)
 		}
 		if ac.Judge[i].Stdout != "" {
-			ac.Judge[i].Stdout = CleanPath(ac.Judge[i].Stdout)
+			ac.Judge[i].Stdout = fileutil.SanitizeRelPath(ac.Judge[i].Stdout)
 		}
 		if ac.Judge[i].Stderr != "" {
-			ac.Judge[i].Stderr = CleanPath(ac.Judge[i].Stderr)
+			ac.Judge[i].Stderr = fileutil.SanitizeRelPath(ac.Judge[i].Stderr)
 		}
 	}
 
 	return nil
-}
-
-func CleanPath(p string) string {
-	new_p := filepath.Join("/", filepath.Clean(p))
-	return new_p[1:]
 }
 
 func (conf *AssignmentConfig) setDefaults() {
@@ -98,10 +93,6 @@ func (t *TestCase) setDefaults() {
 	if t.EvalOnly == nil {
 		defaultEvalOnly := false
 		t.EvalOnly = &defaultEvalOnly
-	}
-	if t.ExitCode == nil {
-		defaultExitCode := int64(0)
-		t.ExitCode = &defaultExitCode
 	}
 	if t.MessageOnFail == "" {
 		t.MessageOnFail = "failed to execute " + t.Title

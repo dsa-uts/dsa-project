@@ -7,6 +7,7 @@ interface DetailedTaskLog {
   memory_kb: number;
   exit_code: number;
   expected_exit_code: number;
+  ignore_exit: boolean;
   stdin: string | null;
   stdout: string;
   stderr: string;
