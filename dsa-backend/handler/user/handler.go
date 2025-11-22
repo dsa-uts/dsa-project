@@ -11,6 +11,7 @@ import (
 	"github.com/dsa-uts/dsa-project/database"
 	"github.com/dsa-uts/dsa-project/database/model"
 	"github.com/labstack/echo/v4"
+	echomw "github.com/labstack/echo/v4/middleware"
 	"github.com/uptrace/bun"
 	"golang.org/x/crypto/bcrypt"
 	"golang.org/x/time/rate"
@@ -59,9 +60,27 @@ func NewUserHandler(jwtSecret string, db *bun.DB) *Handler {
 }
 
 func (h *Handler) RegisterRoutes(r *echo.Group) {
-	// Rate limit: 10 requests per minute per username, burst of 6
-	loginLimiter := middleware.NewLoginRateLimiter(rate.Every(time.Minute/10), 6)
-	r.POST("/login", h.Login, loginLimiter.Middleware())
+	// Global rate limit for /login: 100 requests per second, burst of 200
+	globalLimiter := echomw.RateLimiterWithConfig(echomw.RateLimiterConfig{
+		Store: echomw.NewRateLimiterMemoryStoreWithConfig(
+			echomw.RateLimiterMemoryStoreConfig{
+				Rate:      100,
+				Burst:     200,
+				ExpiresIn: 3 * time.Minute,
+			},
+		),
+		IdentifierExtractor: func(ctx echo.Context) (string, error) {
+			return "global_login", nil // All requests share the same key
+		},
+		DenyHandler: func(c echo.Context, identifier string, err error) error {
+			return c.JSON(http.StatusTooManyRequests, response.NewError("server is busy, please try again later"))
+		},
+	})
+
+	// Per-username rate limit: 10 requests per minute, burst of 6, cleanup after 10 minutes
+	loginLimiter := middleware.NewLoginRateLimiter(rate.Every(time.Minute/10), 6, 10*time.Minute)
+
+	r.POST("/login", h.Login, globalLimiter, loginLimiter.Middleware())
 
 	authedRouter := r.Group("", middleware.JWTMiddleware(h.jwtSecret), middleware.CheckValidityOfJWTMiddleware(h.db))
 

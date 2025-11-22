@@ -3,6 +3,7 @@ package middleware
 import (
 	"net/http"
 	"sync"
+	"time"
 
 	"dsa-backend/handler/response"
 
@@ -10,45 +11,110 @@ import (
 	"golang.org/x/time/rate"
 )
 
+// limiterEntry holds a rate limiter and its last access time
+type limiterEntry struct {
+	limiter    *rate.Limiter
+	lastAccess time.Time
+}
+
 // LoginRateLimiter manages rate limiting per username
 type LoginRateLimiter struct {
-	limiters map[string]*rate.Limiter
+	limiters map[string]*limiterEntry
 	mu       sync.RWMutex
 	rate     rate.Limit
 	burst    int
+	ttl      time.Duration
+	stopCh   chan struct{}
 }
 
-// NewLoginRateLimiter creates a new rate limiter
+// NewLoginRateLimiter creates a new rate limiter with automatic cleanup
 // r: requests per second (e.g., rate.Every(time.Minute/10) for 10 req/min)
 // b: burst size
-func NewLoginRateLimiter(r rate.Limit, b int) *LoginRateLimiter {
-	return &LoginRateLimiter{
-		limiters: make(map[string]*rate.Limiter),
+// ttl: time after which inactive entries are removed (e.g., 1 hour)
+func NewLoginRateLimiter(r rate.Limit, b int, ttl time.Duration) *LoginRateLimiter {
+	l := &LoginRateLimiter{
+		limiters: make(map[string]*limiterEntry),
 		rate:     r,
 		burst:    b,
+		ttl:      ttl,
+		stopCh:   make(chan struct{}),
 	}
+
+	// Start cleanup goroutine
+	go l.cleanup()
+
+	return l
+}
+
+// cleanup periodically removes stale entries
+func (l *LoginRateLimiter) cleanup() {
+	ticker := time.NewTicker(l.ttl / 2) // Run cleanup at half the TTL interval
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ticker.C:
+			l.removeStaleEntries()
+		case <-l.stopCh:
+			return
+		}
+	}
+}
+
+// removeStaleEntries removes entries that haven't been accessed within the TTL
+func (l *LoginRateLimiter) removeStaleEntries() {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+
+	now := time.Now()
+
+	// collect keys to iterate over
+	usernames := make([]string, 0, len(l.limiters))
+	for username := range l.limiters {
+		usernames = append(usernames, username)
+	}
+
+	// iterate over collected keys
+	for _, username := range usernames {
+		entry := l.limiters[username]
+		if now.Sub(entry.lastAccess) > l.ttl {
+			delete(l.limiters, username)
+		}
+	}
+}
+
+// Stop stops the cleanup goroutine
+func (l *LoginRateLimiter) Stop() {
+	close(l.stopCh)
 }
 
 // getLimiter returns the rate limiter for the given username
 func (l *LoginRateLimiter) getLimiter(username string) *rate.Limiter {
 	l.mu.RLock()
-	limiter, exists := l.limiters[username]
+	entry, exists := l.limiters[username]
 	l.mu.RUnlock()
 
 	if exists {
-		return limiter
+		l.mu.Lock()
+		entry.lastAccess = time.Now()
+		l.mu.Unlock()
+		return entry.limiter
 	}
 
 	l.mu.Lock()
 	defer l.mu.Unlock()
 
 	// Double check after acquiring write lock
-	if limiter, exists = l.limiters[username]; exists {
-		return limiter
+	if entry, exists = l.limiters[username]; exists {
+		entry.lastAccess = time.Now()
+		return entry.limiter
 	}
 
-	limiter = rate.NewLimiter(l.rate, l.burst)
-	l.limiters[username] = limiter
+	limiter := rate.NewLimiter(l.rate, l.burst)
+	l.limiters[username] = &limiterEntry{
+		limiter:    limiter,
+		lastAccess: time.Now(),
+	}
 	return limiter
 }
 
