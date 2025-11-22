@@ -13,6 +13,7 @@ import (
 	"github.com/labstack/echo/v4"
 	"github.com/uptrace/bun"
 	"golang.org/x/crypto/bcrypt"
+	"golang.org/x/time/rate"
 )
 
 type userLoginRequest struct {
@@ -58,7 +59,9 @@ func NewUserHandler(jwtSecret string, db *bun.DB) *Handler {
 }
 
 func (h *Handler) RegisterRoutes(r *echo.Group) {
-	r.POST("/login", h.Login)
+	// Rate limit: 10 requests per minute per username, burst of 6
+	loginLimiter := middleware.NewLoginRateLimiter(rate.Every(time.Minute/10), 6)
+	r.POST("/login", h.Login, loginLimiter.Middleware())
 
 	authedRouter := r.Group("", middleware.JWTMiddleware(h.jwtSecret), middleware.CheckValidityOfJWTMiddleware(h.db))
 
