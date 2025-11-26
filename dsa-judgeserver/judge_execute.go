@@ -167,6 +167,13 @@ func (executor *JobExecutor) executeBuildTasks(ctx context.Context, job *model.J
 	// to /home/guest/, with guest:guest ownership
 	// ---------------------------------------------------------------------------
 
+	// Copy user submitted files
+	userSubmittedFolderPath := job.FileDir
+	err = executor.CopyContentsToContainer(ctx, userSubmittedFolderPath, buildContainer_createResponse.ID, "/home/guest/")
+	if err != nil {
+		return nil, err
+	}
+
 	// Copy test files
 	for _, testFile := range job.TestFiles {
 		testFilePath := filepath.Join(job.ResourceDir, testFile)
@@ -174,13 +181,6 @@ func (executor *JobExecutor) executeBuildTasks(ctx context.Context, job *model.J
 		if err != nil {
 			return nil, err
 		}
-	}
-
-	// Copy user submitted files
-	userSubmittedFolderPath := job.FileDir
-	err = executor.CopyContentsToContainer(ctx, userSubmittedFolderPath, buildContainer_createResponse.ID, "/home/guest/")
-	if err != nil {
-		return nil, err
 	}
 
 	// modify ownership of all files under /home/guest to guest:guest
