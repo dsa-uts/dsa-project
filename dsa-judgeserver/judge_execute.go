@@ -27,8 +27,8 @@ type JobExecutor struct {
 const UPLOAD_DIR_IN_HOST = "upload/"
 const UID_GUEST = 1002
 const GID_GUEST = 1002
-const MAX_STDOUT_BYTES = 2 * 1024 // 2 KB
-const MAX_STDERR_BYTES = 2 * 1024 // 2 KB
+const MAX_STDOUT_BYTES = 4 * 1024 // 4 KB
+const MAX_STDERR_BYTES = 4 * 1024 // 4 KB
 
 const CPU_SET = "0"                       // only 1 CPU core can be used.
 const TIMEOUT_BEFORE_CONTAINER_STOP = 120 // timeout in seconds for stopping container
