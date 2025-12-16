@@ -9,8 +9,8 @@ tmp_dir = "tmp"
 [build]
 # Just plain old shell command. You could use `make` as well.
 cmd = "go build -o ./tmp/main ."
-# Binary file yields from `cmd`.
-bin = "tmp/main"
+# Entrypoint binary relative to root. First item is the executable, more items are default arguments.
+entrypoint = ["./tmp/main"]
 # Customize binary, can setup environment variables when run your app.
 full_bin = "./tmp/main"
 # Add additional arguments when running binary (bin/full_bin). Will run './tmp/main hello world'.
