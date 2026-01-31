@@ -225,6 +225,7 @@ type DetailedTaskLog struct {
 	MemoryKB         int64   `json:"memory_kb"`
 	ExitCode         int64   `json:"exit_code"`
 	ExpectedExitCode int64   `json:"expected_exit_code"`
+	IgnoreExit       bool    `json:"ignore_exit"`
 	Stdin            *string `json:"stdin"`           // base64 encoded, compressed with gzip
 	Stdout           string  `json:"stdout"`          // base64 encoded, compressed with gzip
 	Stderr           string  `json:"stderr"`          // base64 encoded, compressed with gzip
@@ -835,6 +836,7 @@ func makeDetailedTaskLog(taskResult model.TaskLog, testCase model.TestCase, reso
 		MemoryKB:         taskResult.MemoryKB,
 		ExitCode:         taskResult.ExitCode,
 		ExpectedExitCode: testCase.ExitCode,
+		IgnoreExit:       testCase.IgnoreExit,
 		Stdin:            stdinData,
 		Stdout:           stdout.Data,
 		Stderr:           stderr.Data,

@@ -27,7 +27,11 @@ const DetailedTaskLogTable: React.FC<DetailedTaskLogTableProps> = ({ logs }) => 
     setDiffMode((prev) => ({ ...prev, [key]: !prev[key] }));
   };
 
-  const exitCodeColor = (exitCode: number, expectedExitCode: number) => {
+  const exitCodeColor = (exitCode: number, expectedExitCode: number, ignoreExit: boolean) => {
+    if (ignoreExit) {
+      return "text-gray-600";
+    }
+
     if (exitCode === 0 && expectedExitCode !== 0) {
       // Expected failure but got success
       return "text-red-600";
@@ -85,8 +89,8 @@ const DetailedTaskLogTable: React.FC<DetailedTaskLogTableProps> = ({ logs }) => 
                         </div>
                         <div>
                           <span className="font-semibold">Exit code: </span>
-                          <span className={exitCodeColor(log.exit_code, log.expected_exit_code)}>
-                            {log.exit_code} (expected: {log.expected_exit_code})
+                          <span className={exitCodeColor(log.exit_code, log.expected_exit_code, log.ignore_exit)}>
+                            {log.exit_code} ({log.ignore_exit ? "no expected exit code" : "expected: " + log.expected_exit_code})
                           </span>
                         </div>
                         <div>
@@ -152,7 +156,7 @@ const DetailedTaskLogTable: React.FC<DetailedTaskLogTableProps> = ({ logs }) => 
                               <div className="text-xs text-gray-600 mb-1">標準出力 (stdout, expected)</div>
                               <div className="bg-white border border-gray-300 rounded p-2 max-h-40 overflow-auto">
                                 <pre className="text-sm font-mono whitespace-pre-wrap">
-                                  {log.expected_stdout || "(No expected stdout)"}
+                                  {log.expected_stdout === null ? "(No expected stdout)" : log.expected_stdout}
                                 </pre>
                               </div>
                             </div>
@@ -205,7 +209,7 @@ const DetailedTaskLogTable: React.FC<DetailedTaskLogTableProps> = ({ logs }) => 
                               <div className="text-xs text-gray-600 mb-1">標準エラー出力 (stderr, expected)</div>
                               <div className="bg-white border border-gray-300 rounded p-2 max-h-40 overflow-auto">
                                 <pre className="text-sm font-mono whitespace-pre-wrap">
-                                  {log.expected_stderr || "(No expected stderr)"}
+                                  {log.expected_stderr === null ? "(No expected stderr)" : log.expected_stderr}
                                 </pre>
                               </div>
                             </div>

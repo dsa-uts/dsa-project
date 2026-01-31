@@ -1729,6 +1729,9 @@ const docTemplate = `{
                     "description": "base64 encoded, compressed with gzip",
                     "type": "string"
                 },
+                "ignore_exit": {
+                    "type": "boolean"
+                },
                 "memory_kb": {
                     "type": "integer"
                 },

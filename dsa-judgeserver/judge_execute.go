@@ -27,8 +27,8 @@ type JobExecutor struct {
 const UPLOAD_DIR_IN_HOST = "upload/"
 const UID_GUEST = 1002
 const GID_GUEST = 1002
-const MAX_STDOUT_BYTES = 2 * 1024 // 2 KB
-const MAX_STDERR_BYTES = 2 * 1024 // 2 KB
+const MAX_STDOUT_BYTES = 4 * 1024 // 4 KB
+const MAX_STDERR_BYTES = 4 * 1024 // 4 KB
 
 const CPU_SET = "0"                       // only 1 CPU core can be used.
 const TIMEOUT_BEFORE_CONTAINER_STOP = 120 // timeout in seconds for stopping container
@@ -81,7 +81,7 @@ func (executor *JobExecutor) executeBuildTasks(ctx context.Context, job *model.J
 
 	cpuSet := CPU_SET
 	timeout := TIMEOUT_BEFORE_CONTAINER_STOP
-	pidLimit := int64(128) // allow more processes for build tasks
+	pidLimit := int64(256) // allow more processes for build tasks
 	// add 32MB for overhead
 	totalMemoryInBytes := min(
 		(job.MemoryMB+32)*1024*1024, MAX_MEMORY_LIMIT_MB*1024*1024)
@@ -108,8 +108,8 @@ func (executor *JobExecutor) executeBuildTasks(ctx context.Context, job *model.J
 				Ulimits: []*container.Ulimit{
 					{
 						Name: "nofile", // limit max number of open files
-						Hard: 512,
-						Soft: 512,
+						Hard: 768,
+						Soft: 768,
 					},
 					{
 						Name: "nproc", // limit max number of processes
@@ -167,6 +167,13 @@ func (executor *JobExecutor) executeBuildTasks(ctx context.Context, job *model.J
 	// to /home/guest/, with guest:guest ownership
 	// ---------------------------------------------------------------------------
 
+	// Copy user submitted files
+	userSubmittedFolderPath := job.FileDir
+	err = executor.CopyContentsToContainer(ctx, userSubmittedFolderPath, buildContainer_createResponse.ID, "/home/guest/")
+	if err != nil {
+		return nil, err
+	}
+
 	// Copy test files
 	for _, testFile := range job.TestFiles {
 		testFilePath := filepath.Join(job.ResourceDir, testFile)
@@ -174,13 +181,6 @@ func (executor *JobExecutor) executeBuildTasks(ctx context.Context, job *model.J
 		if err != nil {
 			return nil, err
 		}
-	}
-
-	// Copy user submitted files
-	userSubmittedFolderPath := job.FileDir
-	err = executor.CopyContentsToContainer(ctx, userSubmittedFolderPath, buildContainer_createResponse.ID, "/home/guest/")
-	if err != nil {
-		return nil, err
 	}
 
 	// modify ownership of all files under /home/guest to guest:guest
@@ -313,11 +313,11 @@ func (executor *JobExecutor) executeBuildTasks(ctx context.Context, job *model.J
 			resultStatus = resultStatus.Max(requeststatus.TLE)
 		}
 
-		if buildTask.ExitCode == 0 && *watchdogOutput.ExitCode != 0 {
+		if !buildTask.IgnoreExit && buildTask.ExitCode == 0 && *watchdogOutput.ExitCode != 0 {
 			// If the expected exit code is 0 (successful execution), but the actual exit code is not 0, mark it as CE
 			resultStatus = resultStatus.Max(requeststatus.CE)
 		}
-		if buildTask.ExitCode != 0 && *watchdogOutput.ExitCode == 0 {
+		if !buildTask.IgnoreExit && buildTask.ExitCode != 0 && *watchdogOutput.ExitCode == 0 {
 			// If the exit code is not 0 (expected failure), but the actual exit code is 0, mark it as RE (Runtime Error)
 			resultStatus = resultStatus.Max(requeststatus.RE)
 		}
@@ -554,24 +554,24 @@ func (executor *JobExecutor) executeJudgeTasks(ctx context.Context, job *model.J
 			resultStatus = resultStatus.Max(requeststatus.TLE)
 		}
 
-		if judgeTask.ExitCode == 0 && *watchdogOutput.ExitCode != 0 {
+		if !judgeTask.IgnoreExit && judgeTask.ExitCode == 0 && *watchdogOutput.ExitCode != 0 {
 			// If the expected exit code is 0 (successful execution), but the actual exit code is not 0, mark it as RE (Runtime Error)
 			resultStatus = resultStatus.Max(requeststatus.RE)
 		}
-		if judgeTask.ExitCode != 0 && *watchdogOutput.ExitCode == 0 {
+		if !judgeTask.IgnoreExit && judgeTask.ExitCode != 0 && *watchdogOutput.ExitCode == 0 {
 			// Expected non-zero exit code (expected failure), but the actual exit code is 0, mark it as WA (Wrong Answer)
 			resultStatus = resultStatus.Max(requeststatus.WA)
 		}
 
 		// Check stdout and stderr if expected files are provided
 
-		if len(expectedStdoutContent) != 0 {
+		if judgeTask.StdoutPath != "" {
 			if !match.Match(string(expectedStdoutContent), watchdogOutput.Stdout) {
 				resultStatus = resultStatus.Max(requeststatus.WA)
 			}
 		}
 
-		if len(expectedStderrContent) != 0 {
+		if judgeTask.StderrPath != "" {
 			if !match.Match(string(expectedStderrContent), watchdogOutput.Stderr) {
 				resultStatus = resultStatus.Max(requeststatus.WA)
 			}

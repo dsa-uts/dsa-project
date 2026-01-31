@@ -27,8 +27,8 @@ const (
 	maxUncompressedSize = 10 * 1024 * 1024
 	// Maximum size for a single uploaded file (5MB)
 	maxFileSize = 5 * 1024 * 1024
-	// Maximum size for an uploaded zip file (5MB)
-	maxZipSize = 5 * 1024 * 1024
+	// Maximum size for an uploaded zip file (10MB)
+	maxZipSize = 10 * 1024 * 1024
 )
 
 // RequestValidation godoc

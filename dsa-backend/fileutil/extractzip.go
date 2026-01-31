@@ -14,10 +14,10 @@ import (
 // TODO: Discuss file size limits
 // TODO: Make this configuration be configurable via env file, or admin API.
 const (
-	// Maximum uncompressed size for uploaded files (10MB)
-	MaxUncompressedSize = 10 * 1024 * 1024
-	// Maximum size for a single uploaded file (5MB)
-	MaxFileSize = 5 * 1024 * 1024
+	// Maximum uncompressed size for uploaded files (15MB)
+	MaxUncompressedSize = 15 * 1024 * 1024
+	// Maximum size for a single uploaded file (15MB)
+	MaxFileSize = 15 * 1024 * 1024
 	// Maximum number of uploaded files
 	MaxFiles = 500
 )
@@ -77,8 +77,11 @@ func SafeExtractZip(fs afero.Fs, reader baseReader, size int64, destDir string) 
 }
 
 func extractFile(fs afero.Fs, file *zip.File, destDir string) error {
+	// Normalize file name to use "/" as separator
+	normalizedFileName := NormalizePath(file.Name)
+
 	// Sanitize file name to prevent path traversal attacks.
-	cleanPath := SanitizeRelPath(file.Name)
+	cleanPath := SanitizeRelPath(normalizedFileName)
 	if strings.Contains(cleanPath, "..") {
 		return fmt.Errorf("invalid file path: %s", file.Name)
 	}

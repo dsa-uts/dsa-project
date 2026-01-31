@@ -362,33 +362,36 @@ func (h *Handler) RegisterProblem(c echo.Context) error {
 	var buildtasks []model.TestCase
 	var judgeTasks []model.TestCase
 
-	for i, t := range config.Build {
-		testcase := model.TestCase{
-			ID:          int64(i + 1),
-			Title:       t.Title,
-			Description: t.Description,
-			Command:     t.Command,
-			Evaluation:  *t.EvalOnly,
-			StdinPath:   t.Stdin,
-			StdoutPath:  t.Stdout,
-			StderrPath:  t.Stderr,
-			ExitCode:    *t.ExitCode,
+	convertTestCase := func(t TestCase, id int) model.TestCase {
+		ignoreExit := false
+		if t.ExitCode == nil {
+			ignoreExit = true
 		}
+		exitCode := int64(0)
+		if t.ExitCode != nil {
+			exitCode = *t.ExitCode
+		}
+		return model.MakeTestCase(
+			int64(id),     // ID
+			t.Title,       // Title
+			t.Description, // Description
+			t.Command,     // Command
+			*t.EvalOnly,   // Evaluation
+			t.Stdin,       // StdinPath
+			t.Stdout,      // StdoutPath
+			t.Stderr,      // StderrPath
+			exitCode,      // ExitCode,
+			ignoreExit,    // IgnoreExit
+		)
+	}
+
+	for i, t := range config.Build {
+		testcase := convertTestCase(t, i+1)
 		buildtasks = append(buildtasks, testcase)
 	}
 
 	for i, t := range config.Judge {
-		testcase := model.TestCase{
-			ID:          int64(i + 1),
-			Title:       t.Title,
-			Description: t.Description,
-			Command:     t.Command,
-			Evaluation:  *t.EvalOnly,
-			StdinPath:   t.Stdin,
-			StdoutPath:  t.Stdout,
-			StderrPath:  t.Stderr,
-			ExitCode:    *t.ExitCode,
-		}
+		testcase := convertTestCase(t, i+1)
 		judgeTasks = append(judgeTasks, testcase)
 	}
 

@@ -40,10 +40,10 @@ async function decompressTaskLog(log: DetailedTaskLog): Promise<DetailedTaskLog>
   return {
     ...log,
     stdin: stdin || null,
-    stdout,
-    stderr,
-    expected_stdout: expectedStdout || null,
-    expected_stderr: expectedStderr || null,
+    stdout: stdout || "",
+    stderr: stderr || "",
+    expected_stdout: expectedStdout === null ? null : expectedStdout,
+    expected_stderr: expectedStderr === null ? null : expectedStderr,
   };
 }
 

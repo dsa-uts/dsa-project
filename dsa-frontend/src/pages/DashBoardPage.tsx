@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useAuthQuery } from "../auth/hooks";
-import { Link, useNavigate } from "react-router";
+import { Link } from "react-router";
 
 interface Problem {
   lecture_id: number;
@@ -19,8 +19,6 @@ interface Lecture {
 
 // url: /dashboard
 const DashBoardPage: React.FC = () => {
-  const navigate = useNavigate();
-
   const [selectedLecture, setSelectedLecture] = useState<number | null>(null);
 
   const lectureDataQuery = useAuthQuery<Lecture[]>({
@@ -111,13 +109,13 @@ const DashBoardPage: React.FC = () => {
               {lecture.problems.length > 0 ? (
                 <div className="space-y-3">
                   {lecture.problems.map((problem) => (
-                    <div
+                    <Link
                       key={`problem-${problem.lecture_id}-${problem.problem_id}`}
-                      className="p-4 border border-gray-200 rounded hover:bg-gray-50 transition-colors cursor-pointer"
-                      onClick={() => navigate(`/problem/${problem.lecture_id}/${problem.problem_id}`)}
+                      to={`/problem/${problem.lecture_id}/${problem.problem_id}`}
+                      className="block p-4 border border-gray-200 rounded hover:bg-gray-50 transition-colors"
                     >
                       <span className="text-gray-700">{problem.title}</span>
-                    </div>
+                    </Link>
                   ))}
                 </div>
               ) : (

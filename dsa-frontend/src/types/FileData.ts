@@ -69,8 +69,8 @@ async function decompressWithStream(compressedData: Uint8Array<ArrayBuffer>): Pr
 }
 
 
-async function decompressString(base64CompressedString: string | null): Promise<string> {
-  if (!base64CompressedString) return ""
+async function decompressString(base64CompressedString: string | null): Promise<string | null> {
+  if (!base64CompressedString) return null;
 
   try {
     // Base64 decode
