@@ -4,6 +4,7 @@ import { addAuthorizationHeader, useAuthQuery } from "../../auth/hooks";
 import { axiosClient, type SuccessResponse } from "../../api/axiosClient";
 import { formatTimestamp } from "../../util/timestamp";
 import SubmitFormSection from "../../components/SubmitFormSection";
+import SearchableCombobox from "../../components/SearchableCombobox";
 import { FileArchive, FileText } from "lucide-react";
 
 interface RequiredFiles {
@@ -77,11 +78,6 @@ const SingleGradingUpload: React.FC = () => {
     setSelectedLecture(lecture || null);
   };
 
-  const handleUserSelect = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const userId = e.target.value;
-    const user = userListData.find(u => u.id === userId);
-    setSelectedUser(user || null);
-  };
 
   const handleTimestampChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const ts = Math.floor(Date.parse(e.target.value) / 1000);
@@ -202,26 +198,19 @@ const SingleGradingUpload: React.FC = () => {
         </select>
       </div>
 
-      {/* Dropdown selection (user) */}
-      {/* TODO: Improve ux by adding search functionality */}
+      {/* User search combobox */}
       <div className="mb-8">
         <div className="mb-2 font-semibold text-xl">
           2. Select User (採点対象ユーザ)
         </div>
-        <select
-          onChange={handleUserSelect}
-          className="w-full bg-white px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-          defaultValue=""
-        >
-          <option value="" disabled>
-            Select User
-          </option>
-          {userListData.map((user) => (
-            <option key={user.id} value={user.id}>
-              {user.id} - {user.name}
-            </option>
-          ))}
-        </select>
+        <SearchableCombobox
+          items={userListData}
+          selected={selectedUser}
+          onSelect={setSelectedUser}
+          getKey={(u) => u.id}
+          getLabel={(u) => `${u.id} - ${u.name}`}
+          placeholder="Search by ID or name..."
+        />
       </div>
 
       {/* Timestamp input */}
