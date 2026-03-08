@@ -31,7 +31,9 @@ func (ps *ProblemStore) FetchResourcePath(ctx context.Context, lectureID int64, 
 func (ps *ProblemStore) GetLectureAndAllProblems(ctx context.Context, d int64) (model.Lecture, error) {
 	var lecture model.Lecture
 	err := ps.db.NewSelect().Model(&lecture).
-		Relation("Problems").
+		Relation("Problems", func(q *bun.SelectQuery) *bun.SelectQuery {
+			return q.Order("problem.problem_id")
+		}).
 		Where("id = ?", d).
 		Scan(ctx)
 	if err != nil {
