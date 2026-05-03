@@ -3,4 +3,5 @@
 logs/*
 nginx/log/*
 CLAUDE.md
+.DS_Store
 
