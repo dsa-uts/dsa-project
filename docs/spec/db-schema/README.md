@@ -1,28 +1,24 @@
-# データベース設計
-
-強調したカラムは必須項目。また、"ディレクトリ"や"パス"は絶対パスではなく相対パスを表す。
+# Database Design
 
 ## users
-ユーザー情報を管理する
 
 | type | attribute | PK/FK/unique/nullable | description |
 | ---- | --------- | ----- | ----------- |
-|  int |    internal_id  |   PK  | internal ID      |
-| varchar(255) | userid |  unique | * user ID <br>* unique ID is specified e.g., Student ID |
+| UUID |    internal_id  | PK | internal ID |
+| varchar(255) | userid |  unique | user ID |
 | varchar(255) | name |  | user name |
 | varchar(255) | hashed_password | | hashed Password |
 | int  | role_id | FK (user_role.id) | specifying user privileges |
 | varchar(255) | email | nullable | optional |
 
 ## user_role
-権限の異なるユーザーロールの情報を管理する
 
 | type | attribute | PK/FK/unique/nullable | description |
 | ---- | --------- | --------------------- | ----------- |
 |  int | id        | PK                    |             |
 | varchar(255) | name |                    | role name   |
 
-デフォルトで、いかの(id, name)タプルが設定されている
+These (id, name) tuples are set:
 - (1, 'admin')
 - (2, 'manager')
 - (3, 'student')
@@ -31,8 +27,8 @@
 
 | type | attribute | PK/FK/unique/nullable | description |
 | ---- | --------- | --------------------- | ----------- |
-| int  | id        | PK, auto_increment    |             |
-| int  | user_id   | FK (users.internal_id)| |
+| UUID | id        | PK    |             |
+| UUID | user_id   | FK (users.internal_id)| |
 | datetime | login_at |                    | timestamp when a user logs in |
 | datetime | logout_at |                   | * timestamp when a user logs out<br>* same as an expiration date of an access token<br>* If user logs out actively, update this field.|
 
@@ -47,18 +43,41 @@ Lecture情報を管理する e.g., "二分木", "ソート"
 | datetime | deadline |                    | * submission deadline<br>* this field is used to distinguish late submission from others |
 
 ## lecture_resource
-Lectureのリソース情報(Problemごとの説明文、テストケース)をバージョン管理する。リソース情報はフォルダ形式でストレージサーバー経由で取得する。
+Lectureのリソース情報(Problemごとの説明文、テストケース)をバージョン管理する。リソース情報でストレージサーバー経由で取得する。
 
 | type | attribute | PK/FK/unique/nullable | description |
 | ---- | --------- | --------------------- | ----------- |
-| int  | lecture_id | PK, FK(lecture.id)   |             |
-| varchar(255) | hash | PK                 | hash value of resource |
-| datetime | registered_at |               |             |
+| UUID | id        | PK                    |             |
+| int  | lecture_id | FK(lecture.id)   |             |
+| datetime | registered_at |            |             |
+| varchar(255) | hash | unique             | hash value of resource |
 | varchar(255) | hash_pub |                | * hash value of public resource<br>* "eval only" testcases are omitted |
 | text | comment | | comment writing a change history | 
 
-## ValidationRequest
-TODO: ここから
+## validation_request
+
+| type | attribute | PK/FK/unique/nullable | description |
+| ---- | --------- | --------------------- | ----------- |
+| UUID  | id        | PK   |             |
+| datetime | ts    |                       | time the request was issued |
+| UUID  | usercode  | FK(users.id)          | requester id |
+| int  | lecture_id | FK (lecture.id)      |             |
+| varchar(255)  | hash      | unique                | hash value of uploaded file |
+
+## validation_result
+
+* request_idに紐づいているvalidation_requestのlecture_idと、resource_idに紐づいているlecture_resource.lecture_idが一致していないといけないが、現状スキーマの方で一致させる制約をつけることができてきない。
+* PKがない
+
+| type | attribute | PK/PK/unique/nullable | description |
+| ---- | --------- | --------------------- | ----------- |
+| UUID  | request_id | FK(validation_request.id) |           |
+| UUID | resource_id | FK(lecture_resource.id) | |
+| int  | result | FK(result_values.value) | |
+| varchar(255) | hash | | |
+
+## grading_request
+
 
 - **ValidationRequest**: 提出されたコードのバリデーションリクエスト
   - **id**: リクエストID (auto increment)
