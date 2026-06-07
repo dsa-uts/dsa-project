@@ -52,8 +52,6 @@
     - ダッシュボードでシステム負荷を監視
     - WARN以上のログをメールで通知
     - 高負荷時にメール・Slackメッセージで通知
-  - 開発
-    - データベースのパスワード、シークレットトークン等はGitリポジトリにハードコーディングせず、Gitで追跡していないenvファイルで設定する。もしくはDocker Secretsを使用する。
   - sandbox実行
     - Task実行は全てVM上のsandboxコンテナ上で実行される
     - VM, sandboxそれぞれで計算リソース制限、ネットワーク制限を行う
@@ -103,7 +101,7 @@ flowchart LR
 
   JD -->|poll jobs / update results| DB
   JD -->|create / start VM| FC
-  FC -->|boot VM| sandbox
+  FC -->|boot VM| vm
   JD -->|execute Task| sandbox
   sandbox -->|stdout / stderr / status| JD
 ```
@@ -119,6 +117,7 @@ flowchart LR
 - ジャッジサーバー: Go
   - ORM: [Bun](https://github.com/uptrace/bun)
   - Sandbox: Firecrackerで立てたVMでsandboxを立てる
+- 運用負荷監視サーバー: 検討中
 
 ### 用語集
 - Task: 課題ごとに設定されている処理単位
