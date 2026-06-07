@@ -73,28 +73,39 @@
 
 ### アーキテクチャ
 
-TODO: updateする
 ```mermaid
 flowchart LR
-  client
-  subgraph "Host(docker-compose)"
-    GW[gateway]
-    BE[backend]
-    FE[frontend]
-    DB[database]
-    JD[judge]
-  end
-  DockerEngine
-  
-  client -->| 0.0.0.0:443 | GW
-  GW -->| /api/... | BE
-  GW -->| /その他 | FE
+  client[Client]
 
-  BE -->| CRUD | DB
-  JD -->| poll&update | DB
-  JD -->| 実行 | sandbox
-  JD -->| サンドボックス生成リクエスト | DockerEngine
-  DockerEngine -->| 生成 | sandbox["sandbox(temporary)"]
+  subgraph host["Host / VPS (docker-compose)"]
+    GW[Gateway]
+    FE[Frontend]
+    BE[Backend API]
+    KR[Ory Kratos]
+    DB[(PostgreSQL)]
+    JD[Judge]
+  end
+
+  subgraph vm["Firecracker VM"]
+    sandbox["Sandbox container<br/>(temporary)"]
+  end
+
+  FC[Firecracker]
+
+  client -->|HTTPS :443| GW
+  GW -->|SPA / static files| FE
+  GW -->|/api/...| BE
+  GW -->|auth self-service| KR
+
+  BE -->|session / identity| KR
+  BE -->|CRUD / enqueue request| DB
+  KR -->|identity / session data| DB
+
+  JD -->|poll jobs / update results| DB
+  JD -->|create / start VM| FC
+  FC -->|boot VM| sandbox
+  JD -->|execute Task| sandbox
+  sandbox -->|stdout / stderr / status| JD
 ```
 
 ### 技術選定
