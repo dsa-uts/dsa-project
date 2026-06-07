@@ -37,6 +37,9 @@
 - Manager機能
   - ユーザーが提出したファイルを一つにまとめたzipファイルをアップロードし、まとめて提出・Task実行する。
   - フォーマットが微妙に異なることでTaskが通らない提出に対して、その場で修正して再チェックすることができる
+- 課題リソースのバージョン管理
+  - 課題リソースを更新しても古いバージョンを参照できる
+  - 
 
 ### 非機能要件
 - セキュリティ
@@ -114,6 +117,7 @@ flowchart LR
   - Validator: [GoPlayground/validator](https://github.com/go-playground/validator)
 - 認証サーバー: Ory Kratos
 - データベース: PostgreSQL
+- オブジェクトストレージ: Seaweedfs
 - ジャッジサーバー: Go
   - ORM: [Bun](https://github.com/uptrace/bun)
   - Sandbox: Firecrackerで立てたVMでsandboxを立てる
