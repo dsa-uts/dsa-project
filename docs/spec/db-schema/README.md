@@ -21,7 +21,7 @@
 These (id, name) tuples are set:
 - (1, 'admin')
 - (2, 'manager')
-- (3, 'student')
+- (3, 'user')
 
 ## login_history
 
@@ -30,10 +30,10 @@ These (id, name) tuples are set:
 | UUID | id        | PK    |             |
 | UUID | user_id   | FK (users.internal_id)| |
 | datetime | login_at |                    | timestamp when a user logs in |
-| datetime | logout_at |                   | * timestamp when a user logs out<br>* same as an expiration date of an access token<br>* If user logs out actively, update this field.|
+| datetime | logout_at |                   | timestamp when a user logs out|
 
 ## lecture
-Lecture情報を管理する e.g., "二分木", "ソート"
+課題情報 e.g., "二分木", "ソート"
 
 | type | attribute | PK/FK/unique/nullable | description |
 | ---- | --------- | --------------------- | ----------- |
@@ -42,8 +42,7 @@ Lecture情報を管理する e.g., "二分木", "ソート"
 | datetime | start_at |                    | when this lecture will be made public to students |
 | datetime | deadline |                    | * submission deadline<br>* this field is used to distinguish late submission from others |
 
-## lecture_resource
-Lectureのリソース情報(Problemごとの説明文、テストケース)をバージョン管理する。リソース情報でストレージサーバー経由で取得する。
+## resource
 
 | type | attribute | PK/FK/unique/nullable | description |
 | ---- | --------- | --------------------- | ----------- |
@@ -51,8 +50,19 @@ Lectureのリソース情報(Problemごとの説明文、テストケース)を�
 | int  | lecture_id | FK(lecture.id)   |             |
 | datetime | registered_at |            |             |
 | varchar(255) | hash | unique             | hash value of resource |
-| varchar(255) | hash_pub |                | * hash value of public resource<br>* "eval only" testcases are omitted |
 | text | comment | | comment writing a change history | 
+
+## suite
+
+| type | attribute | PK/FK/unique/nullable | description |
+| ---- | --------- | --------------------- | ----------- |
+| UUID | id        | PK                    |             |
+| UUID | resource_id | FK(resource.id)     |             |
+| int  | order |                           |             |
+| varchar(255) | title |                   |             |
+| varchar(255) | path |                    |             |
+
+* `CONSTRAINT resource_order UNIQUE (resource_id, order)`
 
 ## validation_request
 
