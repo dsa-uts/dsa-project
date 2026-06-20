@@ -74,6 +74,7 @@
   - 簡単にデプロイできる
     - ハイパラメータを設定する箇所が少ない、または一か所にまとまっている。
     - コマンド一つでデプロイできる。
+- 
 
 ## システム構成
 
@@ -87,33 +88,48 @@ flowchart LR
     GW[Gateway]
     FE[Frontend]
     BE[Backend]
-    KR[Ory Kratos]
     DB[(PostgreSQL)]
     RD[(Redis)]
+    OB[OpenBao]
     JD[Judge]
+    SCD["Sandbox containerd (runsc / gVisor)"]
   end
 
-  subgraph vm["Firecracker VM"]
-    sandbox["Sandbox container<br/>(temporary)"]
+  subgraph sandbox_runtime["Sandbox runtime"]
+    sandbox["Sandbox container (temporary)"]
   end
-
-  FC[Firecracker]
 
   client -->|HTTPS :443| GW
   GW -->|SPA / static files| FE
   GW -->|/api/...| BE
-  GW -->|auth self-service| KR
 
-  BE -->|session / identity| KR
-  BE -->|CRUD / enqueue request| DB
-  KR -->|identity / session data| DB
+  BE -->|CRUD / auth users / durable job state| DB
+  BE -->|session / progress cache| RD
+  BE -->|DB credentials| OB
+  OB -->|dynamic DB user / password| DB
+  RD -->|job queued notification| JD
 
-  JD -->|poll jobs / update results| DB
-  JD -->|create / start VM| FC
-  FC -->|boot VM| vm
+  JD -->|poll / claim jobs / update results| DB
+  JD -->|progress cache| RD
+  JD -->|create / start sandbox task| SCD
+  SCD -->|run with gVisor| sandbox
   JD -->|execute Task| sandbox
   sandbox -->|stdout / stderr / status| JD
 ```
+
+* PostgreSQL: データの永続化 (User, Resource, Request, etc)
+  - ジョブキューも保存する
+* Redis: 一時的なデータの共有
+  - セッション情報
+  - CI Workflow などの短期 progress cache
+  - Judgeサーバーへの notify
+* OpenBao: secret管理
+* sandbox: gVisor(runsc) + 専用 containerd
+  - CPU / memory / pids / 実行時間 / stdout・stderr size の制限
+  - network egress の既定 deny
+  - capabilities drop
+  - `no_new_privileges`
+  - job 終了後 cleanup、監査ログを必須とする。
 
 ### 技術選定
 - フロントエンド: React (Vite) + TypeScript + TailwindCSS
@@ -121,11 +137,12 @@ flowchart LR
   - バックエンドフレームワーク: [Echo](https://github.com/labstack/echo)
   - ORM: [Bun](https://github.com/uptrace/bun)
   - Validator: [GoPlayground/validator](https://github.com/go-playground/validator)
-- 認証サーバー: Ory Kratos
+- 認証: Backend-managed session cookie
 - データベース: PostgreSQL
+- セッション・進捗キャッシュ・ジョブ通知: Redis
+- Secret 管理: OpenBao
 - オブジェクトストレージ: Seaweedfs
 - ジャッジサーバー: Go
   - ORM: [Bun](https://github.com/uptrace/bun)
-  - Sandbox: Firecrackerで立てたVMでsandboxを立てる
+  - Sandbox: VM / VPS 環境では gVisor(runsc) + sandbox 専用 containerd
 - 運用負荷監視サーバー: 検討中
-
