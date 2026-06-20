@@ -84,18 +84,19 @@
 flowchart LR
   client[Client]
 
-  subgraph host["Host / VPS (docker-compose)"]
-    GW[Gateway]
-    FE[Frontend]
-    BE[Backend]
-    DB[(PostgreSQL)]
-    RD[(Redis)]
-    OB[OpenBao]
-    JD[Judge]
-    SCD["Sandbox containerd (runsc / gVisor)"]
-  end
+  subgraph host["Host / VPS"]
+    subgraph compose["docker compose"]
+      GW[Gateway]
+      FE[Frontend]
+      BE[Backend]
+      DB[(PostgreSQL)]
+      RD[(Redis)]
+      OB[OpenBao]
+      JD[Judge]
+    end
 
-  subgraph sandbox_runtime["Sandbox runtime"]
+    SCD["Sandbox-only containerd (runsc / gVisor)"]
+
     sandbox["Sandbox container (temporary)"]
   end
 
