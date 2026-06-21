@@ -70,8 +70,9 @@
     - フォルダ・ファイルの読み込み・書き込み制限
     - ネットワークアクセス制限
   - 監視・ログ収集
-    - ダッシュボードでシステム負荷を監視
-    - WARN以上のログをメールで通知
+    - Beszel のダッシュボードで Host / Container の CPU・メモリ・ディスク・ネットワーク負荷を監視
+    - Uptime Kuma で HTTPS / Backend API / Judge API 等の外形監視を行う
+    - WARN以上のログはアプリケーション側でメール通知する
     - 高負荷時にメール・Slackメッセージで通知
 - パフォーマンス
   - 同時アクセス対応
@@ -179,4 +180,5 @@ flowchart LR
 - ジャッジサーバー: Go
   - ORM: [Bun](https://github.com/uptrace/bun)
   - Sandbox: VM / VPS 環境では gVisor(runsc) + sandbox 専用 containerd
-- 運用負荷監視サーバー: 検討中
+- 運用負荷監視サーバー: Beszel
+- 外形監視: Uptime Kuma
