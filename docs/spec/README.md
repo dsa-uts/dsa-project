@@ -6,7 +6,7 @@
 | 項目 | 内容 |
 | -- | -- |
 | プロジェクト名 | dsa-project |
-| 目的 | 提出された Submission に対して、あらかじめ設定されたCI Workflow を実行する。 |
+| 目的 | 提出されたファイルに対して、あらかじめ設定されたCI Workflow を実行し、採点補助に役立てる |
 
 ## 用語集
 
@@ -23,7 +23,7 @@
   - CI Workflow を定義したファイルや、他 Makefile やプログラムファイルなどのリソース
   - Sandbox用コンテナイメージのビルド定義 (Dockerfile)
 - Submission : Project に紐づいた CI Workflow の実行をリクエストする際に提出するファイル
-  - プログラムファイルや `report.pdf` などのメディアファイル、他 CI Workflow ごとのcontext dir 等を示した メタデータファイル
+  - プログラムファイルや `report.pdf` などのメディアファイル、CI Workflow ごとのcontext dir 等を示した メタデータファイル
 - Version : Resource や Submission のバージョン
   - 日時とハッシュ値で構成される
 
@@ -47,7 +47,7 @@
     - 作成: シングルユーザーの作成、およびスプレッドシートから複数ユーザーの一括作成
   - Resource の作成・更新・削除
     - CI Workflow Resource は GitHub org の private repository で管理する
-    - main ブランチ更新時に GitHub Actions が sandbox 用コンテナイメージを build / push し、Backend の Admin API に Resource Version を登録する
+    - main ブランチ更新時に GitHub Actions が sandbox 用コンテナイメージを build / push し、Backend の Admin API に新しい Resource を登録する
 - Manager 機能
   - 複数のユーザーが提出した Submission を全て一つにまとめたzipファイルをアップロードし、まとめて Request する。
   - フォーマットが微妙に異なることで CI が通らない提出に対して、その場で修正して再 Request することができる
@@ -61,7 +61,7 @@
 ### 非機能要件
 - セキュリティ
   - ログイン認証時に、ロール毎に異なる権限を設定
-  - GitHub Actions から Backend への Resource Version 登録は、通常の Admin session cookie とは分離した CI 専用 Admin API で行う
+  - GitHub Actions から Backend への Resource Version 登録は、CI 専用 Admin API で行う
     - CI 専用の権限は Resource Version の作成に限定する
     - source repository、branch、commit SHA、workflow run ID、image digest を監査ログに残す
   - sandbox上での任意のコード実行時のセキュリティ
@@ -82,7 +82,7 @@
   - 簡単にデプロイできる
     - ハイパラメータを設定する箇所が少ない、または一か所にまとまっている。
     - コマンド一つでデプロイできる。
-- 
+    - 初回起動時にのみ初期設定用 Web UI が表示され、Admin アカウントのパスワード等を指定できる。
 
 ## システム構成
 
