@@ -16,8 +16,10 @@
 - Job : 独立VM/コンテナ内で実行される実行単位
 - Step : シェルコマンド 1 個程度の実行単位
 - Request : CI をリクエストすること
-- Artifact : CI Workflow によって生成された File / url などのリソース
-  - Mermaid の diagram など
+- Artifact : CI Workflow によって生成され、Job 間で明示的に受け渡す named file
+- CI Result : Step ごとの status / stdout / stderr と実行メタデータ
+- Preset File : Resource に含まれ、sandbox では read-only `/preset` mount から参照される trusted file
+- Sandbox Workspace : Job ごとに作成され、Submission と Artifact input file の writable copy を配置する filesystem
 
 - Resource : Project を定義するために作成されたリソースファイル
   - CI Workflow を定義したファイルや、他 Makefile やプログラムファイルなどのリソース
@@ -152,7 +154,12 @@ flowchart LR
   - network egress の既定 deny
   - capabilities drop
   - `no_new_privileges`
-  - job 終了後 cleanup、監査ログを必須とする。
+  - fixed non-root user で Step を実行する。
+  - read-only root filesystem。書き込み可能領域は platform が許可した sandbox workspace 等に限定する。
+  - trusted Preset file は read-only `/preset` mount に配置し、writable な sandbox workspace へは配置しない。
+  - Job は毎回 clean な sandbox workspace から開始する。前 Job の workspace 全体は引き継がず、明示された Artifact file のみを入力として受け取る。
+  - Job 終了後、Step ごとの status / stdout / stderr と明示された Artifact file を回収してから sandbox workspace を cleanup する。Step 間では cleanup しない。
+  - 監査ログを必須とする。
 
 ### 技術選定
 - フロントエンド: React (Vite) + TypeScript + TailwindCSS
@@ -172,4 +179,3 @@ flowchart LR
 - ジャッジサーバー: Go
   - ORM: [Bun](https://github.com/uptrace/bun)
   - Sandbox: VM / VPS 環境では gVisor(runsc) + sandbox 専用 containerd
-
