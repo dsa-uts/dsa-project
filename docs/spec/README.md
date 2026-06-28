@@ -1,33 +1,19 @@
 # オンラインジャッジWebアプリ 仕様書
 
+## 仕様ファイル
+
+- [Resource YAML 仕様](./resource.md)
+- [Database Design](./db-schema.md)
+
+用語は [../../CONTEXT.md](../../CONTEXT.md) を正とする。
+
 ## 概要
 プログラミング演習課題のオンラインジャッジWebアプリケーション
 
 | 項目 | 内容 |
 | -- | -- |
 | プロジェクト名 | dsa-project |
-| 目的 | 提出されたファイルに対して、あらかじめ設定されたCI Workflow を実行し、採点補助に役立てる |
-
-## 用語集
-
-- Project : 複数のCI Workflow からなるプロジェクト単位
-- CI (Continuous Integration) : 提出された Submission に対して、整合性チェックを行うこと
-- Workflow : 実行される CI のパイプライン全体
-- Job : 独立VM/コンテナ内で実行される実行単位
-- Step : シェルコマンド 1 個程度の実行単位
-- Request : CI をリクエストすること
-- Artifact : CI Workflow によって生成され、Job 間で明示的に受け渡す named file
-- CI Result : Step ごとの status / stdout / stderr と実行メタデータ
-- Preset File : Resource に含まれ、sandbox では read-only `/preset` mount から参照される trusted file
-- Sandbox Workspace : Job ごとに作成され、Submission と Artifact input file の writable copy を配置する filesystem
-
-- Resource : Project を定義するために作成されたリソースファイル
-  - CI Workflow を定義したファイルや、他 Makefile やプログラムファイルなどのリソース
-  - Sandbox用コンテナイメージのビルド定義 (Dockerfile)
-- Submission : Project に紐づいた CI Workflow の実行をリクエストする際に提出するファイル
-  - プログラムファイルや `report.pdf` などのメディアファイル、CI Workflow ごとのcontext dir 等を示した メタデータファイル
-- Version : Resource や Submission のバージョン
-  - 日時とハッシュ値で構成される
+| 目的 | 提出された Submission に対して、あらかじめ設定された Workflow を実行し、採点補助に役立てる |
 
 ## 対象ユーザー
 
@@ -41,30 +27,30 @@
 
 ### 機能要件
 - ユーザー認証・認可
-- CI Request
+- Request
   - 提出
   - 結果の表示
 - Admin 機能
   - ユーザーの作成・削除・並び変え
     - 作成: シングルユーザーの作成、およびスプレッドシートから複数ユーザーの一括作成
   - Resource の作成・更新・削除
-    - CI Workflow Resource は GitHub org の private repository で管理する
+    - Resource は GitHub org の private repository で管理する
     - main ブランチ更新時に GitHub Actions が sandbox 用コンテナイメージを build / push し、Backend の Admin API に新しい Resource を登録する
 - Manager 機能
   - 複数のユーザーが提出した Submission を全て一つにまとめたzipファイルをアップロードし、まとめて Request する。
-  - フォーマットが微妙に異なることで CI が通らない提出に対して、その場で修正して再 Request することができる
-- Resource の Version 管理
-  - Resource を更新しても古い Version を参照できる
-  - 複数の Version に対して Request することができる
+  - フォーマットが微妙に異なることで Request が失敗する提出に対して、その場で修正して再 Request することができる
+- Resource Version 管理
+  - Resource を更新しても古い Resource Version を参照できる
+  - 複数の Resource Version に対して Request することができる
     - 差分を確認するため
-  - CI Workflow Resource の Version には、GitHub の commit SHA、GitHub Actions の workflow run ID、GHCR の image digest を紐づける
-  - Request 実行時は Version に固定された image digest を参照する
+  - Resource Version には、GitHub の commit SHA、GitHub Actions の workflow run ID、GHCR の image digest を紐づける
+  - Request 実行時は Resource Version に固定された image digest を参照する
 
 ### 非機能要件
 - セキュリティ
   - ログイン認証時に、ロール毎に異なる権限を設定
-  - GitHub Actions から Backend への Resource Version 登録は、CI 専用 Admin API で行う
-    - CI 専用の権限は Resource Version の作成に限定する
+  - GitHub Actions から Backend への Resource Version 登録は、登録専用 Admin API で行う
+    - 登録専用の権限は Resource Version の作成に限定する
     - source repository、branch、commit SHA、workflow run ID、image digest を監査ログに残す
   - sandbox上での任意のコード実行時のセキュリティ
     - CPUコア数、メモリ使用量の制限
@@ -138,14 +124,14 @@ flowchart LR
   - ジョブキューも保存する
 * Redis: 一時的なデータの共有
   - セッション情報
-  - CI Workflow などの短期 progress cache
+  - Workflow などの短期 progress cache
   - Judgeサーバーへの notify
 * OpenBao: secret管理
-* GitHub private repository: CI Workflow Resource の管理
+* GitHub private repository: Resource の管理
   - main ブランチ更新を Resource 更新の入口とする
 * GitHub Actions: sandbox 用コンテナイメージの build / push と Resource Version 登録
   - GitHub-hosted runner 上で buildx / BuildKit を用いる
-  - Backend の CI 専用 Admin API に Resource Version や Image Digest 等の情報を登録する
+  - Backend の登録専用 Admin API に Resource Version や Image Digest 等の情報を登録する
 * GHCR: sandbox 用コンテナイメージの registry
   - Resource Version には tag ではなく `repo@sha256:...` 形式の digest を固定して記録する
   - Judge / sandbox-only containerd は digest 指定で pull / import する
@@ -172,7 +158,7 @@ flowchart LR
 - セッション・進捗キャッシュ・ジョブ通知: Redis
 - Secret 管理: OpenBao
 - オブジェクトストレージ: Seaweedfs
-- CI Workflow Resource 管理:
+- Resource 管理:
   - GitHub org private repository
   - GitHub Actions (GitHub-hosted runner + buildx / BuildKit)
   - GHCR (Container registry)
