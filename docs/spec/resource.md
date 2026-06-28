@@ -22,67 +22,67 @@ expected/test.stdout
 
 ```yaml
 resource:
-id: dsa-basic
+  id: dsa-basic
 
 workflows:
-judge:
-name: Judge
-description-path: descriptions/judge.md
+  judge:
+    name: Judge
+    description-path: descriptions/judge.md
 
-presets:
-files:
-- source: presets/Makefile
-path: Makefile
-- source: presets/check.sh
-path: scripts/check.sh
+    presets:
+      files:
+        - source: presets/Makefile
+          path: Makefile
+        - source: presets/check.sh
+          path: scripts/check.sh
 
-jobs:
-test:
-name: Test submission
-visibility: public
-depends: []
-sandbox:
-working-directory: /workspace
-build:
-context: .
-dockerfile: sandbox/Dockerfile
-image: ghcr.io/example/dsa-basic-sandbox
-limits:
-cpu: 1
-memory: 512MiB
-pids: 128
-default-step-timeout-seconds: 10
-timeout-buffer-seconds: 5
-stdout-size: 1MiB
-stderr-size: 1MiB
-workspace-size: 256MiB
-artifact-size: 1MiB
-artifacts:
-outputs:
-- name: program
-path: build/program
-steps:
-- name: Compile
-run: ["make", "-f", "/preset/Makefile", "build"]
-timeout-seconds: 30
-expected:
-exit-code: 0
-stderr:
-match: exact
-value: ""
+    jobs:
+      test:
+        name: Test submission
+        visibility: public
+        depends: []
+        sandbox:
+          working-directory: /workspace
+          build:
+            context: .
+            dockerfile: sandbox/Dockerfile
+            image: ghcr.io/example/dsa-basic-sandbox
+        limits:
+          cpu: 1
+          memory: 512MiB
+          pids: 128
+          default-step-timeout-seconds: 10
+          timeout-buffer-seconds: 5
+          stdout-size: 1MiB
+          stderr-size: 1MiB
+          workspace-size: 256MiB
+          artifact-size: 1MiB
+        artifacts:
+          outputs:
+            - name: program
+              path: build/program
+        steps:
+          - name: Compile
+            run: ["make", "-f", "/preset/Makefile", "build"]
+            timeout-seconds: 30
+            expected:
+              exit-code: 0
+              stderr:
+                match: exact
+                value: ""
 
-- name: Test
-run: ["/preset/scripts/check.sh"]
-stdin:
-path: input/sample.txt
-expected:
-exit-code: 0
-stdout:
-match: exact
-path: expected/test.stdout
-stderr:
-match: exact
-value: ""
+          - name: Test
+            run: ["/preset/scripts/check.sh"]
+            stdin:
+              path: input/sample.txt
+            expected:
+              exit-code: 0
+              stdout:
+                match: exact
+                path: expected/test.stdout
+              stderr:
+                match: exact
+                value: ""
 ```
 
 ## 基本規則
@@ -124,12 +124,12 @@ Normalization rules:
 
 ```yaml
 workflows:
-<workflow_id>:
-name: Judge
-description-path: descriptions/judge.md
-presets:
-files: []
-jobs: {}
+  <workflow_id>:
+    name: Judge
+    description-path: descriptions/judge.md
+    presets:
+      files: []
+    jobs: {}
 ```
 
 | field | required | description |
@@ -143,9 +143,9 @@ jobs: {}
 
 ```yaml
 presets:
-files:
-- source: presets/Makefile
-path: Makefile
+  files:
+    - source: presets/Makefile
+      path: Makefile
 ```
 
 | field | required | description |
@@ -167,20 +167,20 @@ Preset file は sandbox 内から読み込み可能だが、sandbox user から�
 
 ```yaml
 jobs:
-build:
-artifacts:
-outputs:
-- name: program
-path: build/program
+  build:
+    artifacts:
+      outputs:
+        - name: program
+          path: build/program
 
-hidden-test:
-visibility: private
-depends: [build]
-artifacts:
-inputs:
-- from-job: build
-name: program
-path: build/program
+  hidden-test:
+    visibility: private
+    depends: [build]
+    artifacts:
+      inputs:
+        - from-job: build
+          name: program
+          path: build/program
 ```
 
 | field | required | description |
@@ -215,14 +215,14 @@ Artifact handoff rules:
 
 ```yaml
 jobs:
-<job_id>:
-name: Test submission
-visibility: public
-depends: []
-sandbox: {}
-limits: {}
-artifacts: {}
-steps: []
+  <job_id>:
+    name: Test submission
+    visibility: public
+    depends: []
+    sandbox: {}
+    limits: {}
+    artifacts: {}
+    steps: []
 ```
 
 Job は独立 sandbox 実行単位。
@@ -247,11 +247,11 @@ Job は独立 sandbox 実行単位である。同一 Job 内の Step は同じ w
 
 ```yaml
 sandbox:
-working-directory: /workspace
-build:
-context: .
-dockerfile: sandbox/Dockerfile
-image: ghcr.io/example/dsa-basic-sandbox
+  working-directory: /workspace
+  build:
+    context: .
+    dockerfile: sandbox/Dockerfile
+    image: ghcr.io/example/dsa-basic-sandbox
 ```
 
 | field | required | description |
@@ -290,16 +290,16 @@ Submitted file を immutable にはしない。sandbox 内の Submission は can
 
 ```yaml
 limits:
-cpu: 1
-memory: 512MiB
-pids: 128
-timeout-seconds: 300
-default-step-timeout-seconds: 10
-timeout-buffer-seconds: 5
-stdout-size: 1MiB
-stderr-size: 1MiB
-workspace-size: 256MiB
-artifact-size: 1MiB
+  cpu: 1
+  memory: 512MiB
+  pids: 128
+  timeout-seconds: 300
+  default-step-timeout-seconds: 10
+  timeout-buffer-seconds: 5
+  stdout-size: 1MiB
+  stderr-size: 1MiB
+  workspace-size: 256MiB
+  artifact-size: 1MiB
 ```
 
 | field | required | description |
