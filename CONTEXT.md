@@ -16,13 +16,45 @@ _Avoid_: Test bundle, judge files
 An immutable version of a Resource associated with source history and sandbox image metadata.
 _Avoid_: Release, revision
 
+**User Account**:
+An authenticated account for a person who can submit or manage Requests.
+_Avoid_: Admin account, Manager account
+
+**Role**:
+An authorization level assigned to a User Account, such as Admin, Manager, or Student.
+_Avoid_: Account type, user type
+
+**System Account**:
+A reserved User Account used as the actor for automated Requests created by the system.
+_Avoid_: Null user, background actor
+
 **Submission**:
-User-provided files submitted for a Request.
+An immutable record of an uploaded normalized file tree for a Project and Subject User, including its uploader, upload time, and content hash. Incorrect Submissions are archived and replaced rather than edited.
 _Avoid_: Upload, answer
 
+**Archived Submission**:
+A Submission removed from current Request creation and normal result views because it was superseded by a corrected Submission.
+_Avoid_: Deleted submission, mutable submission
+
 **Request**:
-A user or manager initiated execution of one or more Workflows against a Submission and Resource Version.
+A user or manager initiated execution of one or more Workflows against a Submission and one Resource Version.
 _Avoid_: Run request, judge request
+
+**Validation Request**:
+A Request for a user's own Submission against the latest Resource Version that executes only public Jobs.
+_Avoid_: Trial, self-check
+
+**Evaluation Request**:
+A Manager-initiated Request for a Subject User that executes both public and private Jobs.
+_Avoid_: Batch request, delegated request
+
+**Subject User**:
+The User Account whose Submission is evaluated by an Evaluation Request.
+_Avoid_: Delegator, owner
+
+**Request Lineage**:
+The relationship from a corrected or retried Request back to the Request it was derived from.
+_Avoid_: Batch, duplicate marker
 
 **Workflow**:
 A dependency-ordered pipeline of Jobs defined by a Resource.
@@ -52,9 +84,17 @@ _Avoid_: Preset workspace, preset path
 A named regular file output declared by a Job for persistence after sandbox cleanup and optional use by later Jobs.
 _Avoid_: Workspace copy, build output
 
+**Public Artifact**:
+An Artifact declared visible to clients when the producing Job is also visible to that client.
+_Avoid_: Download, attachment
+
 **CI Result**:
-Captured Step status, stdout, stderr, Artifact capture status, and related execution metadata from a Request.
+Captured Step status, stdout, stderr, Artifact capture status, judge Status, and related execution metadata from a Request.
 _Avoid_: Artifact, output files
+
+**Status**:
+The judge verdict for a CI Result, such as AC, WA, TLE, MLE, RE, OLE, or IE.
+_Avoid_: Result, state
 
 **Sandbox Workspace**:
 The per-Job filesystem view assembled from a Submission, Preset files, and declared input Artifact files.

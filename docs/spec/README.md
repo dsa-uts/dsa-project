@@ -4,6 +4,7 @@
 
 - [Resource YAML 仕様](./resource.md)
 - [Database Design](./db-schema.md)
+- [REST API Design](./api.md)
 
 用語は [../../CONTEXT.md](../../CONTEXT.md) を正とする。
 
