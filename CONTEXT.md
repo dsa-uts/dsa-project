@@ -52,10 +52,6 @@ _Avoid_: Batch request, delegated request
 Evaluation Request で Submission が評価される User Account。
 _Avoid_: Delegator, owner
 
-**Request Lineage**:
-訂正・retry された Request から、派生元の Request への関係。
-_Avoid_: Batch, duplicate marker
-
 **Workflow**:
 Resource が定義する、依存順に並んだ Job の pipeline。
 _Avoid_: CI, pipeline
