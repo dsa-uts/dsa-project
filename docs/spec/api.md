@@ -1,31 +1,33 @@
-# REST API Design
+# REST API 仕様
 
-This document defines the client-facing REST API shape. Public API language uses Project and Version; Resource and Resource Version remain internal/admin concepts.
+このドキュメントはクライアント向け REST API の形を所有する。Resource リポジトリと Resource YAML の仕様は [resource.md](./resource.md)、用語と Principles は [CONTEXT.md](../../CONTEXT.md) を正とする。
+
+公開 API の語彙では Project と Version を使う。Resource / Resource Version は internal / admin の概念に留める。
 
 ## Conventions
 
 - Base path: `/api`
-- Auth: backend-managed session cookie.
-- IDs: opaque UUID strings.
-- Timestamps: RFC 3339 UTC strings.
-- Request and Submission records are immutable. Corrections archive old Submissions and create new ones.
-- A Request targets one Project, one Submission, one Version, and all Workflows in that Version.
-- Clients poll; no SSE or WebSocket requirement.
+- 認証: backend-managed session cookie。
+- ID: opaque な UUID 文字列。
+- Timestamp: RFC 3339 UTC 文字列。
+- Request と Submission のレコードは immutable。訂正は Archive-not-Edit に従い、旧 Submission を archive して新規作成する。
+- Request は Single-Version Request に従い、1 Project、1 Submission、1 Version、その Version の全 Workflow を対象とする。
+- クライアントは polling する。SSE / WebSocket は要件にない。
 
 ## Roles
 
-| Role | Summary |
+| Role | 概要 |
 | --- | --- |
-| Student | Creates validation Submissions and Requests for self. Sees own public validation results for the latest Project version. |
-| Manager | Creates validation Requests for self and evaluation Requests for any Subject User. Sees validation and evaluation results for all users. Can compare Versions by viewing multiple Requests for one Submission. |
-| Admin | Manages users, Project display order, and Resource registration credentials. |
-| System Account | Actor for queued rerun Requests created after a new Version is registered. |
+| Student | 自分の validation Submission と Request を作成する。最新 Version に対する自分の public な validation 結果を見る。 |
+| Manager | 自分の validation Request と、任意の Subject User への evaluation Request を作成する。全ユーザーの validation / evaluation 結果を見る。1 Submission に対する複数 Request を見て Version 間比較ができる。 |
+| Admin | ユーザー、Project の表示順、Resource 登録の credential を管理する。 |
+| System Account | 新しい Version 登録後に作成される queued rerun Request の actor。 |
 
 ## Auth
 
 ### `POST /api/session`
 
-Creates a session.
+セッションを作成する。
 
 ```json
 {
@@ -36,17 +38,17 @@ Creates a session.
 
 ### `DELETE /api/session`
 
-Deletes the current session.
+現在のセッションを削除する。
 
 ### `GET /api/me`
 
-Returns the current User Account and Role.
+現在の User Account と Role を返す。
 
 ## Projects
 
 ### `GET /api/projects`
 
-Lists Projects in `display_order`.
+Project を `display_order` 順で返す。
 
 ```json
 {
@@ -63,21 +65,21 @@ Lists Projects in `display_order`.
 
 ### `GET /api/projects/{project_id}`
 
-Returns the latest Project view by default.
+既定では最新の Project view を返す。
 
 Query:
 
 | name | role | description |
 | --- | --- | --- |
-| `version_id` | Manager/Admin | Optional explicit Version ID. Students cannot use old versions. |
+| `version_id` | Manager/Admin | 明示的な Version ID。Student は古い Version を指定できない。 |
 
 ### `GET /api/projects/{project_id}/versions`
 
-Manager/Admin only. Lists Versions for diff views and manual reruns.
+Manager/Admin 専用。diff 表示と手動 rerun のために Version を列挙する。
 
 ### `PATCH /api/projects/order`
 
-Admin only. Persists drag-and-drop order in DB. Initial order is imported from the Resource repo manifest.
+Admin 専用。drag-and-drop の表示順を DB に永続化する。初期順序は Resource リポジトリの root manifest から import する。
 
 ```json
 {
@@ -87,39 +89,39 @@ Admin only. Persists drag-and-drop order in DB. Initial order is imported from t
 
 ## Submissions
 
-### Submission Fields
+### Submission fields
 
 | field | description |
 | --- | --- |
-| `id` | Submission UUID. |
-| `project_id` | Target Project. |
-| `kind` | `validation` or `evaluation`. |
-| `subject_user_id` | User Account whose Submission is judged. |
-| `uploader_id` | User Account that uploaded the archive. |
-| `uploaded_at` | Upload timestamp. |
-| `original_submitted_at` | Optional external timestamp for evaluation imports. |
-| `content_hash` | Hash of the normalized file tree after path normalization. |
-| `archived_at` | Null unless archived. |
+| `id` | Submission UUID。 |
+| `project_id` | 対象 Project。 |
+| `kind` | `validation` または `evaluation`。 |
+| `subject_user_id` | 判定対象の User Account。 |
+| `uploader_id` | archive をアップロードした User Account。 |
+| `uploaded_at` | アップロード時刻。 |
+| `original_submitted_at` | evaluation import 用の外部提出時刻。optional。 |
+| `content_hash` | path normalization 後の file tree の hash(Normalized Submission Identity)。 |
+| `archived_at` | archive されるまで null。 |
 
 Rules:
 
-- File contents, `project_id`, `kind`, `subject_user_id`, `uploader_id`, `uploaded_at`, `original_submitted_at`, and `content_hash` are immutable.
-- `kind=validation` requires `subject_user_id == uploader_id`.
-- `kind=evaluation` may use a different Subject User.
-- Two Submissions can share the same `content_hash`; they still have different `id` values.
+- file 内容、`project_id`、`kind`、`subject_user_id`、`uploader_id`、`uploaded_at`、`original_submitted_at`、`content_hash` は immutable。
+- `kind=validation` は `subject_user_id == uploader_id` を要求する。
+- `kind=evaluation` は別の Subject User を指定できる。
+- 2 つの Submission が同じ `content_hash` を持ちうる。その場合も `id` は異なる。
 
 ### `POST /api/projects/{project_id}/submissions`
 
-Uploads a Submission archive.
+Submission archive をアップロードする。
 
 Request: `multipart/form-data`
 
 | field | required | description |
 | --- | --- | --- |
-| `archive` | yes | Submission archive file. |
-| `kind` | yes | `validation` or `evaluation`. |
-| `subject_user_id` | evaluation only | Required for evaluation. For validation, server uses current user. |
-| `original_submitted_at` | no | External submitted-at timestamp for evaluation imports. |
+| `archive` | yes | Submission archive file。 |
+| `kind` | yes | `validation` または `evaluation`。 |
+| `subject_user_id` | evaluation のみ | evaluation では必須。validation では現在のユーザーを使う。 |
+| `original_submitted_at` | no | evaluation import 用の外部提出時刻。 |
 
 Response:
 
@@ -132,34 +134,34 @@ Response:
 
 ### `POST /api/submissions/{submission_id}/archive`
 
-Archives a Submission and hides its Requests from normal result views. Use this for correction workflows instead of editing Submission metadata.
+Submission を archive し、その Request を通常の結果表示から隠す。訂正は Submission metadata の編集ではなく、この API で行う(Archive-not-Edit)。
 
 ## Requests
 
-### Request Fields
+### Request fields
 
 | field | description |
 | --- | --- |
-| `id` | Request UUID. |
-| `submission_id` | Submission to judge. |
-| `version_id` | Single Version target. |
-| `requested_by` | User Account actor, including System Account. |
-| `requested_at` | Request creation timestamp. |
-| `derived_from_request_id` | Nullable lineage link for correction or retry. |
-| `state` | `pending`, `queued`, `running`, `completed`. |
-| `status` | Null until complete, then `AC`, `WA`, `TLE`, `MLE`, `RE`, `OLE`, or `IE`. |
+| `id` | Request UUID。 |
+| `submission_id` | 判定対象の Submission。 |
+| `version_id` | 単一の対象 Version(Single-Version Request)。 |
+| `requested_by` | actor の User Account。System Account を含む。 |
+| `requested_at` | Request 作成時刻。 |
+| `derived_from_request_id` | 訂正・retry の lineage link。nullable。 |
+| `state` | `pending`, `queued`, `running`, `completed`。 |
+| `status` | 完了まで null。完了後 `AC`, `WA`, `TLE`, `MLE`, `RE`, `OLE`, `IE`。 |
 
 Rules:
 
-- A Request always runs every Workflow in the Version.
-- Students can create validation Requests only for their own non-archived validation Submissions.
-- Managers can create evaluation Requests for non-archived evaluation Submissions.
-- Version omission means latest.
-- Students can use only the latest Version. Managers may pass explicit Version IDs.
+- Request はその Version の全 Workflow を必ず実行する。
+- Student は自分の non-archived な validation Submission に対してのみ validation Request を作成できる。
+- Manager は non-archived な evaluation Submission に対して evaluation Request を作成できる。
+- Version 省略時は latest。
+- Student は latest Version のみ使える。Manager は明示的な Version ID を渡せる。
 
 ### `POST /api/projects/{project_id}/requests`
 
-Creates a Request.
+Request を作成する。
 
 ```json
 {
@@ -171,70 +173,59 @@ Creates a Request.
 
 ### `GET /api/projects/{project_id}/requests`
 
-Lists visible Requests. Archived Submissions are excluded by default.
+可視な Request を列挙する。archived Submission の Request は既定で除外する。
 
 Query:
 
 | name | description |
 | --- | --- |
-| `kind` | `validation` or `evaluation`. |
-| `subject_user_id` | Manager/Admin filter. |
-| `version_id` | Filter for diff views. |
-| `include_archived` | Manager/Admin audit view only. |
+| `kind` | `validation` または `evaluation`。 |
+| `subject_user_id` | Manager/Admin 用 filter。 |
+| `version_id` | diff 表示用 filter。 |
+| `include_archived` | Manager/Admin の監査 view 専用。 |
 
 ### `GET /api/requests/{request_id}`
 
-Returns one Request, aggregate Workflow results, and visible Job results.
+1 つの Request、Workflow ごとの集約結果、可視な Job 結果を返す。
 
 ## Results
 
-Detailed Step results are stored. Job, Workflow, and Request `status` values are derived aggregates.
-
-Worst-wins order:
+Step 単位の詳細結果を保存する。Job / Workflow / Request の `status` は導出された集約値であり、Worst-wins に従う:
 
 ```text
 IE > OLE > MLE > TLE > RE > WA > AC
 ```
 
-Status comparison notifications compare per-Workflow aggregate Status for the new latest Version against the old latest Version.
+Status 比較通知は、新しい latest Version と旧 latest Version の per-Workflow 集約 Status を比較する。
 
 ## Artifacts
 
-Artifacts are private unless declared public by Resource YAML and visible through the producing Job.
-
-Allowed public content types:
-
-- `image/png`
-- `image/jpeg`
-- `text/plain`
-- `application/json`
-
-SVG is not allowed as a public Artifact.
+Artifact は Private-by-Default。Resource YAML で `public` 宣言され、かつ生成元の Job がそのクライアントに可視な場合のみ配信する。`content-type` の許可リストは [resource.md](./resource.md) が所有する。
 
 ### `GET /api/requests/{request_id}/artifacts/{artifact_id}`
 
-Authenticated API only. Returns a public Artifact visible to the current user with the declared `Content-Type`.
+認証済み API のみ。現在のユーザーに可視な public Artifact を、宣言された `Content-Type` で返す。
 
-Private Artifacts have no client download API.
+private Artifact にはクライアント向けダウンロード API がない。
 
 ## Queued Reruns
 
-When a new Version becomes latest, the system creates pending Requests first, then enqueues execution.
+新しい Version が latest になったとき、システムは先に pending Request を作成し、その後実行を enqueue する。
 
-For each `(project_id, kind, subject_user_id)`, the source Submission is the latest non-archived Submission by `uploaded_at`.
+各 `(project_id, kind, subject_user_id)` について、source Submission は `uploaded_at` が最新の non-archived Submission とする。
 
-Queued reruns cover:
+Queued rerun の対象:
 
-- latest validation Submissions
-- latest evaluation Submissions
+- 最新の validation Submission
+- 最新の evaluation Submission
 
-The `requested_by` actor is the System Account.
+`requested_by` の actor は System Account。
 
 ## Admin Resource Registration
 
 ### `POST /api/admin/resource-versions`
 
-Registration-only Admin API called by GitHub Actions after sandbox images are built and pushed.
+Registration-only API。sandbox image の build / push 後に GitHub Actions が呼ぶ。登録フロー、Backend 側の validation、payload の意味は [resource.md](./resource.md) の「Resource Version 登録フロー」を正とする。
 
 ```json
 {
@@ -251,40 +242,4 @@ Registration-only Admin API called by GitHub Actions after sandbox images are bu
 }
 ```
 
-Backend fetches `resources.yaml` and Resource YAML from the private GitHub repository, validates them, verifies that image digests are provided for every `sandbox-images` ID, and rejects the registration if validation fails.
-
-## Resource Repo Contract
-
-The Resource repo has a root manifest:
-
-```yaml
-resources:
-  - id: dsa-basic
-    path: dsa-basic/resource.yaml
-```
-
-Resource YAML provides top-level sandbox image definitions, and Jobs reference them by ID:
-
-```yaml
-sandbox-images:
-  default:
-    build:
-      context: .
-      dockerfile: sandbox/Dockerfile
-      image: ghcr.io/example/dsa-basic-sandbox
-
-jobs:
-  test:
-    sandbox-image: default
-```
-
-Public Artifacts must declare `content-type`:
-
-```yaml
-artifacts:
-  outputs:
-    - name: diagram
-      path: out/diagram.png
-      visibility: public
-      content-type: image/png
-```
+`sandbox_images` の key は Resource YAML の `sandbox-images` ID。全 ID に digest が揃っていない場合、登録は reject される。

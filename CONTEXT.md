@@ -1,101 +1,136 @@
 # DSA Project
 
-This context describes the online judge domain language used by the project specification.
+本 context は、プロジェクト仕様書で使うオンラインジャッジのドメイン言語を定義する。
 
 ## Language
 
 **Project**:
-A collection of Workflows for one programming exercise or judging setup.
+1 つのプログラミング演習または judging setup のための Workflow の集合。
 _Avoid_: Assignment, repository
 
 **Resource**:
-Trusted Project definition material maintained by Admins, including Resource YAML, Preset files, descriptions, and sandbox image build inputs.
+Admin が管理する trusted な Project 定義素材。Resource YAML、Preset file、課題説明文、sandbox image build 入力を含む。
 _Avoid_: Test bundle, judge files
 
 **Resource Version**:
-An immutable version of a Resource associated with source history and sandbox image metadata.
+source 履歴と sandbox image metadata に紐づく、Resource の immutable な version。
 _Avoid_: Release, revision
 
 **User Account**:
-An authenticated account for a person who can submit or manage Requests.
+Request を提出・管理できる人の認証済みアカウント。
 _Avoid_: Admin account, Manager account
 
 **Role**:
-An authorization level assigned to a User Account, such as Admin, Manager, or Student.
+User Account に割り当てる権限レベル。Admin、Manager、Student など。
 _Avoid_: Account type, user type
 
 **System Account**:
-A reserved User Account used as the actor for automated Requests created by the system.
+システムが自動作成する Request の actor として使う予約 User Account。
 _Avoid_: Null user, background actor
 
 **Submission**:
-An immutable record of an uploaded normalized file tree for a Project and Subject User, including its uploader, upload time, and content hash. Incorrect Submissions are archived and replaced rather than edited.
+ある Project と Subject User に対してアップロードされた、正規化済み file tree の immutable な記録。uploader、アップロード時刻、content hash を含む。誤った Submission は編集せず archive して置き換える。
 _Avoid_: Upload, answer
 
 **Archived Submission**:
-A Submission removed from current Request creation and normal result views because it was superseded by a corrected Submission.
+訂正版 Submission に置き換えられたため、Request 作成と通常の結果表示から外された Submission。
 _Avoid_: Deleted submission, mutable submission
 
 **Request**:
-A user or manager initiated execution of one or more Workflows against a Submission and one Resource Version.
+user または manager が開始する、1 つの Submission と 1 つの Resource Version に対する Workflow 実行。
 _Avoid_: Run request, judge request
 
 **Validation Request**:
-A Request for a user's own Submission against the latest Resource Version that executes only public Jobs.
+自分の Submission を latest Resource Version に対して実行する Request。public Job のみ実行する。
 _Avoid_: Trial, self-check
 
 **Evaluation Request**:
-A Manager-initiated Request for a Subject User that executes both public and private Jobs.
+Manager が Subject User のために開始する Request。public と private の両方の Job を実行する。
 _Avoid_: Batch request, delegated request
 
 **Subject User**:
-The User Account whose Submission is evaluated by an Evaluation Request.
+Evaluation Request で Submission が評価される User Account。
 _Avoid_: Delegator, owner
 
 **Request Lineage**:
-The relationship from a corrected or retried Request back to the Request it was derived from.
+訂正・retry された Request から、派生元の Request への関係。
 _Avoid_: Batch, duplicate marker
 
 **Workflow**:
-A dependency-ordered pipeline of Jobs defined by a Resource.
+Resource が定義する、依存順に並んだ Job の pipeline。
 _Avoid_: CI, pipeline
 
 **Job**:
-An isolated sandbox execution unit with a fresh workspace, resource limits, Steps, and optional Artifact handoff.
+fresh な workspace、resource limit、Step、optional な Artifact handoff を持つ、独立した sandbox 実行単位。
 _Avoid_: Task, stage
 
 **Private Job**:
-A Job that only Manager and Admin users can execute and inspect.
+Manager / Admin のみが実行・参照できる Job。
 _Avoid_: Hidden job, secret job
 
 **Step**:
-One argv-style command execution within a Job.
+Job 内の 1 回の argv 形式 command 実行。
 _Avoid_: Command, script
 
+**Sandbox Image**:
+Resource YAML の top-level `sandbox-images` で一度だけ定義し、Job が ID で参照する container image。Resource Version ごとに build され、digest は Resource YAML ではなく Resource Version metadata が持つ。
+_Avoid_: Job image, build config
+
 **Preset File**:
-A trusted Resource file made available to a sandboxed Job.
+sandbox 内の Job から参照できる trusted な Resource file。
 _Avoid_: Template file, provided file
 
 **Preset Directory**:
-The fixed read-only `/preset` mount that contains Preset Files for a Job.
+Job 用の Preset File を置く、固定の read-only `/preset` mount。
 _Avoid_: Preset workspace, preset path
 
 **Artifact**:
-A named regular file output declared by a Job for persistence after sandbox cleanup and optional use by later Jobs.
+sandbox cleanup 後の永続化と後続 Job での利用のために、Job が宣言する named regular file 出力。
 _Avoid_: Workspace copy, build output
 
 **Public Artifact**:
-An Artifact declared visible to clients when the producing Job is also visible to that client.
+生成元 Job がそのクライアントに可視な場合に、クライアントへ公開されると宣言された Artifact。
 _Avoid_: Download, attachment
 
 **CI Result**:
-Captured Step status, stdout, stderr, Artifact capture status, judge Status, and related execution metadata from a Request.
+Request から回収した Step の status / stdout / stderr、Artifact capture status、judge Status、関連する実行 metadata。
 _Avoid_: Artifact, output files
 
 **Status**:
-The judge verdict for a CI Result, such as AC, WA, TLE, MLE, RE, OLE, or IE.
+CI Result に対する judge の判定。AC, WA, TLE, MLE, RE, OLE, IE。
 _Avoid_: Result, state
 
 **Sandbox Workspace**:
-The per-Job filesystem view assembled from a Submission, Preset files, and declared input Artifact files.
+Submission、Preset file、宣言された input Artifact file から組み立てる、Job ごとの filesystem view。
 _Avoid_: Worktree, project directory
+
+## Principles
+
+システムを貫く規則の名前。仕様書は規則を再説明せず、この名前で参照する。
+
+**Isolated Job Workspace**:
+Job は毎回 clean な Sandbox Workspace から開始する。前 Job の workspace 全体は引き継がない。(ADR 0001)
+
+**Explicit Artifact Handoff**:
+Job 間の受け渡しは宣言された Artifact file のみ。暗黙の workspace 共有はない。(ADR 0001)
+
+**Normalized Submission Identity**:
+Submission の同一性は正規化済み file tree とその content hash で定義する。(ADR 0002)
+
+**Single-Version Request**:
+1 Request は 1 Submission × 1 Resource Version × その Version の全 Workflow を対象とする。(ADR 0003)
+
+**Archive-not-Edit**:
+訂正は Submission の編集ではなく、archive して新しい Submission を作ることで行う。(ADR 0004)
+
+**Worst-wins**:
+Status の集約は最悪値優先。`IE > OLE > MLE > TLE > RE > WA > AC`。
+
+**Digest Pinning**:
+Resource Version は Sandbox Image を tag ではなく `repo@sha256:...` digest で固定参照する。
+
+**Private-by-Default**:
+Job と Artifact の `visibility` は省略時 `private`。クライアントに見せるものは常に明示的に `public` 宣言する。
+
+**Registration-only API**:
+GitHub Actions が呼ぶ Admin API の権限は Resource Version の作成のみに限定する。

@@ -1,12 +1,14 @@
 # オンラインジャッジWebアプリ 仕様書
 
+このドキュメントは要件とシステム構成の概観を所有する。詳細は各仕様ファイルが所有し、ここでは繰り返さない。
+
 ## 仕様ファイル
 
-- [Resource YAML 仕様](./resource.md)
-- [Database Design](./db-schema.md)
-- [REST API Design](./api.md)
+- [Resource 仕様](./resource.md) — Resource リポジトリ契約、Resource YAML スキーマ、sandbox hardening
+- [REST API 仕様](./api.md) — クライアント向け REST API の形
+- [Database 仕様](./db-schema.md) — DB スキーマ(未整備)
 
-用語は [../../CONTEXT.md](../../CONTEXT.md) を正とする。
+用語と Principles は [../../CONTEXT.md](../../CONTEXT.md) を正とする。
 
 ## 概要
 プログラミング演習課題のオンラインジャッジWebアプリケーション
@@ -50,14 +52,8 @@
 ### 非機能要件
 - セキュリティ
   - ログイン認証時に、ロール毎に異なる権限を設定
-  - GitHub Actions から Backend への Resource Version 登録は、登録専用 Admin API で行う
-    - 登録専用の権限は Resource Version の作成に限定する
-    - source repository、branch、commit SHA、workflow run ID、image digest を監査ログに残す
-  - sandbox上での任意のコード実行時のセキュリティ
-    - CPUコア数、メモリ使用量の制限
-    - 実行時間制限
-    - フォルダ・ファイルの読み込み・書き込み制限
-    - ネットワークアクセス制限
+  - GitHub Actions から Backend への Resource Version 登録は Registration-only API で行う([resource.md](./resource.md) 参照)
+  - sandbox 上での任意のコード実行は resource limit と platform 固定 hardening で隔離する([resource.md](./resource.md) 参照)
 - 可用性
   - 24時間稼働
 - 可搬性
@@ -132,21 +128,12 @@ flowchart LR
   - main ブランチ更新を Resource 更新の入口とする
 * GitHub Actions: sandbox 用コンテナイメージの build / push と Resource Version 登録
   - GitHub-hosted runner 上で buildx / BuildKit を用いる
-  - Backend の登録専用 Admin API に Resource Version や Image Digest 等の情報を登録する
+  - Backend の Registration-only API に Resource Version や image digest 等の情報を登録する
 * GHCR: sandbox 用コンテナイメージの registry
-  - Resource Version には tag ではなく `repo@sha256:...` 形式の digest を固定して記録する
-  - Judge / sandbox-only containerd は digest 指定で pull / import する
-* sandbox: gVisor(runsc) + 専用 containerd
-  - CPU / memory / pids / 実行時間 / stdout・stderr size の制限
-  - network egress の既定 deny
-  - capabilities drop
-  - `no_new_privileges`
-  - fixed non-root user で Step を実行する。
-  - read-only root filesystem。書き込み可能領域は platform が許可した sandbox workspace 等に限定する。
-  - trusted Preset file は read-only `/preset` mount に配置し、writable な sandbox workspace へは配置しない。
-  - Job は毎回 clean な sandbox workspace から開始する。前 Job の workspace 全体は引き継がず、明示された Artifact file のみを入力として受け取る。
-  - Job 終了後、Step ごとの status / stdout / stderr と明示された Artifact file を回収してから sandbox workspace を cleanup する。Step 間では cleanup しない。
-  - 監査ログを必須とする。
+  - Digest Pinning に従い、Judge / sandbox-only containerd は digest 指定で pull / import する
+* sandbox: gVisor(runsc) + sandbox 専用 containerd
+  - Isolated Job Workspace / Explicit Artifact Handoff / Private-by-Default に従う
+  - resource limit と platform 固定 hardening(network deny、capabilities drop 等)の詳細は [resource.md](./resource.md) が所有する
 
 ### 技術選定
 - フロントエンド: React (Vite) + TypeScript + TailwindCSS

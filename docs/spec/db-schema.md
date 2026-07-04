@@ -1,11 +1,6 @@
-# Database Design
+# Database 仕様
 
-## users
+このドキュメントは DB スキーマを所有する。REST API の形は [api.md](./api.md)、Resource の形は [resource.md](./resource.md)、用語と Principles は [CONTEXT.md](../../CONTEXT.md) を正とする。
 
-| type | attribute | PK/FK/unique/nullable | description |
-| ---- | --------- | ----- | ----------- |
-| UUID | internal_id | PK | internal ID |
-| varchar(255) | userid | unique | user ID |
-| varchar(255) | name | | user name |
-....
-
+> [!NOTE]
+> 未整備。API 仕様確定後、実装時に専用セッションで確定する。ここに書かれていないスキーマを確定仕様として扱わないこと。
