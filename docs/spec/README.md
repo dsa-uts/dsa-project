@@ -58,8 +58,8 @@
   - 24時間稼働
 - 可搬性
   - 簡単にデプロイできる
-    - ハイパラメータを設定する箇所が少ない、または一か所にまとまっている。
-    - コマンド一つでデプロイできる。
+    - ハイパラメータは Helm chart の values.yaml に一か所にまとまっている。
+    - k3s のインストールと Helm chart 一つのインストールでデプロイが完了する (k3s 内蔵の Helm controller を使えば実質コマンド一つ)。
     - 初回起動時にのみ初期設定用 Web UI が表示され、Admin アカウントのパスワード等を指定できる。
 
 ## システム構成
@@ -76,29 +76,33 @@ flowchart LR
     ghcr["GHCR<br/>Container registry"]
   end
 
-  subgraph host["Host / VPS"]
-    subgraph compose["docker compose"]
-      GW[Gateway]
-      FE[Frontend]
-      BE[Backend]
-      DB[(PostgreSQL)]
-      RD[(Redis)]
-      OB[OpenBao]
-      JD[Judge]
+  subgraph host["Host / VPS (single node)"]
+    subgraph k3s["k3s (containerd + gVisor RuntimeClass)"]
+      api["kube-apiserver<br/>RBAC + ValidatingAdmissionPolicy"]
+
+      subgraph nsServices["Namespace: services"]
+        IG[Traefik Ingress]
+        FE[Frontend]
+        BE[Backend]
+        DB[(PostgreSQL)]
+        RD[(Redis)]
+        OB[OpenBao]
+        JD[Judge]
+      end
+
+      subgraph nsSandbox["Namespace: sandbox"]
+        sandbox["Sandbox Pod (temporary, runtimeClassName: gvisor)"]
+      end
     end
-
-    SCD["Sandbox-only containerd (runsc / gVisor)"]
-
-    sandbox["Sandbox container (temporary)"]
   end
 
   repo -->|push to main| gha
   gha -->|buildx build / push image| ghcr
-  gha -->|Admin API: Resource Version + image digest| GW
+  gha -->|Admin API: Resource Version + image digest| IG
 
-  client -->|HTTPS :443| GW
-  GW -->|SPA / static files| FE
-  GW -->|/api/...| BE
+  client -->|HTTPS :443| IG
+  IG -->|SPA / static files| FE
+  IG -->|/api/...| BE
 
   BE -->|CRUD / auth users / durable job state| DB
   BE -->|session / progress cache| RD
@@ -110,10 +114,10 @@ flowchart LR
   JD -->|poll / claim jobs / update results| DB
   JD -->|progress cache| RD
   JD -->|resolve Resource Version image digest| DB
-  SCD -->|pull / import image by digest| ghcr
-  JD -->|create / start sandbox task| SCD
-  SCD -->|run with gVisor| sandbox
-  JD -->|execute Task| sandbox
+  JD -->|create / delete sandbox Pod| api
+  api -->|schedule with gVisor RuntimeClass| sandbox
+  k3s -->|pull image by digest| ghcr
+  JD -->|"execute Step (pods/exec)"| sandbox
   sandbox -->|stdout / stderr / status| JD
 ```
 
@@ -130,12 +134,23 @@ flowchart LR
   - GitHub-hosted runner 上で buildx / BuildKit を用いる
   - Backend の Registration-only API に Resource Version や image digest 等の情報を登録する
 * GHCR: sandbox 用コンテナイメージの registry
-  - Digest Pinning に従い、Judge / sandbox-only containerd は digest 指定で pull / import する
-* sandbox: gVisor(runsc) + sandbox 専用 containerd
+  - Digest Pinning に従い、k3s 内蔵 containerd は digest 指定で pull する
+* k3s: 単一 VPS 上のコンテナ基盤
+  - 全サービスと sandbox を同一クラスタに載せ、Namespace (services / sandbox) で分離する
+  - Traefik Ingress が TLS 終端と Frontend / Backend への振り分けを担う
+  - デプロイは Helm chart 一つで行い、設定は values.yaml に集約する
+* sandbox: gVisor(runsc) RuntimeClass を指定した一時 Pod
+  - Judge が sandbox Namespace に Pod を直接作成し (`restartPolicy: Never`)、Step を pods/exec で逐次実行して stdout / stderr / exit code を回収する
+  - Judge の ServiceAccount には sandbox Namespace 限定の Role のみを与える (pods の create/get/list/watch/delete、pods/exec、pods/log)。Judge 自身の Namespace への権限は持たないため、自身や他サービスの Pod は操作できない
+  - ValidatingAdmissionPolicy で sandbox Pod の image を GHCR の特定 org 配下かつ digest 指定必須に制限し (Digest Pinning の強制層)、hostPath は Sandbox Workspace 用の固定 prefix のみ許可する
+  - Sandbox Workspace は Judge がノード上の固定 prefix に組み立て、hostPath で mount する (Preset Directory は read-only)
   - Isolated Job Workspace / Explicit Artifact Handoff / Private-by-Default に従う
   - resource limit と platform 固定 hardening(network deny、capabilities drop 等)の詳細は [resource.md](./resource.md) が所有する
 
 ### 技術選定
+- コンテナ基盤: k3s (単一 VPS、containerd 内蔵、gVisor RuntimeClass)
+- デプロイ: Helm chart (設定は values.yaml に集約)
+- Ingress: k3s 内蔵 Traefik (TLS 終端、Frontend / Backend への振り分け)
 - フロントエンド: React (Vite) + TypeScript + TailwindCSS
 - バックエンド: Go
   - バックエンドフレームワーク: [Echo](https://github.com/labstack/echo)
@@ -152,4 +167,4 @@ flowchart LR
   - GHCR (Container registry)
 - ジャッジサーバー: Go
   - ORM: [Bun](https://github.com/uptrace/bun)
-  - Sandbox: VM / VPS 環境では gVisor(runsc) + sandbox 専用 containerd
+  - Sandbox: gVisor(runsc) RuntimeClass を指定した k8s Pod (sandbox 専用 Namespace)

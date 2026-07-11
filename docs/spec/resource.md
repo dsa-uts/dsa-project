@@ -186,7 +186,7 @@ sandbox-images:
 
 ### Sandbox hardening
 
-sandbox は gVisor(runsc) + sandbox 専用 containerd 上で実行する。以下は platform 側の固定設定であり、Resource YAML では変更できない:
+sandbox は gVisor(runsc) RuntimeClass を指定した k8s Pod として専用 Namespace で実行する。以下は platform 側の固定設定であり、Resource YAML では変更できない:
 
 - network egress の既定 deny
 - Linux capabilities は全て drop
