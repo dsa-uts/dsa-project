@@ -68,6 +68,10 @@ _Avoid_: Batch request, delegated request
 Evaluation Request で Submission が評価される User Account。
 _Avoid_: Delegator, owner
 
+**Queued Rerun**:
+新しい Resource Version の登録を契機に、System Account 名義で自動作成される Request。対象は Project × ユーザーごとに直近の non-archived validation Submission(件数は運用設定値)と、Project × Subject User ごとに最新の non-archived evaluation Submission 1 件。
+_Avoid_: Auto rejudge, batch rerun
+
 **Workflow**:
 Resource が定義する、依存順に並んだ Job の pipeline。"workflow" という語はこのドメイン語彙専用とし、GitHub Actions の実行は Actions Run(`actions-run-id`)と呼ぶ。
 _Avoid_: CI, pipeline, GitHub Actions workflow
@@ -152,3 +156,6 @@ Resource Version は archive も撤回もできない。訂正は Resource repo 
 
 **Git-for-Logic, Console-for-Operations**:
 採点ロジック(Workflow、Job、Preset、Sandbox Image)と課題タイトルは git 管理の Resource が所有する。運用メタデータ(公開日時、締切日時、並び順)はコンソール管理の Project 属性が所有し、変更に Resource Version 登録を要しない。(ADR 0006)
+
+**Converge-to-Latest**:
+既定の結果表示は latest Resource Version 上の Request に固定する。latest 上の Request を持たない Submission は「未実行」として扱い、Queued Rerun が表示を latest へ収束させる。古い Version 上の結果は明示的な Version 選択(Manager/Admin のみ)でしか見えない。(ADR 0007)

@@ -13,6 +13,8 @@
 - User の埋め込みは常に 3 点セット `{"id": "uuid", "userid": "student001", "name": "山田 太郎"}` で統一する。
 - Request と Submission のレコードは immutable(Archive-not-Edit)。更新系エンドポイントは存在しない。
 - クライアントは polling する。SSE / WebSocket は要件にない。polling の受け口は [`GET /api/requests/{request_id}`](#get-apirequestsrequest_id)。
+- 一覧系 API はページネーションを持たず全件を返す。1 クラス分(ユーザー数百・提出数百)という規模がドメインの前提。将来 cursor を後方互換で追加できるよう、一覧レスポンスのトップレベルは配列ではなく object にする。
+- Status の集約値(「2/3 AC」等の進捗表示)と遅延表示はクライアント導出。一覧系 API は per-Workflow の Status と素の時刻を返し、判定済みフラグを持たない。
 
 ### エラーレスポンス
 
@@ -91,7 +93,12 @@
 
 ### `GET /api/projects`
 
-全 Project を `display_order` 昇順で返す。ページネーションなし。
+全 Project を `display_order` 昇順で返す。クライアントの Project 一覧ページ(学生の一層目: 進捗列付き)の受け口。
+
+Role による可視範囲:
+
+- Student: 公開済み(`published_at` ≤ 現在)かつ non-archived な Project のみ。
+- Manager/Admin: 全 Project。未公開・Archived Project(CONTEXT.md)を含む。
 
 ```json
 {
@@ -100,11 +107,31 @@
       "id": "uuid",
       "name": "DSA Basic",
       "latest_version_id": "uuid",
-      "display_order": 10
+      "display_order": 10,
+      "published_at": "2026-04-01T00:00:00Z",
+      "deadline": "2026-04-15T23:59:59Z",
+      "archived": false,
+      "my_result": {
+        "submission_id": "uuid",
+        "uploaded_at": "2026-04-10T12:00:00Z",
+        "request": {
+          "id": "uuid",
+          "state": "completed",
+          "status": "WA",
+          "workflows": [
+            { "id": "basic", "status": "AC" },
+            { "id": "graphs", "status": "WA" }
+          ]
+        }
+      }
     }
   ]
 }
 ```
+
+- `published_at` / `deadline` は nullable。`published_at` が `null` は未公開と同義(CONTEXT.md「公開日時」)。
+- `my_result`: 現在のユーザー自身の進捗。Role を問わず、自分の最新 non-archived validation Submission と、その latest Version 上の最新 Request を返す。Submission がなければ `my_result: null`、latest Version 上の Request がなければ `request: null`(未実行。Converge-to-Latest)。
+- `my_result.request.workflows`: per-Workflow の Status。進捗セル(「2/3 AC」や status chip)はここからクライアント導出。
 
 ### `GET /api/projects/{project_id}`
 
@@ -141,7 +168,7 @@ Query:
 
 - `description_markdown`: Workflow の `description-path`(resource.md 所有)の Markdown 本文をインラインで埋め込む。宣言がなければ `null`。
 - `jobs`: 現在の Role に可視な Job のみ(Private-by-Default)。Student には public Job のみ、Manager/Admin には全 Job。
-- Errors: `404`(Project 不存在)、`403 version_not_allowed`(Student が latest 以外の `version_id` を指定)
+- Errors: `404`(Project 不存在、または未公開・Archived で Student から不可視)、`403 version_not_allowed`(Student が latest 以外の `version_id` を指定)
 
 ### `GET /api/projects/{project_id}/versions`
 
@@ -163,6 +190,21 @@ Manager/Admin 専用。diff 表示と手動 rerun のために Version を列挙
 - `registered_at` 降順。
 - `source_ref` は git commit SHA の完全形。Version の人間可読な識別に commit SHA しか実用手段がないため、Project / Version 語彙の例外としてここでのみ露出する。クライアントは先頭数文字に切り詰めて表示する。
 - Errors: `403`(Student)
+
+### `PATCH /api/projects/{project_id}`
+
+Manager/Admin 専用。コンソール管理の運用メタデータを部分更新する(Git-for-Logic, Console-for-Operations)。
+
+```json
+{
+  "published_at": "2026-04-01T00:00:00Z",
+  "deadline": null
+}
+```
+
+- 更新できるのは `published_at` / `deadline` のみ。`null` 指定で未設定に戻す。並び順は [`PATCH /api/projects/order`](#patch-apiprojectsorder) が所有する。
+- Response: `200` + [`GET /api/projects`](#get-apiprojects) の要素と同形
+- Errors: `403`(Student)、`404`、`422`
 
 ### `PATCH /api/projects/order`
 
@@ -190,7 +232,7 @@ Admin 専用。表示順を永続化する。初期順序は Resource リポジ�
 | `subject_user` | 判定対象の User(3 点セット)。 |
 | `uploader` | アップロードした User(3 点セット)。 |
 | `uploaded_at` | アップロード時刻。 |
-| `original_submitted_at` | evaluation import 用の外部提出時刻。nullable。 |
+| `original_submitted_at` | 外部ツール(Manaba 等)上の提出時刻。evaluation では必須、validation では持たない(`null`)。遅延表示の判定(Deadline との比較)にのみ使う。 |
 | `content_hash` | `sha256:...`(Normalized Submission Identity)。 |
 | `archived_at` | archive されるまで `null`。 |
 
@@ -207,7 +249,7 @@ Request: `multipart/form-data`
 | `files` | yes(複数可) | Submission を構成する各 file。part の `filename` に file tree 内の相対パスを入れる(例: `src/main.c`)。 |
 | `kind` | yes | `validation` または `evaluation`。 |
 | `subject_user_id` | evaluation のみ | validation では現在のユーザーを使う。 |
-| `original_submitted_at` | no | RFC 3339 UTC。 |
+| `original_submitted_at` | evaluation のみ(必須) | RFC 3339 UTC。外部ツール上の提出時刻。validation で指定すると `422`。 |
 
 - Backend は archive の展開をしない。zip / tar.gz の展開と Subject User ごとの振り分けはフロントエンドの責務であり、複数ユーザー分の一括アップロードは本エンドポイントの連続呼び出しで実現する。一括用エンドポイントは存在しない。
 - 上限: 300 files、合計 50 MB。
@@ -223,8 +265,11 @@ Request: `multipart/form-data`
 
 - Errors:
   - `403`(Student が `kind=evaluation` を指定)
-  - `404`(Project 不存在)
+  - `404`(Project 不存在・不可視)
+  - `409 project_archived`(Archived Project への新規 Submission)
   - `422 subject_user_required`(evaluation で `subject_user_id` 欠落)
+  - `422 original_submitted_at_required`(evaluation で `original_submitted_at` 欠落)
+  - `422 original_submitted_at_not_allowed`(validation で `original_submitted_at` を指定)
   - `422 invalid_path`(`..`・絶対パス・重複パス)
   - `422 too_many_files` / `422 upload_too_large`
 
@@ -273,6 +318,7 @@ Request を作成する。Request はその Version の全 Workflow を実行す
 - Errors:
   - `404`(Submission が不可視・不存在)
   - `409 submission_archived`
+  - `409 project_archived`(Archived Project への新規 Request)
   - `403 version_not_allowed`(Student が latest 以外を指定)
   - `409 duplicate_request`(同一 `(submission_id, version_id)` の Request が `pending` / `queued` / `running` に存在する間。完了後の再実行は許可)
 
@@ -341,9 +387,97 @@ Request を作成する。Request はその Version の全 Workflow を実行す
 - `artifacts` の `capture_status`: `captured` / `missing`。Artifact の取得は [Artifacts](#artifacts) を参照。
 - Errors: `404`(不存在・不可視)
 
-### `GET /api/projects/{project_id}/requests`(未定)
+## Results
 
-Request 一覧。validation(自分視点)/ evaluation(全学生俯瞰)/ ダッシュボードで表示軸が異なり、表示設計が未決のためレスポンス形・フィルタ・ページネーションは未定([未定](#未定) 参照)。決定済みの規則: archived Submission の Request は既定で除外する。
+一覧系の読み取りはビュー専用エンドポイントで返す(汎用の Request 一覧 API は作らない)。教員名簿での「ユーザーごとに最新 Submission の最新 Request」をクライアント join で組むと N+1 になるため、各画面 1 リクエストで完結する形をサーバー側が所有する。共通規則:
+
+- archived Submission とその Request は表示しない。
+- `request` は表示対象 Version 上の最新 Request のみ(Converge-to-Latest)。存在しなければ `null`(未実行)。古い Version 上の Request はこれらの API に現れない。
+- `request.workflows` は per-Workflow の `{id, status}`。集約表示(「2/3 AC」、Worst-wins バッジ、遅延強調)はすべてクライアント導出。
+
+### `GET /api/projects/{project_id}/my-results`
+
+現在のユーザー自身の、この Project における validation 試行履歴(学生の二層目)。全 Role が使える。
+
+```json
+{
+  "version_id": "uuid",
+  "workflows": [
+    { "id": "basic", "name": "Basic Test" },
+    { "id": "graphs", "name": "Graph Test" }
+  ],
+  "results": [
+    {
+      "submission": {
+        "id": "uuid",
+        "uploaded_at": "2026-04-10T12:00:00Z",
+        "content_hash": "sha256:..."
+      },
+      "request": {
+        "id": "uuid",
+        "state": "completed",
+        "status": "WA",
+        "requested_at": "2026-04-10T12:01:00Z",
+        "requested_by": { "id": "uuid", "userid": "system", "name": "System" },
+        "workflows": [
+          { "id": "basic", "status": "AC" },
+          { "id": "graphs", "status": "WA" }
+        ]
+      }
+    }
+  ]
+}
+```
+
+- 行 = 自分の non-archived validation Submission。`uploaded_at` 降順、全件。
+- `version_id` / `workflows` は latest Version のもの。全行の分母(Workflow 数)はこれで揃う。
+- `requested_by` で学生自身の Request と Queued Rerun(System Account)を区別できる。
+- Errors: `404`(Project 不存在・不可視)
+
+### `GET /api/projects/{project_id}/results`
+
+Manager/Admin 専用。特定 Version 上の全ユーザーの evaluation 結果名簿。
+
+Query:
+
+| name | description |
+| --- | --- |
+| `version_id` | 対象 Version。省略時は latest。 |
+
+```json
+{
+  "version": { "id": "uuid", "is_latest": true, "registered_at": "2026-04-01T00:00:00Z" },
+  "workflows": [
+    { "id": "basic", "name": "Basic Test" }
+  ],
+  "rows": [
+    {
+      "user": { "id": "uuid", "userid": "student001", "name": "山田 太郎" },
+      "disabled": false,
+      "submission": {
+        "id": "uuid",
+        "uploaded_at": "2026-04-16T09:00:00Z",
+        "original_submitted_at": "2026-04-15T23:50:00Z",
+        "content_hash": "sha256:..."
+      },
+      "request": {
+        "id": "uuid",
+        "state": "completed",
+        "status": "WA",
+        "requested_at": "2026-04-16T09:01:00Z",
+        "workflows": [
+          { "id": "basic", "status": "WA" }
+        ]
+      }
+    }
+  ]
+}
+```
+
+- `rows` は [`PATCH /api/users/order`](#patch-apiusersorder) のグローバル表示順。System Account を除く全ユーザー(disabled 含む)を、Submission の有無に関わらず全件返す。未提出者の把握も本 API の要件。
+- `submission` = その Project × Subject User の最新 non-archived evaluation Submission。なければ `null`(未提出)。同一ユーザーの過去の Submission はドリルダウン(Submission 単位の参照)で辿る。
+- 遅延強調はクライアント導出: Project の `deadline` が設定済み ∧ `original_submitted_at` > `deadline`。
+- Errors: `403`(Student)、`404`(Project / Version 不存在)
 
 ## Artifacts
 
@@ -456,6 +590,7 @@ Registration-only API。sandbox image の build / push 後に GitHub Actions が
 ```
 
 - `sandbox_images` の key は Resource YAML の `sandbox-images` ID。
+- 登録成功の副作用として Queued Rerun(CONTEXT.md)を enqueue する: 新 Version に対し、Project × ユーザーごとに直近の non-archived validation Submission(遡り件数は運用設定値、既定 5)と、Project × Subject User ごとに最新の non-archived evaluation Submission 1 件へ、System Account 名義の Request を自動作成する。
 - Response: `201`
 - Errors:
   - `401`(token 不正)
@@ -467,7 +602,5 @@ Registration-only API。sandbox image の build / push 後に GitHub Actions が
 
 存在は確定しているが、設計が未決のため本ドキュメントがまだ形を定義しないもの。
 
-- **Request 一覧・ダッシュボード系 API**: validation / evaluation / 全課題進捗で表示軸が異なり、見せ方が未決。ページネーション規約もこの設計に従属するため未定。
-- **Queued Reruns**: 新 Version 登録時の自動 rerun(System Account 名義)。Version × Submission の軸をユーザーにどう見せるかが未決のため、挙動の確定を保留。
-- **Status 比較通知**: 新旧 latest Version 間の per-Workflow Status 比較の通知。同じく表示設計に従属する。
+- **Status 比較通知**: 新旧 latest Version 間の per-Workflow Status 比較の通知。Queued Rerun の挙動は確定済み([Results](#results) / CONTEXT.md)だが、比較結果の通知チャネルと見せ方が未決。
 - **初期セットアップ API**: 初回起動時の Admin パスワード等の設定。
