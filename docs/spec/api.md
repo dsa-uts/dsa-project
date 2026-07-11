@@ -444,7 +444,7 @@ Registration-only API。sandbox image の build / push 後に GitHub Actions が
 {
   "resource_id": "dsa-basic",
   "source_ref": "git-commit-sha",
-  "workflow_run_id": "github-actions-run-id",
+  "actions_run_id": "github-actions-run-id",
   "sandbox_images": {
     "default": {
       "image": "ghcr.io/example/dsa-basic-sandbox",

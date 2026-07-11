@@ -35,7 +35,7 @@ dsa-basic/
 2. GitHub Actions は `sandbox-images` の build 定義から image を build / push し、`docker/build-push-action` の `outputs.digest` を取得する。
 3. GitHub Actions は Registration-only API(`POST /api/admin/resource-versions`、形は [api.md](./api.md))で Resource Version を登録する。
 4. Backend は private repository から `resources.yaml` と Resource YAML を取得して validate し、全 `sandbox-images` ID に digest が揃っていることを検証する。validation 失敗時は登録を reject する。
-5. source repository、branch、commit SHA、workflow run ID、image digest を監査ログに残す。
+5. source repository、branch、commit SHA、Actions run ID、image digest を監査ログに残す。
 
 ### Digest Pinning
 
@@ -46,7 +46,7 @@ Resource Version metadata の例:
 ```yaml
 resource-id: dsa-basic
 source-ref: <git-commit-sha>
-workflow-run-id: <github-actions-run-id>
+actions-run-id: <github-actions-run-id>
 images:
   default:
     image: ghcr.io/example/dsa-basic-sandbox

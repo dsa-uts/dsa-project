@@ -46,7 +46,7 @@
   - Resource を更新しても古い Resource Version を参照できる
   - 複数の Resource Version に対して Request することができる
     - 差分を確認するため
-  - Resource Version には、GitHub の commit SHA、GitHub Actions の workflow run ID、GHCR の image digest を紐づける
+  - Resource Version には、GitHub の commit SHA、GitHub Actions の Actions run ID、GHCR の image digest を紐づける
   - Request 実行時は Resource Version に固定された image digest を参照する
 
 ### 非機能要件
