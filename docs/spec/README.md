@@ -77,8 +77,8 @@ flowchart LR
     ghcr["GHCR<br/>Container registry"]
   end
 
-  subgraph host["Host / VPS (single node)"]
-    subgraph k3s["k3s (containerd + gVisor RuntimeClass)"]
+  subgraph host["Deployment target (既定: シングルノード)"]
+    subgraph k3s["k3s cluster (containerd + gVisor RuntimeClass)"]
       api["kube-apiserver<br/>RBAC + ValidatingAdmissionPolicy"]
 
       subgraph nsServices["Namespace: services"]
@@ -136,20 +136,21 @@ flowchart LR
   - Backend の Registration-only API に Resource Version や image digest 等の情報を登録する
 * GHCR: sandbox 用コンテナイメージの registry
   - Digest Pinning に従い、k3s 内蔵 containerd は digest 指定で pull する
-* k3s: 単一 VPS 上のコンテナ基盤
+* k3s: コンテナ基盤
   - 全サービスと sandbox を同一クラスタに載せ、Namespace (services / sandbox) で分離する
+  - manifest は Topology-Agnostic Manifests に従う。デプロイの既定はシングルノード (ADR 0008)
   - Traefik Ingress が TLS 終端と Frontend / Backend への振り分けを担う
   - デプロイは Helm chart 一つで行い、設定は values.yaml に集約する
 * sandbox: gVisor(runsc) RuntimeClass を指定した一時 Pod
   - Judge が sandbox Namespace に Pod を直接作成し (`restartPolicy: Never`)、Step を pods/exec で逐次実行して stdout / stderr / exit code を回収する
   - Judge の ServiceAccount には sandbox Namespace 限定の Role のみを与える (pods の create/get/list/watch/delete、pods/exec、pods/log)。Judge 自身の Namespace への権限は持たないため、自身や他サービスの Pod は操作できない
-  - ValidatingAdmissionPolicy で sandbox Pod の image を GHCR の特定 org 配下かつ digest 指定必須に制限し (Digest Pinning の強制層)、hostPath は Sandbox Workspace 用の固定 prefix のみ許可する
-  - Sandbox Workspace は Judge がノード上の固定 prefix に組み立て、hostPath で mount する (Preset Directory は read-only)
+  - ValidatingAdmissionPolicy で sandbox Pod の image を GHCR の特定 org 配下かつ digest 指定必須に制限し (Digest Pinning の強制層)、hostPath volume を禁止する
+  - Sandbox Workspace / Preset Directory を sandbox Pod へ受け渡す方式は選定中 (ADR 0009)
   - Isolated Job Workspace / Explicit Artifact Handoff / Private-by-Default に従う
   - resource limit と platform 固定 hardening(network deny、capabilities drop 等)の詳細は [resource.md](./resource.md) が所有する
 
 ### 技術選定
-- コンテナ基盤: k3s (単一 VPS、containerd 内蔵、gVisor RuntimeClass)
+- コンテナ基盤: k3s (containerd 内蔵、gVisor RuntimeClass)
 - デプロイ: Helm chart (設定は values.yaml に集約)
 - Ingress: k3s 内蔵 Traefik (TLS 終端、Frontend / Backend への振り分け)
 - フロントエンド: React (Vite) + TypeScript + TailwindCSS

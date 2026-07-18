@@ -159,3 +159,6 @@ Resource Version は archive も撤回もできない。訂正は Resource repo 
 
 **Converge-to-Latest**:
 既定の結果表示は latest Resource Version 上の Request に固定する。latest 上の Request を持たない Submission は「未実行」として扱い、Queued Rerun が表示を latest へ収束させる。古い Version 上の結果は明示的な Version 選択(Manager/Admin のみ)でしか見えない。(ADR 0007)
+
+**Topology-Agnostic Manifests**:
+アプリケーションの manifest (Helm chart) はクラスタのノード構成を仮定しない。Pod 同士のノード同居に依存する機構(hostPath 等)は使わない。デプロイの既定がシングルノードであっても、マルチノードクラスタでそのまま動作する。(ADR 0008)
