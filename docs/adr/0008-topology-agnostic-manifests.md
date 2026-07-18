@@ -1,4 +1,4 @@
-# Topology-agnostic manifests, single-node default deployment
+# Topology-Agnostic Manifests, Single-Node Default Deployment
 
 We considered splitting the cluster into a control-plane VM plus worker VM(s), then retracted it. Deployment targets provide a single machine or VM, so the default deployment is one single-node k3s cluster: on Linux the k3s server runs directly on the host (running extra VMs on one machine adds overhead for little isolation gain, and when the host is itself a VM it forces nested virtualization); on macOS development machines the k3s server runs inside one microvm.nix + vfkit VM. Separately from how we deploy, the application manifests (Helm chart) must not assume any cluster topology: the platform must run unchanged on a multi-node cluster, and no mechanism may depend on two Pods sharing a node. This retires hostPath-based Sandbox Workspace injection even on single-node deployments.
 
