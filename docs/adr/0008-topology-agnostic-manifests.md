@@ -11,6 +11,6 @@ We considered splitting the cluster into a control-plane VM plus worker VM(s), t
 ## Consequences
 
 - Supersedes the ADR 0005 consequence that workspace injection via hostPath may assume the Judge and sandboxes share one node. Sandbox Pods use no hostPath volumes; the ValidatingAdmissionPolicy forbids hostPath in the sandbox namespace instead of allowlisting a fixed prefix.
-- A replacement Sandbox Workspace handoff mechanism must be selected before `judge/` template work starts. Candidates are compared in ADR 0009; the selection is pending there.
+- A replacement Sandbox Workspace handoff mechanism must be selected before `judge/` template work starts. Candidates are compared in ADR 0009, which selects pods/exec streaming via a platform loader container.
 - A dedicated sandbox node is not required by this ADR: sandbox isolation continues to rest on gVisor, namespace boundaries, RBAC, NetworkPolicy, and admission policy, as accepted in ADR 0005. A multi-node operator may still add taints for scheduling, but the manifests must not depend on it.
 - Recorded as the Principle "Topology-Agnostic Manifests" in CONTEXT.md.
