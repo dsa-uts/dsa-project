@@ -13,3 +13,6 @@ tmp/
 result
 result-*
 
+# ローカル k3s 環境の状態 (nix run .#k3s-up)
+.k3s/
+

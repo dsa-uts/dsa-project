@@ -102,6 +102,51 @@ frontend イメージは [static-web-server](https://static-web-server.net/) が
 
 イメージは Linux 用 derivation なので、macOS からビルドするには Linux builder が必要。[nix-darwin](https://github.com/nix-darwin/nix-darwin) の [`nix.linux-builder`](https://nix-darwin.github.io/nix-darwin/manual/#opt-nix.linux-builder.enable) を有効にするのが簡単(`nix flake check` は Linux builder が無くても通る)。
 
+## k3s 環境 (シングルノード)
+
+デプロイの既定はシングルノード k3s クラスタ ([ADR 0008](docs/adr/0008-topology-agnostic-manifests.md))。実行形態は OS で異なるが、操作は共通:
+
+- **macOS**: [microvm.nix](https://github.com/microvm-nix/microvm.nix) + [vfkit](https://github.com/crc-org/vfkit) の VM 1 台の中で k3s server が動く
+- **Linux**: ホストで k3s server が直接動く (systemd の一時 unit `dsa-k3s`)
+
+### 起動と停止
+
+```sh
+nix run .#k3s-up      # 起動し、ノードが Ready になるまで待つ
+export KUBECONFIG=$PWD/.k3s/kubeconfig
+kubectl get nodes     # 1 ノードが Ready
+
+nix run .#k3s-down    # 停止
+```
+
+状態はリポジトリ直下の `.k3s/` に置かれる (`DSA_K3S_STATE_DIR` で変更可):
+
+| ファイル | 内容 |
+| --- | --- |
+| `.k3s/kubeconfig` | ホスト用 kubeconfig (`k3s-up` が生成) |
+| `.k3s/var.img` | (macOS) VM の `/var`。クラスタ状態はここに永続化される |
+| `.k3s/vm.log` | (macOS) VM のコンソールログ |
+
+macOS でクラスタを初期化したいときは、`nix run .#k3s-down` してから `rm -rf .k3s` する。Linux のクラスタ状態はホストの `/var/lib/rancher/k3s` にある。
+
+### macOS の前提: linux builder
+
+VM の NixOS システムは `aarch64-linux` 用なので、ビルドには Linux builder が必要 (コンテナイメージと同じ前提)。[nix-darwin](https://github.com/nix-darwin/nix-darwin) で以下を有効にするのが簡単:
+
+```nix
+nix.linux-builder.enable = true;
+```
+
+適用後、`/etc/nix/machines` に `aarch64-linux` の builder が現れる。詳細は [nix-darwin のマニュアル](https://nix-darwin.github.io/nix-darwin/manual/#opt-nix.linux-builder.enable) を参照。
+
+### 制約と補足
+
+- macOS の VM は 4 vCPU / 4GB RAM / 20GB ディスク (スパース)。変更は `nix/k3s-vm.nix` の `mkDefault` 値を上書きする
+- VM の MAC アドレスは固定 (DHCP lease を安定させるため) なので、**VM は同時に 1 台しか起動できない**。worktree を複数作っても VM は共有される
+- ホスト → VM の接続は vmnet の NAT 越しに VM の IP へ直接行う。kubeconfig の接続先書き換えと TLS SAN の設定は VM 内の systemd サービスが自動で行う
+- Linux の `k3s-up` は `sudo systemd-run` を使う (systemd 前提、非 NixOS ホストでも動く)。`k3s-down` で server を止めてもワークロードのコンテナは残り、次回起動時に再管理される
+- macOS で VM が起動しないときは `.k3s/vm.log` を確認する。VM を foreground で起動してコンソールを見るには: `mkdir -p .k3s/share && cd .k3s && $(nix build --print-out-paths ..#k3s-vm)/bin/microvm-run`
+
 ## flake の検査
 
 ```sh
