@@ -1,105 +1,87 @@
-# 構成(ローカル)
-```mermaid
-flowchart LR
-  subgraph "HostMachine(Linux,macOS,Windows)"
-    client
-    subgraph "Host(docker-compose)"
-      GW[gateway]
-      BE[backend]
-      FE[frontend]
-      DB[database]
-      JD[judge]
-    end
-    DockerEngine
-    
-    client -->| localhost:80 | GW
-    GW -->| /api/... | BE
-    GW -->| /その他 | FE
+# dsa-project
 
-    BE -->| CRUD | DB
-    JD -->| poll&update | DB
-    JD -->| 実行 | sandbox
-    JD -->| サンドボックス生成リクエスト | DockerEngine
-    DockerEngine -->| 生成 | sandbox["sandbox(temporary)"]
-  end
+データ構造とアルゴリズム演習のためのオンラインジャッジシステム。ドメイン言語の定義は [CONTEXT.md](CONTEXT.md) を参照。
+
+## ディレクトリ構成
+
+| ディレクトリ | 役割 |
+| --- | --- |
+| `frontend/` | Web フロントエンド(Node.js / TypeScript) |
+| `backend/` | API サーバー(Go) |
+| `chart/` | Kubernetes へデプロイするための Helm chart |
+| `nix/` | nix 定義の置き場(devShell 定義など)。`flake.nix` から import される |
+| `docs/` | 仕様書(`docs/spec/`)と ADR(`docs/adr/`) |
+
+## 開発環境のセットアップ
+
+開発に必要なツールチェーン(Go / Node.js / Helm / kubectl)は nix flake で管理している。Linux(x86_64 / aarch64)と macOS(Apple Silicon)をサポートする。
+
+### 1. Nix のインストール
+
+flakes を有効にした Nix をインストールする。[Determinate Systems installer](https://github.com/DeterminateSystems/nix-installer) を使うと flakes が最初から有効になる:
+
+```sh
+curl -fsSL https://install.determinate.systems/nix | sh -s -- install
 ```
 
-* gateway: ゲートウェイサーバー(Nginx)。クライアントから来たリクエストのURLを読み、フロントとバックエンドに適切にフォワードする。また、ファイルのアップロードサイズの上限などを設けたり、その他フィルタリングも行う。
-* frontend: フロントエンドサーバー(React)。WebUI(デプロイ時はHTML + Javascriptの静的コンテンツ)をクライアントに送る。
-* backend: バックエンドサーバー(Echo)。バックエンドロジックを処理し、データベースにCRUD(Create,Read,Update,Delete)リクエストを送る。
-* database: データベースサーバー(PostgreSQL)
-* judge: ジャッジサーバー(Docker client)。DBを定期的にpollし、ジャッジリクエストが合ったらそれを処理する。DockerEngineにsandbox生成リクエストを送り、一時的なsandboxを生成してもらい、そのsandbox上でプログラムのコンパイル・実行を行う。
+[公式インストーラ](https://nixos.org/download/) を使う場合は、`~/.config/nix/nix.conf` に以下を追記して flakes を有効にする:
 
-# はじめかた
-1. リポジトリのクローン
-    ```bash
-    git clone https://github.com/dsa-uts/dsa-project.git
-    ```
+```
+experimental-features = nix-command flakes
+```
 
-2. ディレクトリの移動
-    ```bash
-    cd dsa-project
-    ```
+### 2. devShell に入る
 
-3. Docker Engineのインストール
-    [公式サイト](https://docs.docker.com/engine/install/)を参考にインストールする．
-    終えたらバージョンを確認する．
-    ```bash
-    docker --version
-    ```
+リポジトリのルートで:
 
-4. コンテナイメージのビルド
-    ```bash
-    ./docker.py dev build
-    ```
+```sh
+nix develop
+```
 
-5. Sandboxコンテナイメージのビルド
-    ```bash
-    ./sandbox/build.sh
-    ```
+これで Go / Node.js / Helm / kubectl がすべて使えるシェルに入る。
 
-6. config設定
-    ```bash
-    cp config/dev/db_root_password.txt.example config/dev/db_root_password.txt # データベースのrootパスワード
-    cp config/dev/db_app_password.txt.example config/dev/db_app_password.txt # アプリケーション用データベースのパスワード
-    cp config/dev/admin.json.example config/dev/admin.json # 管理者アカウント情報
-    ```
-    必要に応じて、各ファイルの中身を編集する。
+### 3. direnv(推奨)
 
-7. コンテナの起動
-    ```bash
-    ./docker.py dev
-    ```
+[direnv](https://direnv.net/) を使うと、ディレクトリに `cd` するだけで devShell が自動で有効になる。[nix-direnv](https://github.com/nix-community/nix-direnv) の併用を推奨(評価結果がキャッシュされ、シェル起動が速くなる)。
 
-起動後、localhost:5173にアクセスすると、フロントエンドの画面が表示される。
+direnv をセットアップ済みなら、リポジトリのルートで一度だけ:
 
-# デプロイ時
-1. frontendの[.env.production](./dsa-frontend/.env.production)を、実際のドメイン名に合わせて書き換える。
-    ```env
-    VITE_API_BASE_URL=https://your.domain.name/api
-    ```
+```sh
+direnv allow
+```
 
-2. backendの[.env.production](./dsa-backend/.env.production)を、実際のドメイン名に合わせて書き換える。
-    ```env
-    CORS_ALLOWED_ORIGINS=https://your.domain.name
-    ```
+## backend の実行とビルド
 
-3. docker-compose.prod.yamlを編集し、外部からアクセスされるポート番号に合わせてnginxのポートbindingを変更する。
-    ```yaml
-    services:
-      nginx:
-        ports:
-          - "0.0.0.0:80:80"  # ← ここの"0.0.0.0:XX:80"のXXを変更
-    ```
+```sh
+nix run .#backend           # サーバー起動 (PORT 環境変数で変更可、既定 8080)
+nix build .#backend         # バイナリ
+nix build .#backend-image   # コンテナイメージ (下記参照)
+```
 
-4. docker.py prod buildを実行し、コンテナイメージをビルドする。
+devShell 内では通常の Go ワークフローも使える:
 
-5. config設定
-    ```bash
-    cp config/db_root_password.txt.example config/db_root_password.txt
-    cp config/db_app_password.txt.example config/db_app_password.txt
-    cp config/admin.json.example config/admin.json
-    ```
-    必要に応じて、各ファイルの中身を編集する。
+```sh
+cd backend
+go test ./...
+```
 
-6. docker.py prodを実行し、コンテナを起動する。
+依存を変更したら `go mod tidy` の後に `nix/backend.nix` の `vendorHash` を更新する(`pkgs.lib.fakeHash` に置き換えて `nix build .#backend` し、エラーに出る正しい hash を貼り直す)。
+
+### コンテナイメージ
+
+`nix build .#backend-image` の出力はイメージ tar を stdout に流すスクリプト。タグは derivation hash 由来で、内容が変わればタグも変わる。k3s へは registry を経由せず直接 import できる:
+
+```sh
+nix build .#backend-image
+./result | sudo k3s ctr -n k8s.io images import -
+```
+
+イメージは Linux 用 derivation なので、macOS からビルドするには Linux builder が必要。[nix-darwin](https://github.com/nix-darwin/nix-darwin) の [`nix.linux-builder`](https://nix-darwin.github.io/nix-darwin/manual/#opt-nix.linux-builder.enable) を有効にするのが簡単(`nix flake check` は Linux builder が無くても通る)。
+
+## flake の検査
+
+```sh
+nix flake check
+```
+
+CI や手元での確認に使う。全サポートシステム分を評価する場合は `nix flake check --all-systems`。

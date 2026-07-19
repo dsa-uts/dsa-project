@@ -1,3 +1,0 @@
-FROM node:24.11.1-bookworm-slim
-
-WORKDIR /app

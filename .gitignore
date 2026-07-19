@@ -3,4 +3,13 @@
 logs/*
 nginx/log/*
 CLAUDE.md
+.DS_Store
+tmp/
+
+# direnv
+.direnv/
+
+# nix build outputs
+result
+result-*
 
