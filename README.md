@@ -50,6 +50,34 @@ direnv をセットアップ済みなら、リポジトリのルートで一度�
 direnv allow
 ```
 
+## backend の実行とビルド
+
+```sh
+nix run .#backend           # サーバー起動 (PORT 環境変数で変更可、既定 8080)
+nix build .#backend         # バイナリ
+nix build .#backend-image   # コンテナイメージ (下記参照)
+```
+
+devShell 内では通常の Go ワークフローも使える:
+
+```sh
+cd backend
+go test ./...
+```
+
+依存を変更したら `go mod tidy` の後に `nix/backend.nix` の `vendorHash` を更新する(`pkgs.lib.fakeHash` に置き換えて `nix build .#backend` し、エラーに出る正しい hash を貼り直す)。
+
+### コンテナイメージ
+
+`nix build .#backend-image` の出力はイメージ tar を stdout に流すスクリプト。タグは derivation hash 由来で、内容が変わればタグも変わる。k3s へは registry を経由せず直接 import できる:
+
+```sh
+nix build .#backend-image
+./result | sudo k3s ctr -n k8s.io images import -
+```
+
+イメージは Linux 用 derivation なので、macOS からビルドするには Linux builder が必要。[nix-darwin](https://github.com/nix-darwin/nix-darwin) の [`nix.linux-builder`](https://nix-darwin.github.io/nix-darwin/manual/#opt-nix.linux-builder.enable) を有効にするのが簡単(`nix flake check` は Linux builder が無くても通る)。
+
 ## flake の検査
 
 ```sh
