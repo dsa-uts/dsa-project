@@ -19,12 +19,14 @@
         pkgs:
         let
           backend = import ./nix/backend.nix { inherit pkgs; };
+          frontend = import ./nix/frontend.nix { inherit pkgs; };
         in
         {
-          inherit backend;
+          inherit backend frontend;
         }
         // lib.optionalAttrs pkgs.stdenv.isLinux {
           backend-image = import ./nix/backend-image.nix { inherit pkgs backend; };
+          frontend-image = import ./nix/frontend-image.nix { inherit pkgs frontend; };
         }
       );
     in
@@ -32,11 +34,12 @@
       devShells = eachSystem (pkgs: import ./nix/devshells.nix { inherit pkgs; });
       formatter = eachSystem (pkgs: pkgs.nixfmt);
 
-      # darwin の backend-image は aarch64-linux の derivation を指す。
+      # darwin の *-image は aarch64-linux の derivation を指す。
       # macOS からのビルドには linux builder が必要 (README 参照)。
       packages = packagesFor // {
         aarch64-darwin = packagesFor.aarch64-darwin // {
           backend-image = packagesFor.aarch64-linux.backend-image;
+          frontend-image = packagesFor.aarch64-linux.frontend-image;
         };
       };
 
@@ -47,8 +50,8 @@
         };
       });
 
-      # checks は packages から合成する。go test は buildGoModule の checkPhase で走る。
-      # darwin では backend-image を含めない (linux builder 無しでも nix flake check が通るように)。
+      # checks は packages から合成する。go test / vitest は各 derivation の checkPhase で走る。
+      # darwin では *-image を含めない (linux builder 無しでも nix flake check が通るように)。
       checks = packagesFor;
     };
 }

@@ -67,14 +67,38 @@ go test ./...
 
 依存を変更したら `go mod tidy` の後に `nix/backend.nix` の `vendorHash` を更新する(`pkgs.lib.fakeHash` に置き換えて `nix build .#backend` し、エラーに出る正しい hash を貼り直す)。
 
-### コンテナイメージ
+## frontend の開発とビルド
 
-`nix build .#backend-image` の出力はイメージ tar を stdout に流すスクリプト。タグは derivation hash 由来で、内容が変わればタグも変わる。k3s へは registry を経由せず直接 import できる:
+```sh
+nix build .#frontend          # 静的ビルド成果物 (Vite の dist)
+nix build .#frontend-image    # コンテナイメージ (下記参照)
+```
+
+devShell 内では通常の npm ワークフローも使える:
+
+```sh
+cd frontend
+npm install       # 初回と依存変更時
+npm run dev       # dev server (http://localhost:5173)
+npm test          # vitest
+npm run typecheck # tsc -b
+npm run lint      # oxlint
+```
+
+dev server は `/health` と `/api` を backend(`http://localhost:8080`)へ proxy する(`frontend/vite.config.ts`)。別ターミナルで `nix run .#backend` を起動しておくと、hello ページに backend の health check 結果が表示される。
+
+依存を変更したら `nix/frontend.nix` の `npmDepsHash` を更新する(`pkgs.lib.fakeHash` に置き換えて `nix build .#frontend` し、エラーに出る正しい hash を貼り直す)。
+
+## コンテナイメージ
+
+`nix build .#backend-image` / `nix build .#frontend-image` の出力はイメージ tar を stdout に流すスクリプト。タグは derivation hash 由来で、内容が変わればタグも変わる。k3s へは registry を経由せず直接 import できる:
 
 ```sh
 nix build .#backend-image
 ./result | sudo k3s ctr -n k8s.io images import -
 ```
+
+frontend イメージは [static-web-server](https://static-web-server.net/) が `:8080` で静的ファイルを配信する。
 
 イメージは Linux 用 derivation なので、macOS からビルドするには Linux builder が必要。[nix-darwin](https://github.com/nix-darwin/nix-darwin) の [`nix.linux-builder`](https://nix-darwin.github.io/nix-darwin/manual/#opt-nix.linux-builder.enable) を有効にするのが簡単(`nix flake check` は Linux builder が無くても通る)。
 
