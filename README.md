@@ -100,6 +100,8 @@ nix build .#backend-image
 
 frontend イメージは [static-web-server](https://static-web-server.net/) が `:8080` で静的ファイルを配信する。
 
+この直接 import は既定のシングルノードデプロイ前提。chart は `imagePullPolicy: IfNotPresent` なので、マルチノードクラスタでは import されていないノードで `ErrImagePull` になる。マルチノードで動かす場合はレジストリを立てて push するか、全ノードに import すること。
+
 イメージは Linux 用 derivation なので、macOS からビルドするには Linux builder が必要。[nix-darwin](https://github.com/nix-darwin/nix-darwin) の [`nix.linux-builder`](https://nix-darwin.github.io/nix-darwin/manual/#opt-nix.linux-builder.enable) を有効にするのが簡単(`nix flake check` は Linux builder が無くても通る)。
 
 ## k3s 環境 (シングルノード)
