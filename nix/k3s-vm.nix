@@ -40,7 +40,7 @@ in
       }
     ];
 
-    # kubeconfig 受け渡し用。ホスト側 .k3s/share/ が VM 内 /share に見える。
+    # kubeconfig と SSH 鍵の受け渡し用。ホスト側 .k3s/share/ が VM 内 /share に見える。
     shares = [
       {
         tag = "host-share";
@@ -70,9 +70,11 @@ in
   };
 
   networking.firewall = {
+    # 22: ホストからの SSH (image import と VM 内の調査に使う)。
     # 6443: ホストから NAT 越しに API サーバーへ接続する。
     # 80/443: Traefik Ingress (ServiceLB がノードの 80/443 で受ける) へのアクセス。
     allowedTCPPorts = [
+      22
       6443
       80
       443
@@ -112,38 +114,54 @@ in
     '';
   };
 
-  # ホストが /share/images に置いたイメージ tar を containerd (k8s.io namespace)
-  # へ取り込む (k3s-load-images が置く)。virtiofs はホスト側の書き込みを inotify
-  # で通知しないため、systemd path unit ではなく timer で polling する。
-  # プロトコル: ホストは <name>.tar を置き (.tmp からの rename でアトミックに)、
-  # 取り込み結果として <name>.ok または <name>.err が現れるのを待つ。
-  systemd.services.k3s-image-import = {
-    description = "Import image tarballs from /share/images into k3s containerd";
-    path = [ pkgs.k3s ];
-    serviceConfig.Type = "oneshot";
+  # ホストからの SSH 受け口。k3s-load-images がイメージ tar を
+  # `k3s ctr images import -` へストリームするのと、k3s-ssh での調査に使う。
+  # 認証は鍵のみ。クライアント公開鍵は k3s-up が VM 起動前に
+  # /share/ssh/authorized_keys へ置く (リポジトリに鍵は含めない)。
+  services.openssh = {
+    enable = true;
+    settings = {
+      PermitRootLogin = "prohibit-password";
+      PasswordAuthentication = false;
+      KbdInteractiveAuthentication = false;
+    };
+  };
+
+  # ホストの公開鍵を share から root の authorized_keys へインストールする。
+  # sshd は StrictModes で authorized_keys の所有権を検査するため、virtiofs 上の
+  # ファイルを直接参照させず boot 時にコピーする。
+  systemd.services.ssh-install-authorized-keys = {
+    description = "Install the host's SSH public key from the share";
+    wantedBy = [ "multi-user.target" ];
+    requiredBy = [ "sshd.service" ];
+    before = [ "sshd.service" ];
+    unitConfig.RequiresMountsFor = [ "/share" ];
+    serviceConfig = {
+      Type = "oneshot";
+      RemainAfterExit = true;
+    };
     script = ''
-      dir=/share/images
-      [ -d "$dir" ] || exit 0
-      for f in "$dir"/*.tar; do
-        [ -e "$f" ] || continue
-        name="''${f%.tar}"
-        if k3s ctr -n k8s.io images import "$f" > "$name.log" 2>&1; then
-          mv "$name.log" "$name.ok"
-        else
-          mv "$name.log" "$name.err"
-        fi
-        rm -f "$f"
-      done
+      install -d -m 700 /root/.ssh
+      install -m 600 /share/ssh/authorized_keys /root/.ssh/authorized_keys
     '';
   };
-  systemd.timers.k3s-image-import = {
-    wantedBy = [ "timers.target" ];
-    timerConfig = {
-      OnBootSec = "10s";
-      OnUnitActiveSec = "2s";
-      # 既定の AccuracySec (1min) だと 2s 間隔が丸められるため明示する
-      AccuracySec = "1s";
+
+  # sshd のホスト公開鍵を share へ公開する。ホスト側はこれと VM の IP から
+  # known_hosts を組み立てて厳密検証する (TOFU をしない)。
+  systemd.services.ssh-export-host-key = {
+    description = "Publish the sshd host public key to the host share";
+    wantedBy = [ "multi-user.target" ];
+    wants = [ "sshd.service" ];
+    after = [ "sshd.service" ];
+    unitConfig.RequiresMountsFor = [ "/share" ];
+    serviceConfig = {
+      Type = "oneshot";
+      RemainAfterExit = true;
     };
+    script = ''
+      cp /etc/ssh/ssh_host_ed25519_key.pub /share/ssh/host_key.pub.tmp
+      mv /share/ssh/host_key.pub.tmp /share/ssh/host_key.pub
+    '';
   };
 
   # k3s が生成した kubeconfig の接続先を VM の IP に書き換えてホストへ公開する。

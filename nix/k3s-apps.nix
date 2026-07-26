@@ -4,10 +4,10 @@
 #   macOS: microvm.nix + vfkit の VM (nix/k3s-vm.nix) をバックグラウンド起動する。
 #   Linux: ホストで k3s server を systemd の一時 unit (dsa-k3s) として起動する。
 # - k3s-load-images: dockerTools でビルドしたイメージをクラスタへ搬入する。
-#   macOS: tar を VM の share (/share/images) に置き、VM 内の polling importer
-#   (nix/k3s-vm.nix の k3s-image-import) が取り込むのを待つ。
+#   macOS: イメージ tar を SSH 越しに VM の `k3s ctr images import -` へ pipe する。
 #   Linux: stream script をホストの containerd へ直接 pipe する。
 # - k3s-deploy: k3s-load-images した上で Helm chart (chart/) を install する。
+# - k3s-ssh (macOS のみ): VM へ root で SSH する (調査用の正面玄関)。
 #
 # どれも状態は state dir (既定: $PWD/.k3s、DSA_K3S_STATE_DIR で変更可) に置き、
 # k3s-up 完了後は state dir 直下の kubeconfig で kubectl が使える。
@@ -106,50 +106,68 @@ let
 
   darwinApps =
     let
+      # VM へ SSH するための準備。cwd は state dir であること。
+      # IP は kubeconfig の server URL から、ホスト鍵は VM が share へ公開した
+      # ものから known_hosts を組み立て、TOFU せずに厳密検証する。
+      # (kubeconfig / host_key.pub は k3s-up が待つので、up 完了後は必ずある)
+      vmSshSnippet = ''
+        for f in kubeconfig share/ssh/host_key.pub ssh/id_ed25519; do
+          if [ ! -s "$f" ]; then
+            echo "$state_dir/$f not found; run 'nix run .#k3s-up' first" >&2
+            exit 1
+          fi
+        done
+        vm_ip=$(sed -n 's#.*server: https://\([0-9.]*\):6443#\1#p' kubeconfig | head -n1)
+        if [ -z "$vm_ip" ]; then
+          echo "could not parse the VM's IP from $state_dir/kubeconfig" >&2
+          exit 1
+        fi
+        printf '%s %s\n' "$vm_ip" "$(cut -d' ' -f1,2 share/ssh/host_key.pub)" > ssh/known_hosts
+        # -F /dev/null: ユーザーの ~/.ssh/config を読まない (macOS 固有オプション
+        # が nixpkgs の ssh で解釈できず落ちるのを防ぎ、挙動も決定的にする)
+        vm_ssh() {
+          ssh -F /dev/null \
+            -i ssh/id_ed25519 \
+            -o IdentitiesOnly=yes \
+            -o UserKnownHostsFile=ssh/known_hosts \
+            -o StrictHostKeyChecking=yes \
+            "root@$vm_ip" "$@"
+        }
+      '';
+      # VM と話す app 共通の runtime inputs (curl: control socket、sed: kubeconfig)
+      vmClientInputs = with pkgs; [
+        curl
+        coreutils
+        gnused
+        openssh
+      ];
+      # SSH を使う app 共通の前段: state dir へ移動し、VM の稼働を確認した上で
+      # vm_ssh を用意する。
+      requireVmSshSnippet = ''
+        ${stateDirSnippet}
+        cd "$state_dir" 2>/dev/null || {
+          echo "No state dir at $state_dir; run 'nix run .#k3s-up' first" >&2
+          exit 1
+        }
+
+        ${vmRunningSnippet}
+        if ! vm_running; then
+          echo "k3s VM is not running; run 'nix run .#k3s-up' first" >&2
+          exit 1
+        fi
+        ${vmSshSnippet}
+      '';
       loadImages = pkgs.writeShellApplication {
         name = "k3s-load-images";
         meta.description = "Import the container images into the k3s VM's containerd";
-        runtimeInputs = with pkgs; [
-          curl
-          coreutils
-        ];
+        runtimeInputs = vmClientInputs;
         text = ''
-          ${stateDirSnippet}
-          mkdir -p "$state_dir/share/images"
-          cd "$state_dir"
+          ${requireVmSshSnippet}
 
-          ${vmRunningSnippet}
-          if ! vm_running; then
-            echo "k3s VM is not running; run 'nix run .#k3s-up' first" >&2
-            exit 1
-          fi
-
-          # tar を share に置き、VM 内の importer (k3s-image-import) の結果を待つ。
-          # $1: share 内のファイル名 (拡張子なし)、$2: イメージ tar の store path
+          # $1: 表示名、$2: イメージ tar の store path
           import_image() {
-            base="share/images/$1"
-            rm -f "$base.ok" "$base.err"
-            cp "$2" "$base.tar.tmp"
-            mv "$base.tar.tmp" "$base.tar"
             echo "Importing $1 into the VM's containerd ..."
-            for _ in $(seq 180); do
-              if [ -e "$base.ok" ]; then
-                cat "$base.ok"
-                rm -f "$base.ok"
-                return 0
-              fi
-              if [ -e "$base.err" ]; then
-                echo "Image import failed inside the VM:" >&2
-                cat "$base.err" >&2
-                rm -f "$base.err"
-                return 1
-              fi
-              sleep 1
-            done
-            echo "Timed out waiting for the VM to import $1." >&2
-            echo "Hint: the VM may be running an old configuration without the importer;" >&2
-            echo "restart it with 'nix run .#k3s-down' then 'nix run .#k3s-up'." >&2
-            return 1
+            vm_ssh k3s ctr -n k8s.io images import - < "$2"
           }
 
           import_image "dsa-backend-${backendImage.imageTag}" ${backendImage.tar}
@@ -161,6 +179,18 @@ let
       k3s-load-images = toApp loadImages;
       k3s-deploy = toApp (mkDeploy loadImages);
 
+      k3s-ssh = toApp (
+        pkgs.writeShellApplication {
+          name = "k3s-ssh";
+          meta.description = "SSH into the k3s VM as root (arguments run as a command on the VM)";
+          runtimeInputs = vmClientInputs;
+          text = ''
+            ${requireVmSshSnippet}
+            vm_ssh "$@"
+          '';
+        }
+      );
+
       k3s-up = toApp (
         pkgs.writeShellApplication {
           name = "k3s-up";
@@ -169,19 +199,36 @@ let
             curl
             kubectl
             coreutils
+            openssh
             expect # unbuffer: vfkit の stdio コンソールに pty を与える
           ];
           text = ''
             ${stateDirSnippet}
-            mkdir -p "$state_dir/share"
+            mkdir -p "$state_dir/share/ssh"
             cd "$state_dir"
+
+            # VM への SSH 用クライアント鍵。VM は boot 時に share の公開鍵を
+            # root の authorized_keys へインストールする (nix/k3s-vm.nix)。
+            generated_key=0
+            if [ ! -s ssh/id_ed25519 ]; then
+              mkdir -p ssh
+              ssh-keygen -q -t ed25519 -N "" -C "dsa-k3s" -f ssh/id_ed25519
+              generated_key=1
+            fi
+            install -m 600 ssh/id_ed25519.pub share/ssh/authorized_keys
 
             ${vmRunningSnippet}
             started=0
             if vm_running; then
               echo "k3s VM is already running (state dir: $state_dir)"
+              # authorized_keys のインストールは boot 時のみ。稼働中の VM は
+              # いま生成した鍵を知らないので、再起動するまで SSH が通らない。
+              if [ "$generated_key" = 1 ]; then
+                echo "Warning: generated a new SSH client key, but the running VM only installs" >&2
+                echo "it at boot; run 'nix run .#k3s-down' then 'nix run .#k3s-up' to use SSH." >&2
+              fi
             else
-              rm -f share/kubeconfig control.sock
+              rm -f share/kubeconfig share/ssh/host_key.pub control.sock
               echo "Starting the k3s VM (log: $state_dir/vm.log) ..."
               # vfkit はコンソールを stdio に繋ぐため pty が必要 (unbuffer が確保する)
               nohup unbuffer ${k3sVmRunner}/bin/microvm-run > vm.log 2>&1 &
@@ -189,9 +236,9 @@ let
               started=1
             fi
 
-            echo "Waiting for the VM to publish its kubeconfig ..."
+            echo "Waiting for the VM to publish its SSH host key and kubeconfig ..."
             for _ in $(seq 300); do
-              [ -s share/kubeconfig ] && break
+              [ -s share/kubeconfig ] && [ -s share/ssh/host_key.pub ] && break
               if [ "$started" = 1 ] && ! kill -0 "$(cat vm.pid)" 2>/dev/null; then
                 echo "The VM process exited unexpectedly. Last log lines:" >&2
                 tail -n 20 vm.log >&2
@@ -199,8 +246,8 @@ let
               fi
               sleep 1
             done
-            if ! [ -s share/kubeconfig ]; then
-              echo "Timed out waiting for $state_dir/share/kubeconfig. Last log lines:" >&2
+            if ! { [ -s share/kubeconfig ] && [ -s share/ssh/host_key.pub ]; }; then
+              echo "Timed out waiting for $state_dir/share/{kubeconfig,ssh/host_key.pub}. Last log lines:" >&2
               tail -n 20 vm.log >&2
               exit 1
             fi

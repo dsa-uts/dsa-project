@@ -126,6 +126,7 @@ nix run .#k3s-down    # 停止
 | ファイル | 内容 |
 | --- | --- |
 | `.k3s/kubeconfig` | ホスト用 kubeconfig (`k3s-up` が生成) |
+| `.k3s/ssh/` | (macOS) VM への SSH クライアント鍵 (`k3s-up` が生成) と known_hosts |
 | `.k3s/var.img` | (macOS) VM の `/var`。クラスタ状態はここに永続化される |
 | `.k3s/vm.log` | (macOS) VM のコンソールログ |
 
@@ -147,6 +148,7 @@ nix.linux-builder.enable = true;
 - VM の MAC アドレスは固定 (DHCP lease を安定させるため) なので、**VM は同時に 1 台しか起動できない**。worktree を複数作っても VM は共有される
 - ホスト → VM の接続は vmnet の NAT 越しに VM の IP へ直接行う。kubeconfig の接続先書き換えと TLS SAN の設定は VM 内の systemd サービスが自動で行う
 - Linux の `k3s-up` は `sudo systemd-run` を使う (systemd 前提、非 NixOS ホストでも動く)。`k3s-down` で server を止めてもワークロードのコンテナは残り、次回起動時に再管理される
+- macOS では `nix run .#k3s-ssh` で VM に root で入れる (`journalctl` や `k3s ctr` での調査用)。イメージ搬入も同じ SSH 経路を使う。引数は VM 上のコマンドとして実行される: `nix run .#k3s-ssh -- journalctl -u k3s`
 - macOS で VM が起動しないときは `.k3s/vm.log` を確認する。VM を foreground で起動してコンソールを見るには: `mkdir -p .k3s/share && cd .k3s && $(nix build --print-out-paths ..#k3s-vm)/bin/microvm-run`
 
 ## デプロイ (Helm chart)
@@ -163,7 +165,7 @@ nix run .#k3s-deploy   # イメージ搬入 + helm upgrade --install
 `k3s-deploy` は以下を行う:
 
 1. **イメージ搬入** (`nix run .#k3s-load-images` 単体でも実行可)
-   - macOS: イメージ tar を VM の share (`.k3s/share/images/`) に置き、VM 内の importer (systemd timer、`nix/k3s-vm.nix`) が containerd へ取り込む
+   - macOS: イメージ tar を SSH 越しに VM の `k3s ctr -n k8s.io images import -` へ pipe する
    - Linux: イメージの stream script をホストの containerd へ直接 pipe する (`sudo` が必要)
 2. **helm upgrade --install** — image tag は derivation hash 由来で毎ビルド変わるため、現在の tag を `--set` で自動的に渡す
 3. 完了後にアクセス URL (`http://<node-ip>/`) を表示する
