@@ -1,0 +1,27 @@
+# チューニング可能な値はすべてこのファイルに集約する (仕様の可搬性要件)。
+# manifest はクラスタのノード構成を仮定しない (ADR 0008 Topology-Agnostic Manifests)。
+#
+# image tag は必須 (デフォルト無し)。nix dockerTools のイメージは内容依存の
+# tag を持つため、`nix run .#k3s-deploy` が現在の tag を --set で渡す。
+
+backend:
+  image:
+    repository: dsa-backend
+    tag: "" # 必須。空のままだと template がエラーになる
+    pullPolicy: IfNotPresent
+  replicas: 1
+  resources: {}
+
+frontend:
+  image:
+    repository: dsa-frontend
+    tag: "" # 必須。空のままだと template がエラーになる
+    pullPolicy: IfNotPresent
+  replicas: 1
+  resources: {}
+
+ingress:
+  # k3s 同梱の Traefik を既定とする。他の ingress controller を使う場合に上書きする
+  className: traefik
+  # 空なら全ホスト名にマッチする。特定ドメインで公開する場合に設定する
+  host: ""

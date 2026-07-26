@@ -1,0 +1,37 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ include "dsa.fullname" . }}
+  labels:
+    {{- include "dsa.labels" . | nindent 4 }}
+spec:
+  ingressClassName: {{ .Values.ingress.className }}
+  rules:
+    # frontend は同一 origin の /health と /api を backend API として期待する
+    # (frontend/src/App.tsx)。最長パス一致で backend への route が優先される。
+    - http:
+        paths:
+          - path: /health
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ include "dsa.fullname" . }}-backend
+                port:
+                  name: http
+          - path: /api
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ include "dsa.fullname" . }}-backend
+                port:
+                  name: http
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ include "dsa.fullname" . }}-frontend
+                port:
+                  name: http
+      {{- with .Values.ingress.host }}
+      host: {{ quote . }}
+      {{- end }}

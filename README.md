@@ -91,7 +91,7 @@ dev server は `/health` と `/api` を backend(`http://localhost:8080`)へ prox
 
 ## コンテナイメージ
 
-`nix build .#backend-image` / `nix build .#frontend-image` の出力はイメージ tar を stdout に流すスクリプト。タグは derivation hash 由来で、内容が変わればタグも変わる。k3s へは registry を経由せず直接 import できる:
+`nix build .#backend-image` / `nix build .#frontend-image` の出力はイメージ tar を stdout に流すスクリプト。タグは derivation hash 由来で、内容が変わればタグも変わる。k3s へは registry を経由せず直接 import できる(後述の `nix run .#k3s-load-images` がこれを自動で行う):
 
 ```sh
 nix build .#backend-image
@@ -99,6 +99,8 @@ nix build .#backend-image
 ```
 
 frontend イメージは [static-web-server](https://static-web-server.net/) が `:8080` で静的ファイルを配信する。
+
+この直接 import は既定のシングルノードデプロイ前提。chart は `imagePullPolicy: IfNotPresent` なので、マルチノードクラスタでは import されていないノードで `ErrImagePull` になる。マルチノードで動かす場合はレジストリを立てて push するか、全ノードに import すること。
 
 イメージは Linux 用 derivation なので、macOS からビルドするには Linux builder が必要。[nix-darwin](https://github.com/nix-darwin/nix-darwin) の [`nix.linux-builder`](https://nix-darwin.github.io/nix-darwin/manual/#opt-nix.linux-builder.enable) を有効にするのが簡単(`nix flake check` は Linux builder が無くても通る)。
 
@@ -124,6 +126,7 @@ nix run .#k3s-down    # 停止
 | ファイル | 内容 |
 | --- | --- |
 | `.k3s/kubeconfig` | ホスト用 kubeconfig (`k3s-up` が生成) |
+| `.k3s/ssh/` | (macOS) VM への SSH クライアント鍵 (`k3s-up` が生成) と known_hosts |
 | `.k3s/var.img` | (macOS) VM の `/var`。クラスタ状態はここに永続化される |
 | `.k3s/vm.log` | (macOS) VM のコンソールログ |
 
@@ -145,7 +148,41 @@ nix.linux-builder.enable = true;
 - VM の MAC アドレスは固定 (DHCP lease を安定させるため) なので、**VM は同時に 1 台しか起動できない**。worktree を複数作っても VM は共有される
 - ホスト → VM の接続は vmnet の NAT 越しに VM の IP へ直接行う。kubeconfig の接続先書き換えと TLS SAN の設定は VM 内の systemd サービスが自動で行う
 - Linux の `k3s-up` は `sudo systemd-run` を使う (systemd 前提、非 NixOS ホストでも動く)。`k3s-down` で server を止めてもワークロードのコンテナは残り、次回起動時に再管理される
+- macOS では `nix run .#k3s-ssh` で VM に root で入れる (`journalctl` や `k3s ctr` での調査用)。イメージ搬入も同じ SSH 経路を使う。引数は VM 上のコマンドとして実行される: `nix run .#k3s-ssh -- journalctl -u k3s`
 - macOS で VM が起動しないときは `.k3s/vm.log` を確認する。VM を foreground で起動してコンソールを見るには: `mkdir -p .k3s/share && cd .k3s && $(nix build --print-out-paths ..#k3s-vm)/bin/microvm-run`
+
+## デプロイ (Helm chart)
+
+frontend + backend + Traefik Ingress を `chart/` の Helm chart でデプロイする。チューニング可能な値は `chart/values.yaml` に集約されている。manifest はクラスタのノード構成を仮定しない ([ADR 0008](docs/adr/0008-topology-agnostic-manifests.md))。
+
+k3s 環境が起動済みなら 1 コマンド:
+
+```sh
+nix run .#k3s-up       # 未起動の場合
+nix run .#k3s-deploy   # イメージ搬入 + helm upgrade --install
+```
+
+`k3s-deploy` は以下を行う:
+
+1. **イメージ搬入** (`nix run .#k3s-load-images` 単体でも実行可)
+   - macOS: イメージ tar を SSH 越しに VM の `k3s ctr -n k8s.io images import -` へ pipe する
+   - Linux: イメージの stream script をホストの containerd へ直接 pipe する (`sudo` が必要)
+2. **helm upgrade --install** — image tag は derivation hash 由来で毎ビルド変わるため、現在の tag を `--set` で自動的に渡す
+3. 完了後にアクセス URL (`http://<node-ip>/`) を表示する
+
+ブラウザで URL を開くと hello ページが表示され、backend の health check 結果 (`ok`) が出る。Ingress は `/health` と `/api` を backend へ、それ以外を frontend へ route する。
+
+helm を手動で使う場合は tag を明示する:
+
+```sh
+nix run .#k3s-load-images
+helm upgrade --install dsa chart/ \
+  --kubeconfig .k3s/kubeconfig \
+  --set backend.image.tag=$(nix eval --raw .#backend-image.imageTag) \
+  --set frontend.image.tag=$(nix eval --raw .#frontend-image.imageTag)
+```
+
+注意 (macOS): `nix/k3s-vm.nix` を変更しても起動中の VM には反映されない。`nix run .#k3s-down` してから `nix run .#k3s-up` で VM を作り直す。
 
 ## flake の検査
 
@@ -153,4 +190,4 @@ nix.linux-builder.enable = true;
 nix flake check
 ```
 
-CI や手元での確認に使う。全サポートシステム分を評価する場合は `nix flake check --all-systems`。
+CI や手元での確認に使う。go test / vitest に加え、Helm chart の静的検証 (`helm lint` / `helm template`、`nix/chart-check.nix`) もここで走る。全サポートシステム分を評価する場合は `nix flake check --all-systems`。

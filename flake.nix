@@ -67,6 +67,11 @@
 
       apps = lib.genAttrs systems (
         system:
+        let
+          pkgs = nixpkgs.legacyPackages.${system};
+          # macOS は VM (aarch64-linux) 用のイメージを搬入する
+          imagePkgs = if pkgs.stdenv.isDarwin then packagesFor.aarch64-linux else packagesFor.${system};
+        in
         {
           backend = {
             type = "app";
@@ -74,13 +79,22 @@
           };
         }
         // import ./nix/k3s-apps.nix {
-          pkgs = nixpkgs.legacyPackages.${system};
+          inherit pkgs;
           k3sVmRunner = k3sVm.config.microvm.declaredRunner;
+          backendImage = imagePkgs.backend-image;
+          frontendImage = imagePkgs.frontend-image;
         }
       );
 
       # checks は packages から合成する。go test / vitest は各 derivation の checkPhase で走る。
       # darwin では *-image を含めない (linux builder 無しでも nix flake check が通るように)。
-      checks = packagesFor;
+      # chart-check は helm lint / template によるオフライン検証。
+      checks = eachSystem (
+        pkgs:
+        packagesFor.${pkgs.stdenv.hostPlatform.system}
+        // {
+          chart = import ./nix/chart-check.nix { inherit pkgs; };
+        }
+      );
     };
 }

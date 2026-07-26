@@ -4,10 +4,13 @@
 # 出力はイメージ tar を stdout に流すスクリプト:
 #   nix build .#backend-image && ./result | k3s ctr -n k8s.io images import -
 { pkgs, backend }:
-pkgs.dockerTools.streamLayeredImage {
+let
+  withTar = import ./image-tar.nix { inherit pkgs; };
+in
+withTar (pkgs.dockerTools.streamLayeredImage {
   name = "dsa-backend";
   config = {
     Cmd = [ "${backend}/bin/server" ];
     ExposedPorts."8080/tcp" = { };
   };
-}
+})
