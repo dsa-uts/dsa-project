@@ -191,3 +191,5 @@ nix flake check
 ```
 
 CI や手元での確認に使う。go test / vitest に加え、Helm chart の静的検証 (`helm lint` / `helm template`、`nix/chart-check.nix`) もここで走る。全サポートシステム分を評価する場合は `nix flake check --all-systems`。
+
+GitHub Actions (`.github/workflows/ci.yml`) が PR と main への push で同じ `nix flake check` を実行する。Linux runner では checks にコンテナイメージ (`backend-image` / `frontend-image`) のビルドも含まれる。Nix store は [cache-nix-action](https://github.com/nix-community/cache-nix-action) で GitHub Actions cache にキャッシュされる。
