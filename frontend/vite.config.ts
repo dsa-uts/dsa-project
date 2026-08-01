@@ -1,4 +1,5 @@
 /// <reference types="vitest/config" />
+import path from 'node:path'
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
@@ -9,6 +10,11 @@ const backendOrigin = 'http://localhost:8080'
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [react(), tailwindcss()],
+  resolve: {
+    alias: {
+      '@': path.resolve(import.meta.dirname, './src'),
+    },
+  },
   server: {
     // dev server は backend へ API を proxy する。
     // 本番では Ingress が同じパスを backend Service へルーティングする想定。
