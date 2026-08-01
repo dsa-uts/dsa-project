@@ -5,8 +5,8 @@
 ## 仕様ファイル
 
 - [Resource 仕様](./resource.md) — Resource リポジトリ契約、Resource YAML スキーマ、sandbox hardening
-- [REST API 仕様](./api.md) — クライアント向け REST API の形
-- [Database 仕様](./db-schema.md) — DB スキーマ(未整備)
+- [REST API 仕様](./openapi.yaml) — クライアント向け REST API の形(single source of truth、ADR 0010)。[api.md](./api.md) は Conventions と未実装エンドポイントの草稿
+- DB スキーマは [backend/internal/store/migrations/](../../backend/internal/store/migrations/) の SQL ファイルが正(Markdown の複製は持たない)
 
 用語と Principles は [../../CONTEXT.md](../../CONTEXT.md) を正とする。
 

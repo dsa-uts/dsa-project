@@ -6,7 +6,7 @@ pkgs.buildNpmPackage {
   pname = "dsa-frontend";
   version = "0.1.0";
   src = ../frontend;
-  npmDepsHash = "sha256-ZvH75xu6Y8Yimg0Obv7a1QMIccLm/Wl6VNFQZVm6NDo=";
+  npmDepsHash = "sha256-2njR6ENETtBs8b7CnSA1cfGLyW79waCUahM4V94w4pM=";
   nodejs = pkgs.nodejs_24;
 
   # `npm run build` (tsc -b && vite build) が buildPhase で走る。

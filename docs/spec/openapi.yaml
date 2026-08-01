@@ -1,0 +1,115 @@
+# クライアント向け REST API の single source of truth (ADR 0010)。
+# ここを変更したら backend / frontend 双方でコードを再生成してコミットする:
+#   backend:  cd backend && go generate ./...
+#   frontend: cd frontend && npm run generate
+# api.md の草稿はエンドポイントの実装時に本ファイルへ移設して削除していく。
+openapi: 3.0.3
+info:
+  title: dsa-project API
+  version: 0.1.0
+  description: >
+    オンラインジャッジ Web アプリのクライアント向け REST API。
+    用語と Principles は CONTEXT.md、規約(エラー封筒、ID、タイムスタンプ)は
+    docs/spec/api.md の Conventions を正とする。
+paths:
+  /api/hello:
+    get:
+      operationId: listGreetings
+      summary: 保存済みの greeting を新しい順に返す
+      description: >
+        scaffolding 用のダミーエンドポイント (issue #95)。
+        contract pipeline (openapi.yaml → 生成コード → store → PostgreSQL) の
+        疎通確認のためだけに存在し、Auth スライス以降で削除される。
+      responses:
+        "200":
+          description: greeting の一覧
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GreetingList"
+        "500":
+          $ref: "#/components/responses/InternalError"
+    post:
+      operationId: createGreeting
+      summary: greeting を作成して保存する
+      description: scaffolding 用のダミーエンドポイント (issue #95)。listGreetings の説明を参照。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateGreetingRequest"
+      responses:
+        "201":
+          description: 作成された greeting
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Greeting"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+        "500":
+          $ref: "#/components/responses/InternalError"
+components:
+  schemas:
+    Greeting:
+      type: object
+      required: [id, message, created_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: opaque な UUID 文字列
+        message:
+          type: string
+          example: "hello, dsa"
+        created_at:
+          type: string
+          format: date-time
+          description: RFC 3339 UTC
+    GreetingList:
+      type: object
+      required: [greetings]
+      description: 一覧レスポンスのトップレベルは配列ではなく object (api.md Conventions)
+      properties:
+        greetings:
+          type: array
+          items:
+            $ref: "#/components/schemas/Greeting"
+    CreateGreetingRequest:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          example: "dsa"
+    Error:
+      type: object
+      required: [error]
+      description: 統一エラー封筒 (api.md Conventions)
+      properties:
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code:
+              type: string
+              description: snake_case の機械可読文字列
+              example: validation_failed
+            message:
+              type: string
+              description: 開発者向けの英語文。UI にそのまま表示しない
+  responses:
+    ValidationError:
+      description: バリデーション失敗
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    InternalError:
+      description: サーバー内部エラー
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"

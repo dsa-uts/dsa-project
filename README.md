@@ -11,6 +11,9 @@
 | `chart/` | Kubernetes へデプロイするための Helm chart |
 | `nix/` | nix 定義の置き場(devShell 定義など)。`flake.nix` から import される |
 | `docs/` | 仕様書(`docs/spec/`)と ADR(`docs/adr/`) |
+| `scripts/` | 開発用スクリプト(codegen ドリフト検査など) |
+
+エージェント向けの実装規約は [docs/agents/coding-standards.md](docs/agents/coding-standards.md) にある。
 
 ## 開発環境のセットアップ
 
@@ -50,6 +53,17 @@ direnv をセットアップ済みなら、リポジトリのルートで一度�
 direnv allow
 ```
 
+## API contract と codegen
+
+クライアント向け REST API は `docs/spec/openapi.yaml` が single source of truth([ADR 0010](docs/adr/0010-openapi-contract-with-codegen.md))。変更したら両側のコードを再生成してコミットする:
+
+```sh
+cd backend && go generate ./...     # → backend/internal/api/gen.go (oapi-codegen)
+cd frontend && npm run generate     # → frontend/src/api/schema.d.ts (openapi-typescript)
+```
+
+反映漏れは `./scripts/check-codegen.sh` で検査できる(CI でも実行される)。
+
 ## backend の実行とビルド
 
 ```sh
@@ -58,11 +72,14 @@ nix build .#backend         # バイナリ
 nix build .#backend-image   # コンテナイメージ (下記参照)
 ```
 
+`DATABASE_URL`(例: `postgres://postgres:postgres@localhost:5432/postgres?sslmode=disable`)が設定されていれば起動時に PostgreSQL へ接続し、`backend/internal/store/migrations/` の migration を自動適用する。未設定なら DB なしで起動する(DB を使うエンドポイントは 500 を返す)。
+
 devShell 内では通常の Go ワークフローも使える:
 
 ```sh
 cd backend
-go test ./...
+go test ./...          # DB テストを含む (Docker が必要: testcontainers で PostgreSQL を起動)
+go test -short ./...   # DB テストを skip (nix sandbox の checkPhase はこちら)
 ```
 
 依存を変更したら `go mod tidy` の後に `nix/backend.nix` の `vendorHash` を更新する(`pkgs.lib.fakeHash` に置き換えて `nix build .#backend` し、エラーに出る正しい hash を貼り直す)。
@@ -193,3 +210,5 @@ nix flake check
 CI や手元での確認に使う。go test / vitest に加え、Helm chart の静的検証 (`helm lint` / `helm template`、`nix/chart-check.nix`) もここで走る。全サポートシステム分を評価する場合は `nix flake check --all-systems`。
 
 GitHub Actions (`.github/workflows/ci.yml`) が PR と main への push で同じ `nix flake check` を実行する。Linux runner では checks にコンテナイメージ (`backend-image` / `frontend-image`) のビルドも含まれる。Nix store は [cache-nix-action](https://github.com/nix-community/cache-nix-action) で GitHub Actions cache にキャッシュされる。
+
+nix sandbox では Docker が使えないため、`nix flake check` の backend テストは `-short`(DB テスト skip)で走る。CI の `codegen-and-db-test` job が runner の Docker を使って DB テスト(testcontainers)と codegen ドリフト検査を補完する。

@@ -1,44 +1,84 @@
-// Package server assembles the Echo instance: routes, validator, middleware.
+// Package server assembles the Echo instance: routes, spec-driven request
+// validation, and the unified error envelope.
 package server
 
 import (
+	"errors"
+	"fmt"
 	"net/http"
+	"strings"
 
-	"github.com/go-playground/validator/v10"
 	echo "github.com/labstack/echo/v4"
+	echomiddleware "github.com/oapi-codegen/echo-middleware"
+	"github.com/uptrace/bun"
 
+	"github.com/dsa-uts/dsa-project/backend/internal/api"
 	"github.com/dsa-uts/dsa-project/backend/internal/handler"
+	"github.com/dsa-uts/dsa-project/backend/internal/store"
 )
 
-// structValidator adapts go-playground/validator to echo.Validator.
-// docs/spec/api.md: バリデーション失敗は 422、エラーは {"error":{"code","message"}} 封筒。
-type structValidator struct {
-	validate *validator.Validate
-}
-
-func (v *structValidator) Validate(i any) error {
-	if err := v.validate.Struct(i); err != nil {
-		return echo.NewHTTPError(http.StatusUnprocessableEntity, echo.Map{
-			"error": echo.Map{
-				"code":    "validation_failed",
-				"message": err.Error(),
-			},
-		})
-	}
-	return nil
-}
-
-// New builds the Echo instance with all routes registered.
-func New() *echo.Echo {
+// New builds the Echo instance with all routes registered. db may be nil
+// (DATABASE_URL 未設定): /health は動き、DB を使うエンドポイントは
+// 500 database_unavailable を返す。
+func New(db *bun.DB) *echo.Echo {
 	e := echo.New()
 	e.HideBanner = true
-	e.Validator = &structValidator{validate: validator.New()}
+	e.HTTPErrorHandler = httpErrorHandler
 
 	e.GET("/health", handler.Health)
 
-	api := e.Group("/api")
-	api.GET("/hello", handler.HelloGet)
-	api.POST("/hello", handler.HelloPost)
+	spec, err := api.GetSpec()
+	if err != nil {
+		// 生成コードに埋め込まれた spec なので、失敗はビルド成果物の破損のみ
+		panic(fmt.Sprintf("load embedded openapi spec: %v", err))
+	}
+	// servers はデプロイ形態の情報で、リクエストの host 検証には使わない
+	spec.Servers = nil
+
+	// openapi.yaml の required / minLength 等をリクエスト受理前に強制する
+	// (ADR 0010: kin-openapi による validation は spec から従属的に得られる)。
+	validator := echomiddleware.OapiRequestValidatorWithOptions(spec, &echomiddleware.Options{
+		ErrorHandler: func(c echo.Context, err *echo.HTTPError) error {
+			// middleware はリクエスト不正を 400 で返すが、docs/spec/api.md では
+			// バリデーション失敗は 422 + 統一エラー封筒。404 / 405 等はそのまま
+			// httpErrorHandler に流して封筒化する。
+			if err.Code == http.StatusBadRequest {
+				return c.JSON(http.StatusUnprocessableEntity, api.NewError("validation_failed", fmt.Sprint(err.Message)))
+			}
+			return err
+		},
+	})
+
+	var greetings *store.GreetingStore
+	if db != nil {
+		greetings = store.NewGreetingStore(db)
+	}
+	h := api.NewHandler(greetings)
+
+	// validator は spec 由来のルートにだけ掛ける (group 経由で登録)
+	g := e.Group("", validator)
+	api.RegisterHandlers(g, api.NewStrictHandler(h, nil))
 
 	return e
+}
+
+// httpErrorHandler renders every unhandled error as the api.md envelope.
+func httpErrorHandler(err error, c echo.Context) {
+	if c.Response().Committed {
+		return
+	}
+	status := http.StatusInternalServerError
+	message := "Internal server error."
+	if he, ok := errors.AsType[*echo.HTTPError](err); ok {
+		status = he.Code
+		message = fmt.Sprint(he.Message)
+	}
+	// 404 → not_found のように status text から機械可読 code を導出する
+	code := strings.ReplaceAll(strings.ToLower(http.StatusText(status)), " ", "_")
+	if code == "" {
+		code = "error"
+	}
+	if err := c.JSON(status, api.NewError(code, message)); err != nil {
+		c.Logger().Error(err)
+	}
 }

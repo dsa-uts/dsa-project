@@ -1,0 +1,11 @@
+# oapi-codegen の設定 (ADR 0010)。strict-server で response 形をコンパイラ強制する。
+# 生成コマンドは generate.go の go:generate を参照。
+package: api
+output: gen.go
+generate:
+  models: true
+  echo-server: true
+  strict-server: true
+  # kin-openapi validation middleware が参照する spec を生成コードに埋め込む
+  # (実行時に openapi.yaml ファイルへの依存を持たない)
+  embedded-spec: true
