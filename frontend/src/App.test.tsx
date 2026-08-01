@@ -1,6 +1,7 @@
 import { afterEach, expect, test, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { MemoryRouter } from 'react-router'
 import App from './App'
 
 afterEach(() => {
@@ -8,14 +9,17 @@ afterEach(() => {
   vi.unstubAllGlobals()
 })
 
-// main.tsx と同じ Provider 構成。retry を切って失敗ケースを即座に観測する。
-function renderApp() {
+// main.tsx と同じ Provider 構成 (Router はテストでは MemoryRouter)。
+// retry を切って失敗ケースを即座に観測する。
+function renderApp(path = '/') {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   })
   return render(
     <QueryClientProvider client={queryClient}>
-      <App />
+      <MemoryRouter initialEntries={[path]}>
+        <App />
+      </MemoryRouter>
     </QueryClientProvider>,
   )
 }
@@ -27,15 +31,17 @@ function jsonResponse(body: unknown, status = 200) {
   })
 }
 
-interface GreetingRow {
-  id: string
-  message: string
-  created_at: string
+const adminUser = {
+  id: '00000000-0000-0000-0000-000000000001',
+  userid: 'admin',
+  name: '管理者',
+  role: 'admin',
 }
 
-// /health (raw fetch) と /api/hello (openapi-fetch 経由) の両方を
-// URL で振り分けるスタブ。openapi-fetch は Request オブジェクトで呼ぶ。
-function stubFetchRoutes(greetings: GreetingRow[]) {
+// /health (raw fetch) と Auth API (openapi-fetch 経由) を URL で振り分けるスタブ。
+// セッション状態を closure に持ち、login/logout で切り替える。
+function stubAuthRoutes({ loggedIn = false } = {}) {
+  let sessionActive = loggedIn
   vi.stubGlobal(
     'fetch',
     vi.fn(async (input: RequestInfo | URL) => {
@@ -44,64 +50,93 @@ function stubFetchRoutes(greetings: GreetingRow[]) {
       if (url.pathname === '/health') {
         return jsonResponse({ status: 'ok' })
       }
-      if (url.pathname === '/api/hello' && request.method === 'GET') {
-        return jsonResponse({ greetings: [...greetings].reverse() })
-      }
-      if (url.pathname === '/api/hello' && request.method === 'POST') {
-        const body = (await request.json()) as { name: string }
-        const created: GreetingRow = {
-          id: `00000000-0000-0000-0000-00000000000${greetings.length + 1}`,
-          message: `hello, ${body.name}`,
-          created_at: '2026-08-01T00:00:00Z',
+      if (url.pathname === '/api/session' && request.method === 'POST') {
+        const body = (await request.json()) as { userid: string; password: string }
+        if (body.userid === adminUser.userid && body.password === 'password') {
+          sessionActive = true
+          return jsonResponse(adminUser)
         }
-        greetings.push(created)
-        return jsonResponse(created, 201)
+        return jsonResponse(
+          { error: { code: 'invalid_credentials', message: 'invalid userid or password' } },
+          401,
+        )
+      }
+      if (url.pathname === '/api/session' && request.method === 'DELETE') {
+        sessionActive = false
+        return new Response(null, { status: 204 })
+      }
+      if (url.pathname === '/api/me' && request.method === 'GET') {
+        if (sessionActive) {
+          return jsonResponse(adminUser)
+        }
+        return jsonResponse(
+          { error: { code: 'unauthenticated', message: 'no valid session' } },
+          401,
+        )
       }
       throw new Error(`unexpected request: ${request.method} ${url.pathname}`)
     }),
   )
 }
 
-test('backend の health check 結果を表示する', async () => {
-  stubFetchRoutes([])
+test('未認証で保護ページを開くとログインページへリダイレクトする', async () => {
+  stubAuthRoutes({ loggedIn: false })
 
-  renderApp()
+  renderApp('/')
+
+  expect(await screen.findByLabelText('ユーザーID')).toBeDefined()
+})
+
+test('未認証で未知のパスを開いてもログインページへリダイレクトする', async () => {
+  stubAuthRoutes({ loggedIn: false })
+
+  renderApp('/no-such-page')
+
+  expect(await screen.findByLabelText('ユーザーID')).toBeDefined()
+})
+
+test('ログイン成功でホームへ遷移し name と Role が表示される', async () => {
+  stubAuthRoutes({ loggedIn: false })
+
+  renderApp('/login')
+
+  fireEvent.change(screen.getByLabelText('ユーザーID'), { target: { value: 'admin' } })
+  fireEvent.change(screen.getByLabelText('パスワード'), { target: { value: 'password' } })
+  fireEvent.click(screen.getByRole('button', { name: 'ログイン' }))
+
+  expect(await screen.findByText('管理者')).toBeDefined()
+  expect(screen.getByText('admin')).toBeDefined()
+  expect(screen.getByRole('button', { name: 'ログアウト' })).toBeDefined()
+})
+
+test('ログイン失敗でエラーメッセージを表示する', async () => {
+  stubAuthRoutes({ loggedIn: false })
+
+  renderApp('/login')
+
+  fireEvent.change(screen.getByLabelText('ユーザーID'), { target: { value: 'admin' } })
+  fireEvent.change(screen.getByLabelText('パスワード'), { target: { value: 'wrong' } })
+  fireEvent.click(screen.getByRole('button', { name: 'ログイン' }))
+
+  expect(
+    await screen.findByText('ユーザーIDまたはパスワードが正しくありません'),
+  ).toBeDefined()
+})
+
+test('ログアウトするとログインページへ遷移する', async () => {
+  stubAuthRoutes({ loggedIn: true })
+
+  renderApp('/')
+
+  fireEvent.click(await screen.findByRole('button', { name: 'ログアウト' }))
+
+  expect(await screen.findByLabelText('ユーザーID')).toBeDefined()
+})
+
+test('認証済みならホームで backend の health check 結果を表示する', async () => {
+  stubAuthRoutes({ loggedIn: true })
+
+  renderApp('/')
 
   expect(await screen.findByText('ok')).toBeDefined()
-})
-
-test('backend に到達できない場合は unreachable と表示する', async () => {
-  vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new TypeError('fetch failed')))
-
-  renderApp()
-
-  expect(await screen.findByText('unreachable')).toBeDefined()
-  expect(await screen.findByText('failed to load greetings')).toBeDefined()
-})
-
-test('保存済みの greeting を一覧表示する', async () => {
-  stubFetchRoutes([
-    {
-      id: '00000000-0000-0000-0000-000000000001',
-      message: 'hello, dsa',
-      created_at: '2026-08-01T00:00:00Z',
-    },
-  ])
-
-  renderApp()
-
-  expect(await screen.findByText('hello, dsa')).toBeDefined()
-})
-
-test('name を送信すると greeting が作成され一覧が更新される', async () => {
-  stubFetchRoutes([])
-
-  renderApp()
-
-  expect(await screen.findByText('no greetings yet')).toBeDefined()
-
-  fireEvent.change(screen.getByLabelText('name'), { target: { value: 'dsa' } })
-  fireEvent.click(screen.getByRole('button', { name: 'Greet' }))
-
-  expect(await screen.findByText('hello, dsa')).toBeDefined()
 })

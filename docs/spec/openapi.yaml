@@ -12,78 +12,107 @@ info:
     用語と Principles は CONTEXT.md、規約(エラー封筒、ID、タイムスタンプ)は
     docs/spec/api.md の Conventions を正とする。
 paths:
-  /api/hello:
-    get:
-      operationId: listGreetings
-      summary: 保存済みの greeting を新しい順に返す
-      description: >
-        scaffolding 用のダミーエンドポイント (issue #95)。
-        contract pipeline (openapi.yaml → 生成コード → store → PostgreSQL) の
-        疎通確認のためだけに存在し、Auth スライス以降で削除される。
-      responses:
-        "200":
-          description: greeting の一覧
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/GreetingList"
-        "500":
-          $ref: "#/components/responses/InternalError"
+  /api/session:
     post:
-      operationId: createGreeting
-      summary: greeting を作成して保存する
-      description: scaffolding 用のダミーエンドポイント (issue #95)。listGreetings の説明を参照。
+      operationId: createSession
+      summary: セッションを作成する (ログイン)
+      description: >
+        userid / password を検証してセッション cookie を設定する。
+        userid 不存在とパスワード誤りは区別しない (401 invalid_credentials)。
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/CreateGreetingRequest"
+              $ref: "#/components/schemas/CreateSessionRequest"
       responses:
-        "201":
-          description: 作成された greeting
+        "200":
+          description: 認証成功。現在の User を返し、セッション cookie を設定する
+          headers:
+            Set-Cookie:
+              schema:
+                type: string
+              description: HttpOnly / Secure / SameSite=Lax のセッション cookie
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Greeting"
+                $ref: "#/components/schemas/User"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
         "422":
           $ref: "#/components/responses/ValidationError"
         "500":
           $ref: "#/components/responses/InternalError"
+    delete:
+      operationId: deleteSession
+      summary: 現在のセッションを削除する (ログアウト)
+      description: 冪等。セッションが既に無くても 204 を返す。
+      responses:
+        "204":
+          description: セッション削除済み。cookie を失効させる
+          headers:
+            Set-Cookie:
+              schema:
+                type: string
+              description: セッション cookie を削除する (Max-Age=0)
+        "500":
+          $ref: "#/components/responses/InternalError"
+  /api/me:
+    get:
+      operationId: getMe
+      summary: 現在の User Account を返す
+      security:
+        - cookieAuth: []
+      responses:
+        "200":
+          description: 現在の User。sliding session のため cookie を再設定する
+          headers:
+            Set-Cookie:
+              schema:
+                type: string
+              description: 有効期限を延長したセッション cookie
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "500":
+          $ref: "#/components/responses/InternalError"
 components:
   schemas:
-    Greeting:
+    Role:
+      type: string
+      enum: [student, manager, admin]
+      description: User Account の権限レベル (CONTEXT.md「Role」)
+    User:
       type: object
-      required: [id, message, created_at]
+      required: [id, userid, name, role]
       properties:
         id:
           type: string
           format: uuid
           description: opaque な UUID 文字列
-        message:
+        userid:
           type: string
-          example: "hello, dsa"
-        created_at:
-          type: string
-          format: date-time
-          description: RFC 3339 UTC
-    GreetingList:
-      type: object
-      required: [greetings]
-      description: 一覧レスポンスのトップレベルは配列ではなく object (api.md Conventions)
-      properties:
-        greetings:
-          type: array
-          items:
-            $ref: "#/components/schemas/Greeting"
-    CreateGreetingRequest:
-      type: object
-      required: [name]
-      properties:
+          example: "student001"
         name:
           type: string
+          example: "山田 太郎"
+        role:
+          $ref: "#/components/schemas/Role"
+    CreateSessionRequest:
+      type: object
+      required: [userid, password]
+      properties:
+        userid:
+          type: string
           minLength: 1
-          example: "dsa"
+          example: "student001"
+        password:
+          type: string
+          minLength: 1
+          format: password
     Error:
       type: object
       required: [error]
@@ -101,6 +130,12 @@ components:
               type: string
               description: 開発者向けの英語文。UI にそのまま表示しない
   responses:
+    Unauthorized:
+      description: 未認証。セッションなし・期限切れ・credential 不正
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
     ValidationError:
       description: バリデーション失敗
       content:
@@ -113,3 +148,9 @@ components:
         application/json:
           schema:
             $ref: "#/components/schemas/Error"
+  securitySchemes:
+    cookieAuth:
+      type: apiKey
+      in: cookie
+      name: session
+      description: backend-managed session cookie。HttpOnly / Secure / SameSite=Lax

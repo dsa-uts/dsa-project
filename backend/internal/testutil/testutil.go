@@ -7,8 +7,10 @@ import (
 	"context"
 	"testing"
 
+	goredis "github.com/redis/go-redis/v9"
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/modules/postgres"
+	tcredis "github.com/testcontainers/testcontainers-go/modules/redis"
 	"github.com/uptrace/bun"
 
 	"github.com/dsa-uts/dsa-project/backend/internal/store"
@@ -46,4 +48,32 @@ func StartPostgres(t *testing.T) *bun.DB {
 		t.Fatalf("apply migrations: %v", err)
 	}
 	return db
+}
+
+// StartRedis starts a Redis container and returns a connected client
+// (セッションストア用。ADR 0011: datastore は fake しない)。
+func StartRedis(t *testing.T) *goredis.Client {
+	t.Helper()
+	if testing.Short() {
+		t.Skip("-short: skipping test that requires Docker (testcontainers)")
+	}
+
+	ctx := context.Background()
+	rc, err := tcredis.Run(ctx, "redis:8-alpine")
+	testcontainers.CleanupContainer(t, rc)
+	if err != nil {
+		t.Fatalf("start redis container: %v", err)
+	}
+
+	uri, err := rc.ConnectionString(ctx)
+	if err != nil {
+		t.Fatalf("redis connection string: %v", err)
+	}
+	opts, err := goredis.ParseURL(uri)
+	if err != nil {
+		t.Fatalf("parse redis url: %v", err)
+	}
+	client := goredis.NewClient(opts)
+	t.Cleanup(func() { _ = client.Close() })
+	return client
 }

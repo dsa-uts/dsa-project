@@ -4,24 +4,41 @@
  */
 
 export interface paths {
-    "/api/hello": {
+    "/api/session": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /**
-         * 保存済みの greeting を新しい順に返す
-         * @description scaffolding 用のダミーエンドポイント (issue #95)。 contract pipeline (openapi.yaml → 生成コード → store → PostgreSQL) の 疎通確認のためだけに存在し、Auth スライス以降で削除される。
-         */
-        get: operations["listGreetings"];
+        get?: never;
         put?: never;
         /**
-         * greeting を作成して保存する
-         * @description scaffolding 用のダミーエンドポイント (issue
+         * セッションを作成する (ログイン)
+         * @description userid / password を検証してセッション cookie を設定する。 userid 不存在とパスワード誤りは区別しない (401 invalid_credentials)。
          */
-        post: operations["createGreeting"];
+        post: operations["createSession"];
+        /**
+         * 現在のセッションを削除する (ログアウト)
+         * @description 冪等。セッションが既に無くても 204 を返す。
+         */
+        delete: operations["deleteSession"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/me": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 現在の User Account を返す */
+        get: operations["getMe"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -32,27 +49,28 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
-        Greeting: {
+        /**
+         * @description User Account の権限レベル (CONTEXT.md「Role」)
+         * @enum {string}
+         */
+        Role: "student" | "manager" | "admin";
+        User: {
             /**
              * Format: uuid
              * @description opaque な UUID 文字列
              */
             id: string;
-            /** @example hello, dsa */
-            message: string;
-            /**
-             * Format: date-time
-             * @description RFC 3339 UTC
-             */
-            created_at: string;
-        };
-        /** @description 一覧レスポンスのトップレベルは配列ではなく object (api.md Conventions) */
-        GreetingList: {
-            greetings: components["schemas"]["Greeting"][];
-        };
-        CreateGreetingRequest: {
-            /** @example dsa */
+            /** @example student001 */
+            userid: string;
+            /** @example 山田 太郎 */
             name: string;
+            role: components["schemas"]["Role"];
+        };
+        CreateSessionRequest: {
+            /** @example student001 */
+            userid: string;
+            /** Format: password */
+            password: string;
         };
         /** @description 統一エラー封筒 (api.md Conventions) */
         Error: {
@@ -68,6 +86,15 @@ export interface components {
         };
     };
     responses: {
+        /** @description 未認証。セッションなし・期限切れ・credential 不正 */
+        Unauthorized: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["Error"];
+            };
+        };
         /** @description バリデーション失敗 */
         ValidationError: {
             headers: {
@@ -94,28 +121,7 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
-    listGreetings: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description greeting の一覧 */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["GreetingList"];
-                };
-            };
-            500: components["responses"]["InternalError"];
-        };
-    };
-    createGreeting: {
+    createSession: {
         parameters: {
             query?: never;
             header?: never;
@@ -124,20 +130,68 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["CreateGreetingRequest"];
+                "application/json": components["schemas"]["CreateSessionRequest"];
             };
         };
         responses: {
-            /** @description 作成された greeting */
-            201: {
+            /** @description 認証成功。現在の User を返し、セッション cookie を設定する */
+            200: {
                 headers: {
+                    /** @description HttpOnly / Secure / SameSite=Lax のセッション cookie */
+                    "Set-Cookie"?: string;
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Greeting"];
+                    "application/json": components["schemas"]["User"];
                 };
             };
+            401: components["responses"]["Unauthorized"];
             422: components["responses"]["ValidationError"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    deleteSession: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description セッション削除済み。cookie を失効させる */
+            204: {
+                headers: {
+                    /** @description セッション cookie を削除する (Max-Age=0) */
+                    "Set-Cookie"?: string;
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            500: components["responses"]["InternalError"];
+        };
+    };
+    getMe: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 現在の User。sliding session のため cookie を再設定する */
+            200: {
+                headers: {
+                    /** @description 有効期限を延長したセッション cookie */
+                    "Set-Cookie"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["User"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
             500: components["responses"]["InternalError"];
         };
     };
