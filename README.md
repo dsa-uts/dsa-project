@@ -69,7 +69,7 @@ cd frontend && npm run generate     # → frontend/src/api/schema.d.ts (openapi-
 ```sh
 nix run .#backend           # サーバー起動 (PORT 環境変数で変更可、既定 8080)
 nix build .#backend         # バイナリ
-nix build .#backend-image   # コンテナイメージ (下記参照)
+nix run .#backend-image-build  # 依存 metadata を refresh してコンテナイメージをビルド
 ```
 
 `DATABASE_URL`(例: `postgres://postgres:postgres@localhost:5432/postgres?sslmode=disable`)が設定されていれば起動時に PostgreSQL へ接続し、`backend/internal/store/migrations/` の migration を自動適用する。未設定なら DB なしで起動する(DB を使うエンドポイントは 500 を返す)。
@@ -82,7 +82,16 @@ go test ./...          # DB テストを含む (Docker が必要: testcontainers
 go test -short ./...   # DB テストを skip (nix sandbox の checkPhase はこちら)
 ```
 
-依存を変更したら `go mod tidy` の後に `nix/backend.nix` の `vendorHash` を更新する(`pkgs.lib.fakeHash` に置き換えて `nix build .#backend` し、エラーに出る正しい hash を貼り直す)。
+依存を変更したら `go mod tidy` を実行する。開発向けの backend image build と
+deploy は、ビルド前に Nix の依存 metadata (`nix/backend-vendor-hash.nix`) を検査し、
+必要なら自動更新する。更新結果はコミットされず、レビュー可能な作業ツリー変更として残る。
+
+依存 metadata だけを明示的に修復・検査する場合は次を使う:
+
+```sh
+nix run .#backend-deps-refresh # drift があれば作業ツリーを更新
+nix run .#backend-deps-check   # checkout を変更せず drift を検査 (CI と同じ)
+```
 
 ## frontend の開発とビルド
 
@@ -108,10 +117,10 @@ dev server は `/health` と `/api` を backend(`http://localhost:8080`)へ prox
 
 ## コンテナイメージ
 
-`nix build .#backend-image` / `nix build .#frontend-image` の出力はイメージ tar を stdout に流すスクリプト。タグは derivation hash 由来で、内容が変わればタグも変わる。k3s へは registry を経由せず直接 import できる(後述の `nix run .#k3s-load-images` がこれを自動で行う):
+`nix run .#backend-image-build` / `nix build .#frontend-image` の出力はイメージ tar を stdout に流すスクリプト。タグは derivation hash 由来で、内容が変わればタグも変わる。k3s へは registry を経由せず直接 import できる(後述の `nix run .#k3s-load-images` がこれを自動で行う):
 
 ```sh
-nix build .#backend-image
+nix run .#backend-image-build
 ./result | sudo k3s ctr -n k8s.io images import -
 ```
 
