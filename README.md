@@ -104,7 +104,7 @@ npm run lint      # oxlint
 
 dev server は `/health` と `/api` を backend(`http://localhost:8080`)へ proxy する(`frontend/vite.config.ts`)。別ターミナルで `nix run .#backend` を起動しておくと、hello ページに backend の health check 結果が表示される。
 
-依存を変更したら `nix/frontend.nix` の `npmDepsHash` を更新する(`pkgs.lib.fakeHash` に置き換えて `nix build .#frontend` し、エラーに出る正しい hash を貼り直す)。
+依存を変更したら `package.json` と `package-lock.json` をコミットする。Nix の frontend build は lockfile から依存を取得するため、Nix 固有の dependency hash の更新は不要。
 
 ## コンテナイメージ
 
