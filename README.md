@@ -17,7 +17,7 @@
 
 ## 開発環境のセットアップ
 
-開発に必要なツールチェーン(Go / Node.js / Helm / kubectl)は nix flake で管理している。Linux(x86_64 / aarch64)と macOS(Apple Silicon)をサポートする。
+開発に必要なツールチェーン(Go / Node.js / Helm / kubectl)は nix flake で管理している。サポート対象は Linux(x86_64 / aarch64)である。macOS では OrbStack の Linux machine に SSH 接続し、その中でリポジトリを clone して開発する。
 
 ### 1. Nix のインストール
 
@@ -119,14 +119,9 @@ frontend イメージは [static-web-server](https://static-web-server.net/) が
 
 この直接 import は既定のシングルノードデプロイ前提。chart は `imagePullPolicy: IfNotPresent` なので、マルチノードクラスタでは import されていないノードで `ErrImagePull` になる。マルチノードで動かす場合はレジストリを立てて push するか、全ノードに import すること。
 
-イメージは Linux 用 derivation なので、macOS からビルドするには Linux builder が必要。[nix-darwin](https://github.com/nix-darwin/nix-darwin) の [`nix.linux-builder`](https://nix-darwin.github.io/nix-darwin/manual/#opt-nix.linux-builder.enable) を有効にするのが簡単(`nix flake check` は Linux builder が無くても通る)。
-
 ## k3s 環境 (シングルノード)
 
-デプロイの既定はシングルノード k3s クラスタ ([ADR 0008](docs/adr/0008-topology-agnostic-manifests.md))。実行形態は OS で異なるが、操作は共通:
-
-- **macOS**: [microvm.nix](https://github.com/microvm-nix/microvm.nix) + [vfkit](https://github.com/crc-org/vfkit) の VM 1 台の中で k3s server が動く
-- **Linux**: ホストで k3s server が直接動く (systemd の一時 unit `dsa-k3s`)
+デプロイの既定はシングルノード k3s クラスタ ([ADR 0008](docs/adr/0008-topology-agnostic-manifests.md))。Linux ホスト上で k3s server が systemd の一時 unit `dsa-k3s` として動く。`k3s-up` は `sudo systemd-run` を使うため、systemd と sudo が必要になる。OrbStack を使う場合も Linux machine 内で以下のコマンドを実行する。
 
 ### 起動と停止
 
@@ -143,30 +138,13 @@ nix run .#k3s-down    # 停止
 | ファイル | 内容 |
 | --- | --- |
 | `.k3s/kubeconfig` | ホスト用 kubeconfig (`k3s-up` が生成) |
-| `.k3s/ssh/` | (macOS) VM への SSH クライアント鍵 (`k3s-up` が生成) と known_hosts |
-| `.k3s/var.img` | (macOS) VM の `/var`。クラスタ状態はここに永続化される |
-| `.k3s/vm.log` | (macOS) VM のコンソールログ |
 
-macOS でクラスタを初期化したいときは、`nix run .#k3s-down` してから `rm -rf .k3s` する。Linux のクラスタ状態はホストの `/var/lib/rancher/k3s` にある。
-
-### macOS の前提: linux builder
-
-VM の NixOS システムは `aarch64-linux` 用なので、ビルドには Linux builder が必要 (コンテナイメージと同じ前提)。[nix-darwin](https://github.com/nix-darwin/nix-darwin) で以下を有効にするのが簡単:
-
-```nix
-nix.linux-builder.enable = true;
-```
-
-適用後、`/etc/nix/machines` に `aarch64-linux` の builder が現れる。詳細は [nix-darwin のマニュアル](https://nix-darwin.github.io/nix-darwin/manual/#opt-nix.linux-builder.enable) を参照。
+クラスタ状態はホストの `/var/lib/rancher/k3s` にある。
 
 ### 制約と補足
 
-- macOS の VM は 4 vCPU / 4GB RAM / 20GB ディスク (スパース)。変更は `nix/k3s-vm.nix` の `mkDefault` 値を上書きする
-- VM の MAC アドレスは固定 (DHCP lease を安定させるため) なので、**VM は同時に 1 台しか起動できない**。worktree を複数作っても VM は共有される
-- ホスト → VM の接続は vmnet の NAT 越しに VM の IP へ直接行う。kubeconfig の接続先書き換えと TLS SAN の設定は VM 内の systemd サービスが自動で行う
-- Linux の `k3s-up` は `sudo systemd-run` を使う (systemd 前提、非 NixOS ホストでも動く)。`k3s-down` で server を止めてもワークロードのコンテナは残り、次回起動時に再管理される
-- macOS では `nix run .#k3s-ssh` で VM に root で入れる (`journalctl` や `k3s ctr` での調査用)。イメージ搬入も同じ SSH 経路を使う。引数は VM 上のコマンドとして実行される: `nix run .#k3s-ssh -- journalctl -u k3s`
-- macOS で VM が起動しないときは `.k3s/vm.log` を確認する。VM を foreground で起動してコンソールを見るには: `mkdir -p .k3s/share && cd .k3s && $(nix build --print-out-paths ..#k3s-vm)/bin/microvm-run`
+- `k3s-up` は非 NixOS ホストでも動くが、systemd を前提とする
+- `k3s-down` で server を止めてもワークロードのコンテナは残り、次回起動時に再管理される
 
 ## デプロイ (Helm chart)
 
@@ -182,8 +160,7 @@ nix run .#k3s-deploy   # イメージ搬入 + helm upgrade --install
 `k3s-deploy` は以下を行う:
 
 1. **イメージ搬入** (`nix run .#k3s-load-images` 単体でも実行可)
-   - macOS: イメージ tar を SSH 越しに VM の `k3s ctr -n k8s.io images import -` へ pipe する
-   - Linux: イメージの stream script をホストの containerd へ直接 pipe する (`sudo` が必要)
+   - イメージの stream script をホストの containerd へ直接 pipe する (`sudo` が必要)
 2. **helm upgrade --install** — image tag は derivation hash 由来で毎ビルド変わるため、現在の tag を `--set` で自動的に渡す
 3. 完了後にアクセス URL (`http://<node-ip>/`) を表示する
 
@@ -198,8 +175,6 @@ helm upgrade --install dsa chart/ \
   --set backend.image.tag=$(nix eval --raw .#backend-image.imageTag) \
   --set frontend.image.tag=$(nix eval --raw .#frontend-image.imageTag)
 ```
-
-注意 (macOS): `nix/k3s-vm.nix` を変更しても起動中の VM には反映されない。`nix run .#k3s-down` してから `nix run .#k3s-up` で VM を作り直す。
 
 ## flake の検査
 
