@@ -1,5 +1,6 @@
-// Package testutil provides the HTTP-seam test harness (ADR 0011):
-// a disposable real PostgreSQL via testcontainers with migrations applied.
+// Package testutil provides the legacy in-process HTTP-seam test harness.
+// ADR 0012 supersedes this testcontainers path with tests against an isolated,
+// deployed Helm release; this package remains only until that migration lands.
 // Docker が無い環境 (nix sandbox 等) では `go test -short` で DB テストをスキップする。
 package testutil
 

@@ -1,5 +1,5 @@
 // Package store owns database access: the Bun connection, migrations, and
-// concrete store types. ADR 0011: store は実 PostgreSQL に対してテストする具象型で、
+// concrete store types. ADR 0011: store は具象型のままとし、
 // repository interface 層は意図的に作らない。
 package store
 

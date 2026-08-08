@@ -20,10 +20,11 @@
 - migration は Bun の `migrate` パッケージで管理し、サーバー起動時に自動適用される。
 - 新しい migration は `YYYYMMDDHHMMSS_<name>.up.sql` / `.down.sql` のペアで追加する。適用済み migration ファイルは編集しない。
 
-## テスト (ADR 0011)
+## テスト (ADR 0012)
 
-- backend のテストは HTTP seam で書く: testcontainers で実 PostgreSQL を立て、migration を適用した上で、full Echo server に HTTP リクエストを投げて観測する(`backend/internal/testutil` がハーネス)。DB を fake しない。repository interface を作らない。
-- `go test ./...` は Docker が必要。`go test -short ./...` は DB テストを skip する(nix sandbox の checkPhase はこちら)。DB テストは CI の `codegen-and-db-test` job(runner の Docker)で回る。
+- PostgreSQL、Redis、実行中の backend、Ingress、frontend を必要とするテストは、k3s に隔離してデプロイした Helm release の公開 HTTP interface を通して観測する。テスト内で server を組み立てたり、testcontainers で依存を起動したりする第二の実行経路は作らない。
+- 主要な正常系は Helm Test Job から browser E2E で確認し、画面から到達しにくい API contract は同じ Job から公開 HTTP API を直接検査する。テストデータは公開 interface 経由で作り、DB を assertion seam にしない。
+- 外部依存なしで観測できる純粋なロジックだけを通常の unit test に残す。store は具象型のままとし、DB fake や repository interface を作らない(interface の方針は ADR 0011)。
 - frontend のテストは vitest + happy-dom。fetch は `vi.stubGlobal('fetch', ...)` でスタブする(MSW は導入しない)。
 
 ## 色は token のみ (no-raw-colors)

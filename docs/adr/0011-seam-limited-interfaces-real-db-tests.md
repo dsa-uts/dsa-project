@@ -1,5 +1,9 @@
 # Seam-Limited Interfaces, Real-Database Tests
 
+Status: accepted
+
+ADR 0012 supersedes the test strategy described below: tests that require PostgreSQL or a running backend now exercise a deployed Helm release on k3s through its public HTTP interface. The seam-limited interface decision, including the deliberate absence of repository interfaces, remains accepted.
+
 Go interfaces are introduced only where substitution actually happens: `judge.Executor` (fake worker during the stub-first milestones, sandbox executor later, and the future `cmd/judge` binary), the clock, and the Redis notifier. Store types stay concrete and are tested against a real PostgreSQL (testcontainers or equivalent); handler tests go through httptest with a real store. There is deliberately no repository-interface layer and no mock-based unit isolation between layers.
 
 ## Considered Options
