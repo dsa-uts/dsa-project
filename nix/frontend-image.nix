@@ -2,10 +2,7 @@
 # static-web-server が Vite のビルド成果物を配信する。
 # tag 未指定・stream 形式の理由は backend-image.nix のコメントを参照。
 { pkgs, frontend }:
-let
-  withTar = import ./image-tar.nix { inherit pkgs; };
-in
-withTar (pkgs.dockerTools.streamLayeredImage {
+pkgs.dockerTools.streamLayeredImage {
   name = "dsa-frontend";
   config = {
     Cmd = [
@@ -20,4 +17,4 @@ withTar (pkgs.dockerTools.streamLayeredImage {
     ];
     ExposedPorts."8080/tcp" = { };
   };
-})
+}
