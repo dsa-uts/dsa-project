@@ -8,15 +8,12 @@
 #
 # どれも状態は state dir (既定: $PWD/.k3s、DSA_K3S_STATE_DIR で変更可) に置き、
 # k3s-up 完了後は state dir 直下の kubeconfig で kubectl が使える。
-{
-  pkgs,
-  backendImage,
-  frontendImage,
-}:
+{ pkgs }:
 let
   inherit (pkgs) lib;
 
   chart = ../chart;
+  dependencyTool = ../scripts/backend-deps.sh;
 
   toApp = drv: {
     type = "app";
@@ -65,6 +62,7 @@ let
         kubernetes-helm
         kubectl
         coreutils
+        nix
       ];
       text = ''
         ${stateDirSnippet}
@@ -76,11 +74,14 @@ let
 
         ${lib.getExe loadImages}
 
+        backend_tag=$(nix eval --raw .#backend-image.imageTag)
+        frontend_tag=$(nix eval --raw .#frontend-image.imageTag)
+
         echo "Installing the Helm chart ..."
         helm upgrade --install dsa ${chart} \
           --kubeconfig "$kubeconfig" \
-          --set backend.image.tag=${backendImage.imageTag} \
-          --set frontend.image.tag=${frontendImage.imageTag} \
+          --set backend.image.tag="$backend_tag" \
+          --set frontend.image.tag="$frontend_tag" \
           --wait --timeout 5m
 
         node_ip=$(kubectl --kubeconfig "$kubeconfig" get nodes \
@@ -115,13 +116,18 @@ let
       loadImages = pkgs.writeShellApplication {
         name = "k3s-load-images";
         meta.description = "Import the container images into the host k3s server's containerd";
+        runtimeInputs = [ pkgs.nix ];
         text = ''
+          ${dependencyTool} refresh --repo-root "$PWD"
+          backend_image=$(nix build --no-link --print-out-paths .#backend-image)
+          frontend_image=$(nix build --no-link --print-out-paths .#frontend-image)
+
           # stream script を containerd (k8s.io namespace) へ直接 pipe する。
           # containerd の socket は root 所有のため sudo が要る。
-          echo "Importing dsa-backend:${backendImage.imageTag} (requires sudo) ..."
-          ${backendImage} | sudo ${pkgs.k3s}/bin/k3s ctr -n k8s.io images import -
-          echo "Importing dsa-frontend:${frontendImage.imageTag} ..."
-          ${frontendImage} | sudo ${pkgs.k3s}/bin/k3s ctr -n k8s.io images import -
+          echo "Importing the backend image (requires sudo) ..."
+          "$backend_image" | sudo ${pkgs.k3s}/bin/k3s ctr -n k8s.io images import -
+          echo "Importing the frontend image ..."
+          "$frontend_image" | sudo ${pkgs.k3s}/bin/k3s ctr -n k8s.io images import -
         '';
       };
     in

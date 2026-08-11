@@ -47,10 +47,9 @@
             program = "${self.packages.${system}.backend}/bin/server";
           };
         }
+        // import ./nix/backend-deps-apps.nix { inherit pkgs; }
         // import ./nix/k3s-apps.nix {
           inherit pkgs;
-          backendImage = packagesFor.${system}.backend-image;
-          frontendImage = packagesFor.${system}.frontend-image;
         }
       );
 
