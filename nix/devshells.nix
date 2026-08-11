@@ -8,6 +8,8 @@
       # backend
       go
       gopls
+      # scripts
+      nushell
       # chart
       kubernetes-helm
       kubectl

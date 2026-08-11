@@ -13,7 +13,7 @@ let
   inherit (pkgs) lib;
 
   chart = ../chart;
-  dependencyTool = ../scripts/backend-deps.sh;
+  dependencyTool = ../scripts/backend-deps.nu;
 
   toApp = drv: {
     type = "app";
@@ -116,7 +116,10 @@ let
       loadImages = pkgs.writeShellApplication {
         name = "k3s-load-images";
         meta.description = "Import the container images into the host k3s server's containerd";
-        runtimeInputs = [ pkgs.nix ];
+        runtimeInputs = [
+          pkgs.nix
+          pkgs.nushell
+        ];
         text = ''
           ${dependencyTool} refresh --repo-root "$PWD"
           backend_image=$(nix build --no-link --print-out-paths .#backend-image)
