@@ -10,9 +10,6 @@ pkgs.buildGoModule {
   src = ../backend;
   inherit vendorHash;
   env.CGO_ENABLED = 0;
-  # nix sandbox では Docker が使えないため、testcontainers を使う DB テストは
-  # skip する (-short)。DB テストは GitHub Actions の codegen-and-db-test job で回す。
-  checkFlags = [ "-short" ];
   ldflags = [
     "-s"
     "-w"

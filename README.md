@@ -78,8 +78,7 @@ devShell 内では通常の Go ワークフローも使える:
 
 ```sh
 cd backend
-go test ./...          # DB テストを含む (Docker が必要: testcontainers で PostgreSQL を起動)
-go test -short ./...   # DB テストを skip (nix sandbox の checkPhase はこちら)
+go test ./...          # 外部依存のない unit test
 ```
 
 依存を変更したら `go mod tidy` を実行する。開発向けの backend image build と
@@ -196,4 +195,4 @@ CI や手元での確認に使う。go test / vitest に加え、Helm chart の�
 
 GitHub Actions (`.github/workflows/ci.yml`) が PR と main への push で同じ `nix flake check` を実行する。Linux runner では checks にコンテナイメージ (`backend-image` / `frontend-image`) のビルドも含まれる。Nix store は [cache-nix-action](https://github.com/nix-community/cache-nix-action) で GitHub Actions cache にキャッシュされる。
 
-nix sandbox では Docker が使えないため、`nix flake check` の backend テストは `-short`(DB テスト skip)で走る。CI の `codegen-and-db-test` job が runner の Docker を使って DB テスト(testcontainers)と codegen ドリフト検査を補完する。
+PostgreSQL、Redis、実行中の backend、Ingress、frontend を必要とするテストは、ADR 0012 に従い k3s にデプロイした Helm release の公開 HTTP interface 経由で実行する。CI の `codegen-check` job は codegen ドリフト検査を実行する。

@@ -7,7 +7,7 @@
 - [CONTEXT.md](CONTEXT.md) — 用語(ubiquitous language)と Principles。**ここの用語をコード・ドキュメント全体で使う**
 - [docs/agents/coding-standards.md](docs/agents/coding-standards.md) — codegen ポリシー、テストポリシー、no-raw-colors ルール
 - [docs/agents/domain.md](docs/agents/domain.md) — ドメインモデル
-- [docs/adr/](docs/adr/) — アーキテクチャ決定(特に 0010: OpenAPI codegen、0011: seam-limited interfaces + real-DB tests)
+- [docs/adr/](docs/adr/) — アーキテクチャ決定(特に 0010: OpenAPI codegen、0011: seam-limited interfaces、0012: deployed public interface tests)
 - [docs/spec/](docs/spec/) — 仕様書。REST API は `docs/spec/openapi.yaml` が正
 
 ## 主要コマンド
@@ -18,7 +18,7 @@ cd backend && go generate ./...     # → backend/internal/api/gen.go
 cd frontend && npm run generate     # → frontend/src/api/schema.d.ts
 ./scripts/check-codegen.sh          # ドリフト検査 (CI でも実行)
 
-# backend (DB テストは Docker が必要。-short で skip)
+# backend (外部依存のない unit test)
 cd backend && go test ./...
 
 # frontend
@@ -28,4 +28,4 @@ cd frontend && npm test && npm run typecheck && npm run lint
 nix flake check
 ```
 
-backend は `DATABASE_URL` があれば起動時に migration を自動適用する。スキーマは `backend/internal/store/migrations/` の SQL が正。
+backend は `DATABASE_URL` と `REDIS_URL` を必須とし、起動時に初期接続を確認して migration を自動適用する。スキーマは `backend/internal/store/migrations/` の SQL が正。PostgreSQL、Redis、実行中の backend、Ingress、frontend を必要とするテストは、k3s にデプロイした Helm release の公開 HTTP interface 経由で実行する (ADR 0012)。
