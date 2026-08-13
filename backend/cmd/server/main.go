@@ -5,11 +5,10 @@ import (
 	"log"
 	"net"
 	"os"
+	"time"
 
-	"github.com/uptrace/bun"
-
+	"github.com/dsa-uts/dsa-project/backend/internal/app"
 	"github.com/dsa-uts/dsa-project/backend/internal/server"
-	"github.com/dsa-uts/dsa-project/backend/internal/store"
 )
 
 func main() {
@@ -18,19 +17,17 @@ func main() {
 		port = "8080"
 	}
 
-	// DATABASE_URL が無くても起動する: Helm chart にまだ PostgreSQL が無いため
-	// (デプロイ構成の変更は scaffolding の scope 外)。DB を使うエンドポイントは
-	// 500 database_unavailable を返す。
-	var db *bun.DB
-	if dsn := os.Getenv("DATABASE_URL"); dsn != "" {
-		db = store.Open(dsn)
-		if err := store.Migrate(context.Background(), db); err != nil {
-			log.Fatalf("apply migrations: %v", err)
-		}
-	} else {
-		log.Println("DATABASE_URL is not set; running without a database")
+	startupCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	datastores, err := app.ConnectDatastores(startupCtx, app.DatastoreConfig{
+		DatabaseURL: os.Getenv("DATABASE_URL"),
+		RedisURL:    os.Getenv("REDIS_URL"),
+	})
+	if err != nil {
+		log.Fatalf("initialize datastores: %v", err)
 	}
+	defer datastores.Close()
 
-	e := server.New(db)
+	e := server.New(datastores.DB)
 	log.Fatal(e.Start(net.JoinHostPort("", port)))
 }

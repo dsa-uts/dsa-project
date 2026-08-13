@@ -12,6 +12,32 @@ backend:
   replicas: 1
   resources: {}
 
+postgresql:
+  image:
+    repository: postgres
+    tag: "17.6"
+    pullPolicy: IfNotPresent
+  auth:
+    # Credentials have no usable defaults. Supply them through a private values
+    # file; values-development.yaml is only for the local development release.
+    username: ""
+    password: ""
+    database: ""
+  storage:
+    size: 1Gi
+    # Empty selects the cluster's default StorageClass.
+    storageClassName: ""
+  resources: {}
+
+redis:
+  image:
+    repository: redis
+    tag: "8.2.1"
+    pullPolicy: IfNotPresent
+  auth:
+    password: ""
+  resources: {}
+
 frontend:
   image:
     repository: dsa-frontend

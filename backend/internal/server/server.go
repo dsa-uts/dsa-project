@@ -17,9 +17,8 @@ import (
 	"github.com/dsa-uts/dsa-project/backend/internal/store"
 )
 
-// New builds the Echo instance with all routes registered. db may be nil
-// (DATABASE_URL 未設定): /health は動き、DB を使うエンドポイントは
-// 500 database_unavailable を返す。
+// New builds the Echo instance with all routes registered. Production startup
+// only calls New after both required datastores have connected successfully.
 func New(db *bun.DB) *echo.Echo {
 	e := echo.New()
 	e.HideBanner = true

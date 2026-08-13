@@ -80,6 +80,7 @@ let
         echo "Installing the Helm chart ..."
         helm upgrade --install dsa ${chart} \
           --kubeconfig "$kubeconfig" \
+          --values ${chart}/values-development.yaml \
           --set backend.image.tag="$backend_tag" \
           --set frontend.image.tag="$frontend_tag" \
           --wait --timeout 5m
