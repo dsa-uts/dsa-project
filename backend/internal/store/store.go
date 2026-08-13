@@ -15,7 +15,7 @@ import (
 	"github.com/dsa-uts/dsa-project/backend/internal/store/migrations"
 )
 
-// Open connects to PostgreSQL. DSN 例: postgres://user:pass@host:5432/db?sslmode=disable
+// Open creates a PostgreSQL handle. Callers must Ping before serving requests.
 func Open(dsn string) *bun.DB {
 	sqldb := sql.OpenDB(pgdriver.NewConnector(pgdriver.WithDSN(dsn)))
 	return bun.NewDB(sqldb, pgdialect.New())

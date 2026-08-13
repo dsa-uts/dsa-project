@@ -1,8 +1,5 @@
 apiVersion: v2
 name: dsa
-description: >-
-  DSA project online judge. Hello-world walking skeleton: frontend + backend +
-  Traefik Ingress. Datastores (PostgreSQL, Redis, OpenBao, Seaweedfs) are added
-  in later feature work.
+description: DSA project online judge application with PostgreSQL and Redis
 type: application
 version: 0.1.0

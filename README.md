@@ -72,7 +72,7 @@ nix build .#backend         # バイナリ
 nix run .#backend-image-build  # 依存 metadata を refresh してコンテナイメージをビルド
 ```
 
-`DATABASE_URL`(例: `postgres://postgres:postgres@localhost:5432/postgres?sslmode=disable`)が設定されていれば起動時に PostgreSQL へ接続し、`backend/internal/store/migrations/` の migration を自動適用する。未設定なら DB なしで起動する(DB を使うエンドポイントは 500 を返す)。
+backend は `DATABASE_URL` と `REDIS_URL` を必須とする。起動時に PostgreSQL と Redis の初期接続を確認し、`backend/internal/store/migrations/` の embedded migration を自動適用する。設定欠落または初期接続失敗時は HTTP server を起動せず終了する。
 
 devShell 内では通常の Go ワークフローも使える:
 
@@ -157,7 +157,7 @@ nix run .#k3s-down    # 停止
 
 ## デプロイ (Helm chart)
 
-frontend + backend + Traefik Ingress を `chart/` の Helm chart でデプロイする。チューニング可能な値は `chart/values.yaml` に集約されている。manifest はクラスタのノード構成を仮定しない ([ADR 0008](docs/adr/0008-topology-agnostic-manifests.md))。
+frontend + backend + PostgreSQL + Redis + Traefik Ingress を `chart/` の Helm chart でデプロイする。チューニング可能な値は `chart/values.yaml` に集約されている。manifest はクラスタのノード構成を仮定しない ([ADR 0008](docs/adr/0008-topology-agnostic-manifests.md))。development release の PostgreSQL は PVC に永続化し、Redis は非永続である。固定 credentials は `chart/values-development.yaml` にのみ置き、通常 defaults には usable な値を持たせない。
 
 k3s 環境が起動済みなら 1 コマンド:
 
@@ -181,6 +181,7 @@ helm を手動で使う場合は tag を明示する:
 nix run .#k3s-load-images
 helm upgrade --install dsa chart/ \
   --kubeconfig .k3s/kubeconfig \
+  --values chart/values-development.yaml \
   --set backend.image.tag=$(nix eval --raw .#backend-image.imageTag) \
   --set frontend.image.tag=$(nix eval --raw .#frontend-image.imageTag)
 ```
