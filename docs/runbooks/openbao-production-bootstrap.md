@@ -7,16 +7,12 @@ initialization is not.
 ## Prerequisites
 
 - A Kubernetes namespace named `openbao`.
-- Three schedulable Kubernetes nodes. The chart's required hostname
-  anti-affinity places one Raft voter on each node; a single-node production
-  cluster will intentionally leave two Pods Pending.
 - A TLS certificate whose SANs include `openbao`, `openbao.openbao`,
-  `openbao.openbao.svc`, `openbao-0.openbao-internal`,
-  `openbao-1.openbao-internal`, and `openbao-2.openbao-internal`.
+  `openbao.openbao.svc`, and `openbao-0.openbao-internal`.
 - An `openbao-server-tls` Secret in that namespace with `tls.crt`, `tls.key`, and
   `ca.crt`. This is a trust-bootstrap exception: do not attempt to store the
   OpenBao server's own TLS key in OpenBao.
-- A secure, cluster-external destination for three unseal shares and the initial
+- A secure, cluster-external destination for the unseal key and the initial
   root token. Never write the initialization output into this repository, a
   Kubernetes Secret, CI logs, or ordinary shell history.
 - `kubectl`, Helm, and Nushell, available through `nix develop`.
@@ -47,36 +43,25 @@ An exit status of 2 means uninitialized. Initialize only in that state:
 
 ```sh
 kubectl -n openbao exec -it openbao-0 -- \
-  bao operator init -key-shares=3 -key-threshold=2
+  bao operator init -key-shares=1 -key-threshold=1
 ```
 
-Immediately distribute the three shares to separate authorized custodians and
-store the initial root token offline. Do not leave terminal capture or scrollback
-containing the output unattended.
+Immediately store the unseal key and initial root token offline. Do not leave
+terminal capture or scrollback containing the output unattended.
 
 ## Unseal
 
-For every server Pod, two different custodians each enter one share. Enter the
-share only at the interactive prompt:
+Enter the unseal key only at the interactive prompt:
 
 ```sh
 kubectl -n openbao exec -it openbao-0 -- bao operator unseal
-kubectl -n openbao exec -it openbao-0 -- bao operator unseal
-kubectl -n openbao exec -it openbao-1 -- bao operator unseal
-kubectl -n openbao exec -it openbao-1 -- bao operator unseal
-kubectl -n openbao exec -it openbao-2 -- bao operator unseal
-kubectl -n openbao exec -it openbao-2 -- bao operator unseal
 ```
 
-Verify seal and Raft membership:
+Verify the server status:
 
 ```sh
 kubectl -n openbao exec openbao-0 -- bao status
-kubectl -n openbao exec openbao-0 -- bao operator raft list-peers
 ```
-
-If a follower did not join through `retry_join`, follow the OpenBao Raft join
-procedure before unsealing it; do not initialize that follower independently.
 
 ## Configure application access
 
@@ -138,8 +123,7 @@ and OpenBao KV value to the previous matching pair before restarting backend.
 
 ## Restart and recovery
 
-After a complete server restart, repeat only **Unseal**. Never run `operator init`
-against existing storage. Alert when any server is sealed, when fewer than two
-Raft voters are healthy, or when CSI mounts fail. Take encrypted Raft snapshots
-regularly, store them outside the cluster, and test restoration together with
-the TLS material and two unseal shares.
+After a server restart, repeat only **Unseal**. Never run `operator init` against
+existing storage. Alert when the server is sealed or when CSI mounts fail. Take
+encrypted Raft snapshots regularly, store them outside the cluster, and test
+restoration together with the TLS material and unseal key.

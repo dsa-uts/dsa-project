@@ -183,7 +183,7 @@ kubectl kustomize deploy/overlays/local
 kubectl kustomize deploy/overlays/production
 ```
 
-本番overlay (`deploy/overlays/production`) のimage repositoryはGHCRを指す。記載されているゼロdigestは誤デプロイを防ぐsentinelであり、本番CDがGHCRへのpushで得たbackend/frontendのdigestに一時コピー上で置き換えてからapplyする。本番OpenBaoの初期化、Shamir 3/2 unseal、初期Secret投入は [production bootstrap runbook](docs/runbooks/openbao-production-bootstrap.md) に従う。
+本番overlay (`deploy/overlays/production`) のimage repositoryはGHCRを指す。記載されているゼロdigestは誤デプロイを防ぐsentinelであり、本番CDがGHCRへのpushで得たbackend/frontendのdigestに一時コピー上で置き換えてからapplyする。本番OpenBaoの初期化、unseal、初期Secret投入は [production bootstrap runbook](docs/runbooks/openbao-production-bootstrap.md) に従う。
 
 ## flake の検査
 

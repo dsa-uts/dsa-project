@@ -6,7 +6,7 @@
 
 ## 結論
 
-**OpenBao + OpenBao CSI Provider + Secrets Store CSI Driver を採用する。** Secret の正本は OpenBao にだけ置き、Pod は専用 ServiceAccount で認証し、CSI ephemeral volume のファイルとして読む。OpenBao server は Integrated Storage (Raft) の 3 node HA を最小構成とし、永続 volume、TLS、定期 snapshot、unseal / recovery key のクラスタ外保管を必須にする。OpenBao の Helm 文書は 3 server の HA 構成を示し、Integrated Storage は第三者のストレージを必要とせず HA と backup/restore を提供する（[OpenBao Kubernetes Helm](https://openbao.org/docs/platform/k8s/helm/run/)、[Integrated Storage](https://openbao.org/docs/internals/integrated-storage/)）。
+**OpenBao + OpenBao CSI Provider + Secrets Store CSI Driver を採用する。** Secret の正本は OpenBao にだけ置き、Pod は専用 ServiceAccount で認証し、CSI ephemeral volume のファイルとして読む。OpenBao server は Integrated Storage (Raft) を使い、永続 volume、TLS、定期 snapshot、unseal key のクラスタ外保管を必須にする（[OpenBao Kubernetes Helm](https://openbao.org/docs/platform/k8s/helm/run/)、[Integrated Storage](https://openbao.org/docs/internals/integrated-storage/)）。
 
 この選択理由は、OpenBao 本体と CSI provider がともに **MPL-2.0** で、ベンダーの競合サービス条項を持たず、self-hosted k3s に必要な Kubernetes 認証、Helm 配布、CSI file mount を一つの系統で提供できるためである（[OpenBao LICENSE](https://github.com/openbao/openbao/blob/main/LICENSE)、[OpenBao CSI Provider](https://github.com/openbao/openbao-csi-provider)）。
 
@@ -61,9 +61,8 @@ Infisical は UI と開発者向け workflow を重視する場合には再評�
 1. production workload は `secretKeyRef` ではなく CSI volume file を読む。Kubernetes Secret への同期は有効化しない。
 2. workload ごとに専用 ServiceAccount、OpenBao role、最小権限 policy を作る。OpenBao CSI は requesting Pod の ServiceAccount で認証する設計である（[OpenBao CSI documentation](https://openbao.org/docs/2.5.x/platform/k8s/csi/)）。
 3. 初期導入では CSI Driver の `enableSecretRotation` を無効にし、アプリは起動時に file を一度だけ読む。静的値を変更するときはデータストア側の credential と OpenBao KV を一致させ、Pod を明示的に rollout する。将来rotationを有効にする場合は、poll interval、atomicなfile replacementの監視、再読込、接続張り直し、失敗時のold connection維持をまとめて設計する。
-4. OpenBao は application と同じ単一 node に閉じない。少なくとも 3 voter の Raft HA とし、1/2 node は quorum / failure tolerance がないことを認識する（[Integrated Storage deployment table](https://openbao.org/docs/internals/integrated-storage/)）。
-5. CSI mount は Pod 起動時に OpenBao へ到達できないと secret を取得できないため、OpenBao、DNS/network、storage、unseal を application の可用性依存として監視する（[OpenBao CSI documentation](https://openbao.org/docs/2.5.x/platform/k8s/csi/)）。
-6. 将来rotationを導入するときの受入試験は「OpenBao値更新 → mount file更新 → application reload → 新credentialで接続成功 → old credential無効化」まで行う。file timestampの変化だけをrotation成功としない。
+4. CSI mount は Pod 起動時に OpenBao へ到達できないと secret を取得できないため、OpenBao、DNS/network、storage、unseal を application の可用性依存として監視する（[OpenBao CSI documentation](https://openbao.org/docs/2.5.x/platform/k8s/csi/)）。
+5. 将来rotationを導入するときの受入試験は「OpenBao値更新 → mount file更新 → application reload → 新credentialで接続成功 → old credential無効化」まで行う。file timestampの変化だけをrotation成功としない。
 
 ## 今回の方針
 

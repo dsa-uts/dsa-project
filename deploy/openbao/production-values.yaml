@@ -27,7 +27,7 @@ server:
       readOnly: true
   ha:
     enabled: true
-    replicas: 3
+    replicas: 1
     raft:
       enabled: true
       setNodeId: true
@@ -44,13 +44,6 @@ server:
 
         storage "raft" {
           path = "/openbao/data"
-
-          retry_join {
-            leader_api_addr         = "https://openbao-0.openbao-internal:8200"
-            leader_ca_cert_file     = "/openbao/tls/ca.crt"
-            leader_client_cert_file = "/openbao/tls/tls.crt"
-            leader_client_key_file  = "/openbao/tls/tls.key"
-          }
         }
 
         service_registration "kubernetes" {}

@@ -9,9 +9,9 @@ rotation and in-process reload are deferred.
 Development runs a disposable OpenBao dev server. `k3s-deploy` installs the
 pinned Secrets Store CSI Driver and OpenBao chart, configures Kubernetes auth,
 policies and roles idempotently, and seeds known non-sensitive development
-passwords. Production runs a separate three-member Integrated Storage (Raft)
-OpenBao installation with persistent data and audit volumes and TLS. Its initial
-Shamir seal uses three key shares with a threshold of two. Unseal keys and the
+passwords. Production runs a single-server Integrated Storage (Raft) OpenBao
+installation with persistent data and audit volumes and TLS. Its initial Shamir
+seal uses one key share with a threshold of one. The unseal key and the
 initial root token are stored outside Kubernetes and OpenBao.
 
 ## Considered Options
