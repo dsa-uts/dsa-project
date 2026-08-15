@@ -13,6 +13,7 @@
       # Kubernetes manifests
       kustomize
       kubectl
+      kubernetes-helm
     ];
   };
 }

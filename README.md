@@ -156,7 +156,7 @@ nix run .#k3s-down    # 停止
 
 ## デプロイ (Kustomize)
 
-frontend + backend + PostgreSQL + Redis + Traefik Ingress の共通manifestは `deploy/base/` にあり、環境差は `deploy/overlays/` に限定する。manifestはクラスタのノード構成を仮定しない ([ADR 0008](docs/adr/0008-topology-agnostic-manifests.md))。local overlay の PostgreSQL は PVC に永続化し、Redis は非永続である。固定 credentials は local overlay にのみ置く。Helmを使わない理由とimage配送の方針は [ADR 0013](docs/adr/0013-kustomize-deployment-manifests.md) を参照。
+frontend + backend + PostgreSQL + Redis + Traefik Ingress の共通manifestは `deploy/base/` にあり、環境差は `deploy/overlays/` に限定する。manifestはクラスタのノード構成を仮定しない ([ADR 0008](docs/adr/0008-topology-agnostic-manifests.md))。local overlay の PostgreSQL は PVC に永続化し、Redis は非永続である。SecretはOpenBaoを正本とし、専用ServiceAccountで認証したworkloadへCSI fileとしてmountする ([ADR 0014](docs/adr/0014-openbao-static-secret-delivery.md))。Helmを使わない理由とアプリimage配送の方針は [ADR 0013](docs/adr/0013-kustomize-deployment-manifests.md) を参照。
 
 k3s 環境が起動済みなら 1 コマンド:
 
@@ -169,9 +169,10 @@ nix run .#k3s-deploy   # イメージ搬入 + local overlay の apply
 
 1. **イメージ搬入** (`nix run .#k3s-load-images` 単体でも実行可)
    - イメージの stream script をホストの containerd へ直接 pipe する (`sudo` が必要)
-2. **local manifest のrenderとapply** — image tagはderivation hash由来で毎ビルド変わるため、一時コピー上のlocal overlayへ現在のtagを自動注入する。Git管理されたmanifestは変更しない
-3. **rollout待機** — backend / frontend のDeploymentが完了するまで待つ
-4. 完了後にアクセス URL (`http://<node-ip>/`) を表示する
+2. **Secret基盤の収束** — version固定したSecrets Store CSI DriverとOpenBaoをHelmでinstall/upgradeし、disposableなdev serverへKubernetes auth、最小権限policy/role、既知の開発用passwordを冪等に設定する
+3. **local manifest のrenderとapply** — image tagはderivation hash由来で毎ビルド変わるため、一時コピー上のlocal overlayへ現在のtagを自動注入する。Git管理されたmanifestは変更しない
+4. **rollout待機** — backend / frontend のDeploymentが完了するまで待つ
+5. 完了後にアクセス URL (`http://<node-ip>/`) を表示する
 
 ブラウザで URL を開くと hello ページが表示され、backend の health check 結果 (`ok`) が出る。Ingress は `/health` と `/api` を backend へ、それ以外を frontend へ route する。
 
@@ -182,7 +183,7 @@ kubectl kustomize deploy/overlays/local
 kubectl kustomize deploy/overlays/production
 ```
 
-本番overlay (`deploy/overlays/production`) のimage repositoryはGHCRを指す。記載されているゼロdigestは誤デプロイを防ぐsentinelであり、本番CDがGHCRへのpushで得たbackend/frontendのdigestに一時コピー上で置き換えてからapplyする。
+本番overlay (`deploy/overlays/production`) のimage repositoryはGHCRを指す。記載されているゼロdigestは誤デプロイを防ぐsentinelであり、本番CDがGHCRへのpushで得たbackend/frontendのdigestに一時コピー上で置き換えてからapplyする。本番OpenBaoの初期化、Shamir 3/2 unseal、初期Secret投入は [production bootstrap runbook](docs/runbooks/openbao-production-bootstrap.md) に従う。
 
 ## flake の検査
 

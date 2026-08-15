@@ -19,6 +19,7 @@ spec:
         app.kubernetes.io/instance: dsa
         app.kubernetes.io/component: postgresql
     spec:
+      serviceAccountName: dsa-postgresql
       containers:
         - name: postgresql
           image: postgres:17.6
@@ -28,20 +29,11 @@ spec:
               containerPort: 5432
           env:
             - name: POSTGRES_USER
-              valueFrom:
-                secretKeyRef:
-                  name: dsa-datastore
-                  key: postgres-username
-            - name: POSTGRES_PASSWORD
-              valueFrom:
-                secretKeyRef:
-                  name: dsa-datastore
-                  key: postgres-password
+              value: dsa
+            - name: POSTGRES_PASSWORD_FILE
+              value: /run/secrets/dsa/postgres-password
             - name: POSTGRES_DB
-              valueFrom:
-                secretKeyRef:
-                  name: dsa-datastore
-                  key: postgres-database
+              value: dsa
           readinessProbe:
             exec:
               command: ["sh", "-c", "pg_isready -U \"$POSTGRES_USER\" -d \"$POSTGRES_DB\""]
@@ -53,7 +45,16 @@ spec:
             - name: data
               mountPath: /var/lib/postgresql/data
               subPath: postgres
+            - name: datastore-secrets
+              mountPath: /run/secrets/dsa
+              readOnly: true
       volumes:
         - name: data
           persistentVolumeClaim:
             claimName: dsa-postgresql
+        - name: datastore-secrets
+          csi:
+            driver: secrets-store.csi.k8s.io
+            readOnly: true
+            volumeAttributes:
+              secretProviderClass: dsa-postgresql-secrets

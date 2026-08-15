@@ -20,7 +20,8 @@ pkgs.runCommand "manifest-check"
         "kind: Deployment" \
         "kind: StatefulSet" \
         "kind: PersistentVolumeClaim" \
-        "kind: Secret" \
+        "kind: SecretProviderClass" \
+        "kind: ServiceAccount" \
         "kind: Service" \
         "kind: Ingress" \
         "name: dsa-backend" \
@@ -32,6 +33,16 @@ pkgs.runCommand "manifest-check"
           exit 1
         }
       done
+
+      if grep -qE "kind: Secret$|secretKeyRef:" "$rendered"; then
+        echo "manifest-check: Kubernetes Secret material found in $rendered" >&2
+        exit 1
+      fi
+      test "$(grep -c "driver: secrets-store.csi.k8s.io" "$rendered")" -eq 3
+      for workload in backend postgresql redis; do
+        grep -q "name: dsa-$workload-secrets" "$rendered"
+        grep -q "serviceAccountName: dsa-$workload" "$rendered"
+      done
     done
 
     grep -q "image: dsa-backend:local" local.yaml
@@ -41,8 +52,13 @@ pkgs.runCommand "manifest-check"
     grep -q "image: redis:8.2.1" local.yaml
     grep -q "storageClassName: local-path" local.yaml
     grep -q "app.kubernetes.io/instance: dsa" local.yaml
+    grep -q "secretPath: kv/data/dsa/dev/postgresql" local.yaml
+    grep -q "secretPath: kv/data/dsa/dev/redis" local.yaml
     grep -q "image: ghcr.io/dsa-uts/dsa-backend@sha256:" production.yaml
     grep -q "image: ghcr.io/dsa-uts/dsa-frontend@sha256:" production.yaml
+    grep -q "secretPath: kv/data/dsa/prod/postgresql" production.yaml
+    grep -q "secretPath: kv/data/dsa/prod/redis" production.yaml
+    grep -q "baoAddress: https://openbao.openbao.svc:8200" production.yaml
 
     render-local-manifests backend-check frontend-check > generated-local.yaml
     grep -q "image: dsa-backend:backend-check" generated-local.yaml

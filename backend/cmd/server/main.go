@@ -19,10 +19,11 @@ func main() {
 
 	startupCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	datastores, err := app.ConnectDatastores(startupCtx, app.DatastoreConfig{
-		DatabaseURL: os.Getenv("DATABASE_URL"),
-		RedisURL:    os.Getenv("REDIS_URL"),
-	})
+	datastoreConfig, err := app.LoadDatastoreConfig()
+	if err != nil {
+		log.Fatalf("load datastore configuration: %v", err)
+	}
+	datastores, err := app.ConnectDatastores(startupCtx, datastoreConfig)
 	if err != nil {
 		log.Fatalf("initialize datastores: %v", err)
 	}

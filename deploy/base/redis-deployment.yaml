@@ -18,36 +18,59 @@ spec:
         app.kubernetes.io/instance: dsa
         app.kubernetes.io/component: redis
     spec:
+      serviceAccountName: dsa-redis
+      initContainers:
+        - name: render-auth-config
+          image: redis:8.2.1
+          command: ["sh", "-eu", "-c"]
+          args:
+            - |
+              password=$(cat /run/secrets/dsa/redis-password)
+              case "$password" in
+                *[!A-Za-z0-9_-]*|'')
+                  echo "Redis password must contain only A-Z, a-z, 0-9, _ or -" >&2
+                  exit 1
+                  ;;
+              esac
+              printf 'user default on >%s ~* &* +@all\n' "$password" > /redis-auth/users.acl
+          volumeMounts:
+            - name: datastore-secrets
+              mountPath: /run/secrets/dsa
+              readOnly: true
+            - name: redis-auth
+              mountPath: /redis-auth
       containers:
         - name: redis
           image: redis:8.2.1
           imagePullPolicy: IfNotPresent
-          command: ["sh", "-c"]
-          args: ['exec redis-server --save "" --appendonly no --requirepass "$REDIS_PASSWORD"']
+          args: ["redis-server", "--save", "", "--appendonly", "no", "--aclfile", "/redis-auth/users.acl"]
           ports:
             - name: redis
               containerPort: 6379
-          env:
-            - name: REDIS_PASSWORD
-              valueFrom:
-                secretKeyRef:
-                  name: dsa-datastore
-                  key: redis-password
-            - name: REDISCLI_AUTH
-              valueFrom:
-                secretKeyRef:
-                  name: dsa-datastore
-                  key: redis-password
           readinessProbe:
             exec:
-              command: ["redis-cli", "ping"]
+              command: ["sh", "-c", "REDISCLI_AUTH=$(cat /run/secrets/dsa/redis-password) exec redis-cli ping"]
           livenessProbe:
             exec:
-              command: ["redis-cli", "ping"]
+              command: ["sh", "-c", "REDISCLI_AUTH=$(cat /run/secrets/dsa/redis-password) exec redis-cli ping"]
           resources: {}
           volumeMounts:
             - name: data
               mountPath: /data
+            - name: datastore-secrets
+              mountPath: /run/secrets/dsa
+              readOnly: true
+            - name: redis-auth
+              mountPath: /redis-auth
+              readOnly: true
       volumes:
         - name: data
+          emptyDir: {}
+        - name: datastore-secrets
+          csi:
+            driver: secrets-store.csi.k8s.io
+            readOnly: true
+            volumeAttributes:
+              secretProviderClass: dsa-redis-secrets
+        - name: redis-auth
           emptyDir: {}

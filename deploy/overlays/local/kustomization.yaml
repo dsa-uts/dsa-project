@@ -2,15 +2,7 @@ apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
   - ../../base
-secretGenerator:
-  - name: dsa-datastore
-    literals:
-      - postgres-username=dsa
-      - postgres-password=development-password
-      - postgres-database=dsa
-      - redis-password=development-password
-      - database-url=postgres://dsa:development-password@dsa-postgresql:5432/dsa?sslmode=disable
-      - redis-url=redis://:development-password@dsa-redis:6379/0
+  - secret-provider-classes.yaml
 images:
   - name: dsa-backend
     newTag: local
