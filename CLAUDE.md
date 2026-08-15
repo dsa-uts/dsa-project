@@ -1,6 +1,6 @@
 # dsa-project
 
-オンラインジャッジ Web アプリの monorepo(frontend: React + Vite + TS / backend: Go + Echo + Bun / chart: Helm)。
+オンラインジャッジ Web アプリの monorepo(frontend: React + Vite + TS / backend: Go + Echo + Bun / deploy: Kubernetes + Kustomize)。
 
 ## 必読ドキュメント
 
@@ -28,4 +28,4 @@ cd frontend && npm test && npm run typecheck && npm run lint
 nix flake check
 ```
 
-backend は `DATABASE_URL` と `REDIS_URL` を必須とし、起動時に初期接続を確認して migration を自動適用する。スキーマは `backend/internal/store/migrations/` の SQL が正。PostgreSQL、Redis、実行中の backend、Ingress、frontend を必要とするテストは、k3s にデプロイした Helm release の公開 HTTP interface 経由で実行する (ADR 0012)。
+backend は `DATABASE_URL` と `REDIS_URL` を必須とし、起動時に初期接続を確認して migration を自動適用する。スキーマは `backend/internal/store/migrations/` の SQL が正。PostgreSQL、Redis、実行中の backend、Ingress、frontend を必要とするテストは、k3s にデプロイしたアプリケーションの公開 HTTP interface 経由で実行する (ADR 0012)。

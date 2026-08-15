@@ -1,27 +1,28 @@
 apiVersion: apps/v1
 kind: StatefulSet
 metadata:
-  name: {{ include "dsa.fullname" . }}-postgresql
+  name: dsa-postgresql
   labels:
-    {{- include "dsa.labels" . | nindent 4 }}
     app.kubernetes.io/component: postgresql
 spec:
-  serviceName: {{ include "dsa.fullname" . }}-postgresql
+  serviceName: dsa-postgresql
   replicas: 1
   selector:
     matchLabels:
-      {{- include "dsa.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/name: dsa
+      app.kubernetes.io/instance: dsa
       app.kubernetes.io/component: postgresql
   template:
     metadata:
       labels:
-        {{- include "dsa.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/name: dsa
+        app.kubernetes.io/instance: dsa
         app.kubernetes.io/component: postgresql
     spec:
       containers:
         - name: postgresql
-          image: {{ .Values.postgresql.image.repository }}:{{ .Values.postgresql.image.tag }}
-          imagePullPolicy: {{ .Values.postgresql.image.pullPolicy }}
+          image: postgres:17.6
+          imagePullPolicy: IfNotPresent
           ports:
             - name: postgresql
               containerPort: 5432
@@ -29,17 +30,17 @@ spec:
             - name: POSTGRES_USER
               valueFrom:
                 secretKeyRef:
-                  name: {{ include "dsa.fullname" . }}-datastore
+                  name: dsa-datastore
                   key: postgres-username
             - name: POSTGRES_PASSWORD
               valueFrom:
                 secretKeyRef:
-                  name: {{ include "dsa.fullname" . }}-datastore
+                  name: dsa-datastore
                   key: postgres-password
             - name: POSTGRES_DB
               valueFrom:
                 secretKeyRef:
-                  name: {{ include "dsa.fullname" . }}-datastore
+                  name: dsa-datastore
                   key: postgres-database
           readinessProbe:
             exec:
@@ -47,8 +48,7 @@ spec:
           livenessProbe:
             exec:
               command: ["sh", "-c", "pg_isready -U \"$POSTGRES_USER\" -d \"$POSTGRES_DB\""]
-          resources:
-            {{- toYaml .Values.postgresql.resources | nindent 12 }}
+          resources: {}
           volumeMounts:
             - name: data
               mountPath: /var/lib/postgresql/data
@@ -56,4 +56,4 @@ spec:
       volumes:
         - name: data
           persistentVolumeClaim:
-            claimName: {{ include "dsa.fullname" . }}-postgresql
+            claimName: dsa-postgresql

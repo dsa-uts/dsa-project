@@ -1,5 +1,7 @@
 # Kubernetes (k3s) over Docker Compose
 
+The Helm-specific deployment consequence below is superseded by ADR 0013. The decision to run the platform on k3s remains accepted.
+
 The platform runs all services and sandboxes on one k3s cluster, replacing the previous two-layer design of docker compose plus a sandbox-only containerd daemon. The Judge creates sandbox Pods directly (`restartPolicy: Never`, gVisor RuntimeClass) in a dedicated namespace and executes each Step via pods/exec. Its ServiceAccount holds a Role scoped to the sandbox namespace only, so it cannot delete itself or touch service Pods. A built-in ValidatingAdmissionPolicy (CEL) restricts sandbox images to the project's GHCR org with mandatory `@sha256:` digests — the enforcement layer for Digest Pinning. This buys declarative resource control, namespace-scoped RBAC, and admission-time image policy that compose cannot express.
 
 ## Considered Options
@@ -14,4 +16,4 @@ The platform runs all services and sandboxes on one k3s cluster, replacing the p
 
 - The daemon-level separation of the sandbox-only containerd is gone: every workload shares the k3s-embedded containerd. Isolation now rests on gVisor's kernel isolation (RuntimeClass), with namespace boundaries, RBAC, NetworkPolicy, and admission policy covering the management plane.
 - This ADR originally injected Sandbox Workspaces via hostPath, which assumed the Judge and sandboxes share one node. That consequence is superseded by ADR 0008 (Topology-Agnostic Manifests): sandbox Pods use no hostPath, and the handoff mechanism is selected in ADR 0009.
-- "One-command deploy" now means installing k3s plus one Helm chart, with all tunables collected in values.yaml.
+- Superseded by ADR 0013: "one-command deploy" now means starting k3s and applying the environment's Kustomize overlay through the deployment command.

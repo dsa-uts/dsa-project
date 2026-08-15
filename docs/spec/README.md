@@ -59,8 +59,8 @@
   - 24時間稼働
 - 可搬性
   - 簡単にデプロイできる
-    - ハイパラメータは Helm chart の values.yaml に一か所にまとまっている。
-    - k3s のインストールと Helm chart 一つのインストールでデプロイが完了する (k3s 内蔵の Helm controller を使えば実質コマンド一つ)。
+    - 環境共通の設定はKustomize base、環境差はlocal / production overlayにまとまっている。
+    - k3sの起動と環境overlayの適用をデプロイコマンド一つで行える。
     - 初回起動時にのみ初期設定用 Web UI が表示され、Admin アカウントのパスワード等を指定できる。
 
 ## システム構成
@@ -140,7 +140,7 @@ flowchart LR
   - 全サービスと sandbox を同一クラスタに載せ、Namespace (services / sandbox) で分離する
   - manifest は Topology-Agnostic Manifests に従う。デプロイの既定はシングルノード (ADR 0008)
   - Traefik Ingress が TLS 終端と Frontend / Backend への振り分けを担う
-  - デプロイは Helm chart 一つで行い、設定は values.yaml に集約する
+  - デプロイはKustomize baseと環境overlayから行い、環境差をoverlayに集約する
 * sandbox: gVisor(runsc) RuntimeClass を指定した一時 Pod
   - Judge が sandbox Namespace に Pod を直接作成し (`restartPolicy: Never`)、Step を pods/exec で逐次実行して stdout / stderr / exit code を回収する
   - Judge の ServiceAccount には sandbox Namespace 限定の Role のみを与える (pods の create/get/list/watch/delete、pods/exec、pods/log)。Judge 自身の Namespace への権限は持たないため、自身や他サービスの Pod は操作できない
@@ -151,7 +151,7 @@ flowchart LR
 
 ### 技術選定
 - コンテナ基盤: k3s (containerd 内蔵、gVisor RuntimeClass)
-- デプロイ: Helm chart (設定は values.yaml に集約)
+- デプロイ: Kubernetes manifest + Kustomize (共通設定はbase、環境差はoverlay)
 - Ingress: k3s 内蔵 Traefik (TLS 終端、Frontend / Backend への振り分け)
 - フロントエンド: React (Vite) + TypeScript + TailwindCSS
 - バックエンド: Go

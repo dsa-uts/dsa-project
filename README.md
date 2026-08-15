@@ -8,7 +8,7 @@
 | --- | --- |
 | `frontend/` | Web フロントエンド(Node.js / TypeScript) |
 | `backend/` | API サーバー(Go) |
-| `chart/` | Kubernetes へデプロイするための Helm chart |
+| `deploy/` | Kubernetes manifest の Kustomize base / overlay |
 | `nix/` | nix 定義の置き場(devShell 定義など)。`flake.nix` から import される |
 | `docs/` | 仕様書(`docs/spec/`)と ADR(`docs/adr/`) |
 | `scripts/` | 開発用スクリプト(codegen ドリフト検査など) |
@@ -17,7 +17,7 @@
 
 ## 開発環境のセットアップ
 
-開発に必要なツールチェーン(Go / Node.js / Helm / kubectl)は nix flake で管理している。サポート対象は Linux(x86_64 / aarch64)である。macOS では OrbStack の Linux machine に SSH 接続し、その中でリポジトリを clone して開発する。
+開発に必要なツールチェーン(Go / Node.js / Kustomize / kubectl)は nix flake で管理している。サポート対象は Linux(x86_64 / aarch64)である。macOS では OrbStack の Linux machine に SSH 接続し、その中でリポジトリを clone して開発する。
 
 ### 1. Nix のインストール
 
@@ -41,7 +41,7 @@ experimental-features = nix-command flakes
 nix develop
 ```
 
-これで Go / Node.js / Helm / kubectl がすべて使えるシェルに入る。
+これで Go / Node.js / Kustomize / kubectl がすべて使えるシェルに入る。
 
 ### 3. direnv(推奨)
 
@@ -125,7 +125,7 @@ nix run .#backend-image-build
 
 frontend イメージは [static-web-server](https://static-web-server.net/) が `:8080` で静的ファイルを配信する。
 
-この直接 import は既定のシングルノードデプロイ前提。chart は `imagePullPolicy: IfNotPresent` なので、マルチノードクラスタでは import されていないノードで `ErrImagePull` になる。マルチノードで動かす場合はレジストリを立てて push するか、全ノードに import すること。
+この直接 import は既定のシングルノードローカル環境だけを対象とする。local overlay は `imagePullPolicy: Never` なので、マルチノードクラスタでは import されていないノードで `ErrImageNeverPull` になる。マルチノードで動かす場合はレジストリを立ててpushするか、全ノードにimportすること。本番CDはGHCRからdigest指定でpullする。
 
 ## k3s 環境 (シングルノード)
 
@@ -154,36 +154,35 @@ nix run .#k3s-down    # 停止
 - `k3s-up` は非 NixOS ホストでも動くが、systemd を前提とする
 - `k3s-down` で server を止めてもワークロードのコンテナは残り、次回起動時に再管理される
 
-## デプロイ (Helm chart)
+## デプロイ (Kustomize)
 
-frontend + backend + PostgreSQL + Redis + Traefik Ingress を `chart/` の Helm chart でデプロイする。チューニング可能な値は `chart/values.yaml` に集約されている。manifest はクラスタのノード構成を仮定しない ([ADR 0008](docs/adr/0008-topology-agnostic-manifests.md))。development release の PostgreSQL は PVC に永続化し、Redis は非永続である。固定 credentials は `chart/values-development.yaml` にのみ置き、通常 defaults には usable な値を持たせない。
+frontend + backend + PostgreSQL + Redis + Traefik Ingress の共通manifestは `deploy/base/` にあり、環境差は `deploy/overlays/` に限定する。manifestはクラスタのノード構成を仮定しない ([ADR 0008](docs/adr/0008-topology-agnostic-manifests.md))。local overlay の PostgreSQL は PVC に永続化し、Redis は非永続である。固定 credentials は local overlay にのみ置く。Helmを使わない理由とimage配送の方針は [ADR 0013](docs/adr/0013-kustomize-deployment-manifests.md) を参照。
 
 k3s 環境が起動済みなら 1 コマンド:
 
 ```sh
 nix run .#k3s-up       # 未起動の場合
-nix run .#k3s-deploy   # イメージ搬入 + helm upgrade --install
+nix run .#k3s-deploy   # イメージ搬入 + local overlay の apply
 ```
 
 `k3s-deploy` は以下を行う:
 
 1. **イメージ搬入** (`nix run .#k3s-load-images` 単体でも実行可)
    - イメージの stream script をホストの containerd へ直接 pipe する (`sudo` が必要)
-2. **helm upgrade --install** — image tag は derivation hash 由来で毎ビルド変わるため、現在の tag を `--set` で自動的に渡す
-3. 完了後にアクセス URL (`http://<node-ip>/`) を表示する
+2. **local manifest のrenderとapply** — image tagはderivation hash由来で毎ビルド変わるため、一時コピー上のlocal overlayへ現在のtagを自動注入する。Git管理されたmanifestは変更しない
+3. **rollout待機** — backend / frontend のDeploymentが完了するまで待つ
+4. 完了後にアクセス URL (`http://<node-ip>/`) を表示する
 
 ブラウザで URL を開くと hello ページが表示され、backend の health check 結果 (`ok`) が出る。Ingress は `/health` と `/api` を backend へ、それ以外を frontend へ route する。
 
-helm を手動で使う場合は tag を明示する:
+追跡されているlocal / production overlayの静的なrender結果は次で確認できる。localの実際のNix hash tag注入は`k3s-deploy`が一時コピー上で行う:
 
 ```sh
-nix run .#k3s-load-images
-helm upgrade --install dsa chart/ \
-  --kubeconfig .k3s/kubeconfig \
-  --values chart/values-development.yaml \
-  --set backend.image.tag=$(nix eval --raw .#backend-image.imageTag) \
-  --set frontend.image.tag=$(nix eval --raw .#frontend-image.imageTag)
+kubectl kustomize deploy/overlays/local
+kubectl kustomize deploy/overlays/production
 ```
+
+本番overlay (`deploy/overlays/production`) のimage repositoryはGHCRを指す。記載されているゼロdigestは誤デプロイを防ぐsentinelであり、本番CDがGHCRへのpushで得たbackend/frontendのdigestに一時コピー上で置き換えてからapplyする。
 
 ## flake の検査
 
@@ -191,8 +190,8 @@ helm upgrade --install dsa chart/ \
 nix flake check
 ```
 
-CI や手元での確認に使う。go test / vitest に加え、Helm chart の静的検証 (`helm lint` / `helm template`、`nix/chart-check.nix`) もここで走る。全サポートシステム分を評価する場合は `nix flake check --all-systems`。
+CI や手元での確認に使う。go test / vitest に加え、local / production Kustomize overlayと動的なローカルtag注入の静的検証 (`nix/manifest-check.nix`) もここで走る。全サポートシステム分を評価する場合は `nix flake check --all-systems`。
 
 GitHub Actions (`.github/workflows/ci.yml`) が PR と main への push で同じ `nix flake check` を実行する。Linux runner では checks にコンテナイメージ (`backend-image` / `frontend-image`) のビルドも含まれる。Nix store は [cache-nix-action](https://github.com/nix-community/cache-nix-action) で GitHub Actions cache にキャッシュされる。
 
-PostgreSQL、Redis、実行中の backend、Ingress、frontend を必要とするテストは、ADR 0012 に従い k3s にデプロイした Helm release の公開 HTTP interface 経由で実行する。CI の `codegen-check` job は codegen ドリフト検査を実行する。
+PostgreSQL、Redis、実行中の backend、Ingress、frontend を必要とするテストは、ADR 0012 に従い k3s にデプロイしたアプリケーションの公開 HTTP interface 経由で実行する。CI の `codegen-check` job は codegen ドリフト検査を実行する。

@@ -144,7 +144,7 @@ Kubernetes 公式([Images](https://kubernetes.io/docs/concepts/containers/images
 1. kubelet / containerd のキャッシュ: `IfNotPresent` では同名タグが既にあれば新イメージを見に行かない(registry なし運用では import が「pull」の代替なので、import し直せば containerd 内のタグは差し替わるが、既存 Pod は古いイメージのまま動き続ける)。
 2. **より本質的な罠**: Deployment は「rollout is triggered if and only if the Deployment's Pod template (that is, `.spec.template`) is changed」([Deployment docs](https://kubernetes.io/docs/concepts/workloads/controllers/deployment/#updating-a-deployment))。固定タグだと manifest が変わらないため、**import し直しても rollout 自体が起きない**。`kubectl rollout restart` を毎回手で打つ運用になる。
 
-**推奨**: dockerTools の nix hash タグ(`imageTag`)を Helm chart / manifest の `image:` に流し込み、**デプロイのたびにタグが変わる**ようにする。これなら `.spec.template` が変わって rollout が自然に走り、`imagePullPolicy: IfNotPresent`(特定タグの既定値)のままで registry への pull も発生しない。registry が本当に存在しない環境では、タグ解決に行かないことを保証する `Never` も選べるが、`IfNotPresent` + import 済みで実用上十分。
+**推奨**: dockerTools の nix hash タグ(`imageTag`)をローカルKustomize overlayの `image:` に流し込み、**デプロイのたびにタグが変わる**ようにする。これなら `.spec.template` が変わって rollout が自然に走る。直接importするローカル環境では、registryへ問い合わせないことを保証する `imagePullPolicy: Never` を使う。本番CDはGHCRへpushしたimageをdigest指定で参照する (ADR 0013)。
 
 ## 論点 4: CI 統合と Dockerfile 方式との比較
 

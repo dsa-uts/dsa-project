@@ -1,26 +1,27 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: {{ include "dsa.fullname" . }}-backend
+  name: dsa-backend
   labels:
-    {{- include "dsa.labels" . | nindent 4 }}
     app.kubernetes.io/component: backend
 spec:
-  replicas: {{ .Values.backend.replicas }}
+  replicas: 1
   selector:
     matchLabels:
-      {{- include "dsa.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/name: dsa
+      app.kubernetes.io/instance: dsa
       app.kubernetes.io/component: backend
   template:
     metadata:
       labels:
-        {{- include "dsa.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/name: dsa
+        app.kubernetes.io/instance: dsa
         app.kubernetes.io/component: backend
     spec:
       containers:
         - name: backend
-          image: {{ .Values.backend.image.repository }}:{{ required "backend.image.tag is required (nix run .#k3s-deploy が現在の tag を渡す)" .Values.backend.image.tag }}
-          imagePullPolicy: {{ .Values.backend.image.pullPolicy }}
+          image: dsa-backend:required
+          imagePullPolicy: IfNotPresent
           ports:
             - name: http
               containerPort: 8080
@@ -28,12 +29,12 @@ spec:
             - name: DATABASE_URL
               valueFrom:
                 secretKeyRef:
-                  name: {{ include "dsa.fullname" . }}-datastore
+                  name: dsa-datastore
                   key: database-url
             - name: REDIS_URL
               valueFrom:
                 secretKeyRef:
-                  name: {{ include "dsa.fullname" . }}-datastore
+                  name: dsa-datastore
                   key: redis-url
           readinessProbe:
             httpGet:
@@ -43,5 +44,4 @@ spec:
             httpGet:
               path: /health
               port: http
-          resources:
-            {{- toYaml .Values.backend.resources | nindent 12 }}
+          resources: {}

@@ -10,7 +10,7 @@ import (
 
 // Handler implements the generated StrictServerInterface.
 type Handler struct {
-	// nil のときは DB 未接続 (DATABASE_URL 未設定)。chart に PostgreSQL が
+	// nil のときは DB 未接続 (DATABASE_URL 未設定)。manifest に PostgreSQL が
 	// 入るまでの scaffolding 期の妥協で、DB を使う操作は 500 を返す。
 	greetings *store.GreetingStore
 }

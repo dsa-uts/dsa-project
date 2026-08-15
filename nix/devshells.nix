@@ -10,8 +10,8 @@
       gopls
       # scripts
       nushell
-      # chart
-      kubernetes-helm
+      # Kubernetes manifests
+      kustomize
       kubectl
     ];
   };
