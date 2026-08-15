@@ -2,7 +2,7 @@
 
 def bao-exec [namespace: string, pod: string, token: string, ...args: string] {
   let command = [kubectl --namespace $namespace exec -i $pod -- sh -c
-    'IFS= read -r BAO_TOKEN; export BAO_TOKEN; shift; exec bao "$@"' sh]
+    'IFS= read -r BAO_TOKEN; export BAO_TOKEN; exec bao "$@"' sh]
     | append $args
   let result = $'($token)(char newline)'
     | run-external ...$command
@@ -18,7 +18,7 @@ def bao-exec [namespace: string, pod: string, token: string, ...args: string] {
 def write-policy [namespace: string, pod: string, token: string, name: string, policy: string] {
   let input = [$token $policy] | str join (char newline)
   let command = [kubectl --namespace $namespace exec -i $pod -- sh -c
-    'IFS= read -r BAO_TOKEN; export BAO_TOKEN; shift; exec bao "$@"'
+    'IFS= read -r BAO_TOKEN; export BAO_TOKEN; exec bao "$@"'
     sh policy write $name -]
   let result = $input
     | run-external ...$command
