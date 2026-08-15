@@ -18,7 +18,7 @@ func main() {
 		port = "8080"
 	}
 
-	// DATABASE_URL が無くても起動する: Helm chart にまだ PostgreSQL が無いため
+	// DATABASE_URL が無くても起動する: deployment manifest にまだ PostgreSQL が無いため
 	// (デプロイ構成の変更は scaffolding の scope 外)。DB を使うエンドポイントは
 	// 500 database_unavailable を返す。
 	var db *bun.DB

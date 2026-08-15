@@ -1,12 +1,14 @@
 # Topology-Agnostic Manifests, Single-Node Default Deployment
 
-We considered splitting the cluster into a control-plane node plus worker node(s), then retracted it. Deployment targets provide a single Linux machine, so the default deployment is one single-node k3s cluster running directly on that host. Separately from how we deploy, the application manifests (Helm chart) must not assume any cluster topology: the platform must run unchanged on a multi-node cluster, and no mechanism may depend on two Pods sharing a node. This retires hostPath-based Sandbox Workspace injection even on single-node deployments.
+ADR 0013 replaces the Helm packaging described below with Kustomize overlays. The topology-agnostic manifest decision remains accepted.
+
+We considered splitting the cluster into a control-plane node plus worker node(s), then retracted it. Deployment targets provide a single Linux machine, so the default deployment is one single-node k3s cluster running directly on that host. Separately from how we deploy, the application manifests must not assume any cluster topology: the platform must run unchanged on a multi-node cluster, and no mechanism may depend on two Pods sharing a node. This retires hostPath-based Sandbox Workspace injection even on single-node deployments.
 
 ## Considered Options
 
 - Separate control plane and worker nodes on the single machine. Enables a dedicated, tainted sandbox node as a stronger separation path, but adds management overhead without adding a physical isolation boundary.
-- Single-node deployment with manifests that assume node co-location (status quo per ADR 0005). Simplest, but couples the chart to one cluster shape; it would break on any multi-node cluster.
-- Single-node default deployment with topology-agnostic manifests (chosen). Deployment stays "install k3s, install one Helm chart" while the chart stays portable to multi-node clusters.
+- Single-node deployment with manifests that assume node co-location (status quo per ADR 0005). Simplest, but couples the manifests to one cluster shape; it would break on any multi-node cluster.
+- Single-node default deployment with topology-agnostic manifests (chosen). Deployment stays one command while the manifests remain portable to multi-node clusters.
 
 ## Consequences
 

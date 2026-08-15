@@ -1,6 +1,8 @@
 # Deployed Public Interface Tests
 
-Tests that need PostgreSQL, Redis, or a running backend execute against an isolated Helm release on k3s and observe only the deployed public HTTP interface, including browser-visible behavior. Pure logic keeps dependency-free unit tests, but testcontainers and tests that assemble the server in-process are retired so local development and CI exercise the same chart, images, migrations, routing, and datastore integration.
+ADR 0013 replaces the Helm release and Helm Test mechanism described below with an isolated namespace and an ordinary Kubernetes test Job. The deployed public-interface test seam remains accepted.
+
+Tests that need PostgreSQL, Redis, or a running backend execute in an isolated namespace on k3s and observe only the deployed public HTTP interface, including browser-visible behavior. Pure logic keeps dependency-free unit tests, but testcontainers and tests that assemble the server in-process are retired so local development and CI exercise the same manifests, images, migrations, routing, and datastore integration.
 
 This ADR supersedes only the real-database and in-process HTTP test strategy from ADR 0011. ADR 0011's seam-limited interface decision remains in effect: store types stay concrete, and repository interfaces are not introduced solely for testing.
 
@@ -11,6 +13,6 @@ This ADR supersedes only the real-database and in-process HTTP test strategy fro
 
 ## Consequences
 
-- Local tests use host k3s and CI uses k3d, but both run the same Helm chart and Helm Test image; only cluster provisioning and image import differ.
-- Each run uses an isolated test namespace and release. PostgreSQL and Redis are test infrastructure, not mocks, and test state is created through the public interface.
+- Local tests use host k3s and CI uses k3d, but both run the same Kustomize base and Kubernetes test Job image; only the overlay, cluster provisioning, and image delivery differ.
+- Each run uses an isolated test namespace. PostgreSQL and Redis are test infrastructure, not mocks, and test state is created through the public interface.
 - Tests that require the deployed system are slower than in-process tests, so only pure dependency-free behavior remains in the fast unit-test suite.

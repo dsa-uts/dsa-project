@@ -1,13 +1,13 @@
 apiVersion: v1
 kind: Service
 metadata:
-  name: {{ include "dsa.fullname" . }}-frontend
+  name: dsa-frontend
   labels:
-    {{- include "dsa.labels" . | nindent 4 }}
     app.kubernetes.io/component: frontend
 spec:
   selector:
-    {{- include "dsa.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/name: dsa
+    app.kubernetes.io/instance: dsa
     app.kubernetes.io/component: frontend
   ports:
     - name: http

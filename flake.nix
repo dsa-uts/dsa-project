@@ -1,5 +1,5 @@
 {
-  description = "DSA project monorepo (online judge): frontend / backend / chart";
+  description = "DSA project monorepo (online judge): frontend / backend / Kubernetes manifests";
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
@@ -54,12 +54,12 @@
       );
 
       # checks は packages から合成する。go test / vitest は各 derivation の checkPhase で走る。
-      # chart-check は helm lint / template によるオフライン検証。
+      # manifest-check は Kustomize overlay のオフライン検証。
       checks = eachSystem (
         pkgs:
         packagesFor.${pkgs.stdenv.hostPlatform.system}
         // {
-          chart = import ./nix/chart-check.nix { inherit pkgs; };
+          manifests = import ./nix/manifest-check.nix { inherit pkgs; };
         }
       );
     };

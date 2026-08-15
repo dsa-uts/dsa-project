@@ -1,6 +1,6 @@
 # dsa-project
 
-オンラインジャッジ Web アプリの monorepo(frontend: React + Vite + TS / backend: Go + Echo + Bun / chart: Helm)。
+オンラインジャッジ Web アプリの monorepo(frontend: React + Vite + TS / backend: Go + Echo + Bun / deploy: Kubernetes + Kustomize)。
 
 ## 必読ドキュメント
 

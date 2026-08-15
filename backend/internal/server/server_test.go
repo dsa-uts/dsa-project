@@ -108,7 +108,7 @@ func TestHelloValidationError(t *testing.T) {
 	}
 }
 
-// DATABASE_URL 未設定で起動した場合 (chart に PostgreSQL が無い scaffolding 期の妥協) の挙動。
+// DATABASE_URL 未設定で起動した場合 (manifest に PostgreSQL が無い scaffolding 期の妥協) の挙動。
 func TestHelloDatabaseUnavailable(t *testing.T) {
 	e := server.New(nil)
 	rec := do(e, http.MethodGet, "/api/hello", "")

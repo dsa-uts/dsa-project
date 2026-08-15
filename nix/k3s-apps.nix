@@ -4,7 +4,7 @@
 #   (dsa-k3s) として起動・停止する。
 # - k3s-load-images: dockerTools でビルドしたイメージをクラスタへ搬入する。
 #   stream script をホストの containerd へ直接 pipe する。
-# - k3s-deploy: k3s-load-images した上で Helm chart (chart/) を install する。
+# - k3s-deploy: k3s-load-images した上でローカル用 Kustomize overlay を apply する。
 #
 # どれも状態は state dir (既定: $PWD/.k3s、DSA_K3S_STATE_DIR で変更可) に置き、
 # k3s-up 完了後は state dir 直下の kubeconfig で kubectl が使える。
@@ -12,8 +12,9 @@
 let
   inherit (pkgs) lib;
 
-  chart = ../chart;
+  manifests = ../deploy;
   dependencyTool = ../scripts/backend-deps.nu;
+  renderLocalManifests = import ./render-local-manifests.nix { inherit pkgs manifests; };
 
   toApp = drv: {
     type = "app";
@@ -50,16 +51,15 @@ let
     echo "  export KUBECONFIG=$state_dir/kubeconfig"
   '';
 
-  # イメージ搬入後に chart を helm install し、アクセス URL を表示する。
-  # image tag は derivation hash 由来で毎ビルド変わり得るため、この app が
-  # 現在の tag を --set で values に渡す (chart/values.yaml 参照)。
+  # イメージ搬入後にローカル用 manifest を apply し、アクセス URL を表示する。
+  # image tag は derivation hash 由来で毎ビルド変わり得るため、一時的に render
+  # した manifest へ現在の tag を注入して Deployment の rollout を起こす。
   mkDeploy =
     loadImages:
     pkgs.writeShellApplication {
       name = "k3s-deploy";
-      meta.description = "Load the container images and install the Helm chart onto the k3s cluster";
+      meta.description = "Load the container images and apply the local Kubernetes manifests";
       runtimeInputs = with pkgs; [
-        kubernetes-helm
         kubectl
         coreutils
         nix
@@ -77,12 +77,13 @@ let
         backend_tag=$(nix eval --raw .#backend-image.imageTag)
         frontend_tag=$(nix eval --raw .#frontend-image.imageTag)
 
-        echo "Installing the Helm chart ..."
-        helm upgrade --install dsa ${chart} \
-          --kubeconfig "$kubeconfig" \
-          --set backend.image.tag="$backend_tag" \
-          --set frontend.image.tag="$frontend_tag" \
-          --wait --timeout 5m
+        echo "Applying the local Kubernetes manifests ..."
+        ${lib.getExe renderLocalManifests} "$backend_tag" "$frontend_tag" \
+          | kubectl --kubeconfig "$kubeconfig" apply -f -
+        kubectl --kubeconfig "$kubeconfig" rollout status \
+          deployment/dsa-backend --timeout=5m
+        kubectl --kubeconfig "$kubeconfig" rollout status \
+          deployment/dsa-frontend --timeout=5m
 
         node_ip=$(kubectl --kubeconfig "$kubeconfig" get nodes \
           -o jsonpath='{.items[0].status.addresses[?(@.type=="InternalIP")].address}')
