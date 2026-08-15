@@ -1,28 +1,44 @@
-package app_test
+package config
 
 import (
 	"net/url"
+	"os"
+	"path/filepath"
 	"testing"
-
-	"github.com/dsa-uts/dsa-project/backend/internal/app"
 )
 
-func TestBuildDatastoreConfigEscapesConnectionSettings(t *testing.T) {
-	cfg := app.BuildDatastoreConfig(
-		app.PostgreSQLConnectionSettings{
-			Host:     "dsa-postgresql",
-			Port:     "5432",
-			User:     "dsa user",
-			Database: "dsa/database",
-			Password: "postgres p@ssword",
-		},
-		app.RedisConnectionSettings{
-			Host:     "dsa-redis",
-			Port:     "6379",
-			Database: "2",
-			Password: "redis p@ssword",
-		},
-	)
+func TestLoad(t *testing.T) {
+	secretDirectory := t.TempDir()
+	databasePasswordPath := filepath.Join(secretDirectory, "postgres-password")
+	redisPasswordPath := filepath.Join(secretDirectory, "redis-password")
+	if err := os.WriteFile(databasePasswordPath, []byte("postgres p@ssword\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(redisPasswordPath, []byte("redis p@ssword\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	for name, value := range map[string]string{
+		"DATABASE_HOST":          "dsa-postgresql",
+		"DATABASE_PORT":          "5432",
+		"DATABASE_USER":          "dsa user",
+		"DATABASE_NAME":          "dsa/database",
+		"DATABASE_PASSWORD_FILE": databasePasswordPath,
+		"REDIS_HOST":             "dsa-redis",
+		"REDIS_PORT":             "6379",
+		"REDIS_DATABASE":         "2",
+		"REDIS_PASSWORD_FILE":    redisPasswordPath,
+	} {
+		t.Setenv(name, value)
+	}
+
+	cfg, err := load()
+	if err != nil {
+		t.Fatalf("load configuration: %v", err)
+	}
+	if cfg.Port != "8080" {
+		t.Errorf("Port = %q, want %q", cfg.Port, "8080")
+	}
 
 	postgresURL, err := url.Parse(cfg.DatabaseURL)
 	if err != nil {

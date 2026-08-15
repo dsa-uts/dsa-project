@@ -71,9 +71,6 @@ nix run .#backend           # サーバー起動 (PORT 環境変数で変更可�
 nix build .#backend         # バイナリ
 nix run .#backend-image-build  # 依存 metadata を refresh してコンテナイメージをビルド
 ```
-
-backend は `DATABASE_URL` と `REDIS_URL` を必須とする。起動時に PostgreSQL と Redis の初期接続を確認し、`backend/internal/store/migrations/` の embedded migration を自動適用する。設定欠落または初期接続失敗時は HTTP server を起動せず終了する。
-
 devShell 内では通常の Go ワークフローも使える:
 
 ```sh
