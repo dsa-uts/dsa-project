@@ -153,8 +153,6 @@ nix run .#k3s-down    # 停止
 
 ## デプロイ (Kustomize)
 
-frontend + backend + PostgreSQL + Redis + Traefik Ingress の共通manifestは `deploy/base/` にあり、環境差は `deploy/overlays/` に限定する。manifestはクラスタのノード構成を仮定しない ([ADR 0008](docs/adr/0008-topology-agnostic-manifests.md))。local overlay の PostgreSQL は PVC に永続化し、Redis は非永続である。SecretはOpenBaoを正本とし、専用ServiceAccountで認証したworkloadへCSI fileとしてmountする ([ADR 0014](docs/adr/0014-openbao-static-secret-delivery.md))。Helmを使わない理由とアプリimage配送の方針は [ADR 0013](docs/adr/0013-kustomize-deployment-manifests.md) を参照。
-
 k3s 環境が起動済みなら 1 コマンド:
 
 ```sh
