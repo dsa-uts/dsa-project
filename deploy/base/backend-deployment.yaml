@@ -18,6 +18,7 @@ spec:
         app.kubernetes.io/instance: dsa
         app.kubernetes.io/component: backend
     spec:
+      serviceAccountName: dsa-backend
       containers:
         - name: backend
           image: dsa-backend:required
@@ -26,16 +27,24 @@ spec:
             - name: http
               containerPort: 8080
           env:
-            - name: DATABASE_URL
-              valueFrom:
-                secretKeyRef:
-                  name: dsa-datastore
-                  key: database-url
-            - name: REDIS_URL
-              valueFrom:
-                secretKeyRef:
-                  name: dsa-datastore
-                  key: redis-url
+            - name: DATABASE_HOST
+              value: dsa-postgresql
+            - name: DATABASE_PORT
+              value: "5432"
+            - name: DATABASE_USER
+              value: dsa
+            - name: DATABASE_NAME
+              value: dsa
+            - name: DATABASE_PASSWORD_FILE
+              value: /run/secrets/dsa/postgres-password
+            - name: REDIS_HOST
+              value: dsa-redis
+            - name: REDIS_PORT
+              value: "6379"
+            - name: REDIS_DATABASE
+              value: "0"
+            - name: REDIS_PASSWORD_FILE
+              value: /run/secrets/dsa/redis-password
           readinessProbe:
             httpGet:
               path: /health
@@ -45,3 +54,14 @@ spec:
               path: /health
               port: http
           resources: {}
+          volumeMounts:
+            - name: datastore-secrets
+              mountPath: /run/secrets/dsa
+              readOnly: true
+      volumes:
+        - name: datastore-secrets
+          csi:
+            driver: secrets-store.csi.k8s.io
+            readOnly: true
+            volumeAttributes:
+              secretProviderClass: dsa-backend-secrets

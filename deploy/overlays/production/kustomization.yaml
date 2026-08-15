@@ -2,17 +2,7 @@ apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
   - ../../base
-# CD は apply 前の一時コピーで、これらの sentinel credentials を本番用の値に
-# 置き換える。固定値のままではデータストアへ接続できない。
-secretGenerator:
-  - name: dsa-datastore
-    literals:
-      - postgres-username=required
-      - postgres-password=required
-      - postgres-database=required
-      - redis-password=required
-      - database-url=required
-      - redis-url=required
+  - secret-provider-classes.yaml
 # CD は apply 前の一時コピーで、この存在しない sentinel digest を GHCR が返した
 # digest に置き換える。固定値のままでは誤って latest をデプロイしない。
 images:

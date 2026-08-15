@@ -1,0 +1,17 @@
+global:
+  tlsDisable: true
+
+injector:
+  enabled: false
+
+server:
+  dev:
+    enabled: true
+    devRootToken: development-root-token
+  dataStorage:
+    enabled: false
+
+csi:
+  enabled: true
+  agent:
+    enabled: false

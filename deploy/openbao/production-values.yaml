@@ -1,0 +1,67 @@
+global:
+  tlsDisable: false
+
+injector:
+  enabled: false
+
+server:
+  podManagementPolicy: Parallel
+  dataStorage:
+    enabled: true
+    size: 10Gi
+    storageClass: local-path
+    persistentVolumeClaimRetentionPolicy:
+      whenDeleted: Retain
+      whenScaled: Retain
+  auditStorage:
+    enabled: true
+    size: 10Gi
+    storageClass: local-path
+  volumes:
+    - name: server-tls
+      secret:
+        secretName: openbao-server-tls
+  volumeMounts:
+    - name: server-tls
+      mountPath: /openbao/tls
+      readOnly: true
+  ha:
+    enabled: true
+    replicas: 1
+    raft:
+      enabled: true
+      setNodeId: true
+      config: |
+        ui = false
+
+        listener "tcp" {
+          address            = "[::]:8200"
+          cluster_address    = "[::]:8201"
+          tls_cert_file      = "/openbao/tls/tls.crt"
+          tls_key_file       = "/openbao/tls/tls.key"
+          tls_client_ca_file = "/openbao/tls/ca.crt"
+        }
+
+        storage "raft" {
+          path = "/openbao/data"
+        }
+
+        service_registration "kubernetes" {}
+
+csi:
+  enabled: true
+  agent:
+    enabled: false
+  volumes:
+    - name: server-ca
+      secret:
+        secretName: openbao-server-tls
+        items:
+          - key: ca.crt
+            path: ca.crt
+  volumeMounts:
+    - name: server-ca
+      mountPath: /openbao/tls
+      readOnly: true
+  extraArgs:
+    - -openbao-tls-ca-cert=/openbao/tls/ca.crt

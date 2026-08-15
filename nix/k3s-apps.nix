@@ -14,6 +14,8 @@ let
 
   manifests = ../deploy;
   dependencyTool = ../scripts/backend-deps.nu;
+  openbaoInstall = ../scripts/openbao-install.nu;
+  openbaoConfigure = ../scripts/openbao-configure.nu;
   renderLocalManifests = import ./render-local-manifests.nix { inherit pkgs manifests; };
 
   toApp = drv: {
@@ -61,8 +63,10 @@ let
       meta.description = "Load the container images and apply the local Kubernetes manifests";
       runtimeInputs = with pkgs; [
         kubectl
+        kubernetes-helm
         coreutils
         nix
+        nushell
       ];
       text = ''
         ${stateDirSnippet}
@@ -73,6 +77,11 @@ let
         fi
 
         ${lib.getExe loadImages}
+
+        export KUBECONFIG="$kubeconfig"
+        echo "Installing and configuring local OpenBao ..."
+        ${pkgs.nushell}/bin/nu ${openbaoInstall} dev
+        ${pkgs.nushell}/bin/nu ${openbaoConfigure} dev
 
         backend_tag=$(nix eval --raw .#backend-image.imageTag)
         frontend_tag=$(nix eval --raw .#frontend-image.imageTag)

@@ -4,24 +4,23 @@ import (
 	"context"
 	"log"
 	"net"
-	"os"
 	"time"
 
 	"github.com/dsa-uts/dsa-project/backend/internal/app"
+	"github.com/dsa-uts/dsa-project/backend/internal/config"
 	"github.com/dsa-uts/dsa-project/backend/internal/server"
 )
 
 func main() {
-	port := os.Getenv("PORT")
-	if port == "" {
-		port = "8080"
-	}
-
 	startupCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
+	cfg, err := config.Get()
+	if err != nil {
+		log.Fatalf("load configuration: %v", err)
+	}
 	datastores, err := app.ConnectDatastores(startupCtx, app.DatastoreConfig{
-		DatabaseURL: os.Getenv("DATABASE_URL"),
-		RedisURL:    os.Getenv("REDIS_URL"),
+		DatabaseURL: cfg.DatabaseURL,
+		RedisURL:    cfg.RedisURL,
 	})
 	if err != nil {
 		log.Fatalf("initialize datastores: %v", err)
@@ -29,5 +28,5 @@ func main() {
 	defer datastores.Close()
 
 	e := server.New(datastores.DB)
-	log.Fatal(e.Start(net.JoinHostPort("", port)))
+	log.Fatal(e.Start(net.JoinHostPort("", cfg.Port)))
 }
