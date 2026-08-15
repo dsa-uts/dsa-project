@@ -62,10 +62,8 @@ jobs:
       - name: Build container images
         run: nix build -L .#backend-image .#frontend-image
 
-  # nix sandbox では Docker が使えないため、flake check から漏れるものをここで回す:
-  # - codegen ドリフト検査 (openapi.yaml と生成コードの同期、ADR 0010)
-  # - testcontainers を使う backend の DB テスト (runner の Docker を使う、ADR 0011)
-  codegen-and-db-test:
+  # openapi.yaml と生成コードの同期を検査する (ADR 0010)。
+  codegen-check:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
@@ -92,6 +90,3 @@ jobs:
 
       - name: Check codegen drift
         run: nix develop -c ./scripts/check-codegen.sh
-
-      - name: Backend tests (with real PostgreSQL via testcontainers)
-        run: nix develop -c bash -c 'cd backend && go test ./...'

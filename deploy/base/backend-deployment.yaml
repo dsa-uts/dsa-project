@@ -25,6 +25,17 @@ spec:
           ports:
             - name: http
               containerPort: 8080
+          env:
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: dsa-datastore
+                  key: database-url
+            - name: REDIS_URL
+              valueFrom:
+                secretKeyRef:
+                  name: dsa-datastore
+                  key: redis-url
           readinessProbe:
             httpGet:
               path: /health

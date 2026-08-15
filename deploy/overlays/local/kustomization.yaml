@@ -2,6 +2,15 @@ apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
   - ../../base
+secretGenerator:
+  - name: dsa-datastore
+    literals:
+      - postgres-username=dsa
+      - postgres-password=development-password
+      - postgres-database=dsa
+      - redis-password=development-password
+      - database-url=postgres://dsa:development-password@dsa-postgresql:5432/dsa?sslmode=disable
+      - redis-url=redis://:development-password@dsa-redis:6379/0
 images:
   - name: dsa-backend
     newTag: local
@@ -10,7 +19,15 @@ images:
 patches:
   - target:
       kind: Deployment
+      name: dsa-(backend|frontend)
     patch: |-
       - op: replace
         path: /spec/template/spec/containers/0/imagePullPolicy
         value: Never
+  - target:
+      kind: PersistentVolumeClaim
+      name: dsa-postgresql
+    patch: |-
+      - op: add
+        path: /spec/storageClassName
+        value: local-path

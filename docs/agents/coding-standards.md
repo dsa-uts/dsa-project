@@ -11,7 +11,7 @@
 - 再生成コマンド(生成物はコミットする):
   - backend: `cd backend && go generate ./...`
   - frontend: `cd frontend && npm run generate`
-- spec と生成コードのドリフトは `scripts/check-codegen.sh` が検出する(CI の `codegen-and-db-test` job でも実行)。openapi.yaml を変更したら両側を再生成してからコミットすること。
+- spec と生成コードのドリフトは `scripts/check-codegen.sh` が検出する(CI の `codegen-check` job でも実行)。openapi.yaml を変更したら両側を再生成してからコミットすること。
 - backend のハンドラは `StrictServerInterface` の実装として書く。リクエストの形式検証(422)は kin-openapi middleware が spec から自動で行うため、ハンドラ内に手書きの形式チェックを重複させない。
 
 ## DB スキーマと migration

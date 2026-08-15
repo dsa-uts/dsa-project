@@ -72,14 +72,13 @@ nix build .#backend         # バイナリ
 nix run .#backend-image-build  # 依存 metadata を refresh してコンテナイメージをビルド
 ```
 
-`DATABASE_URL`(例: `postgres://postgres:postgres@localhost:5432/postgres?sslmode=disable`)が設定されていれば起動時に PostgreSQL へ接続し、`backend/internal/store/migrations/` の migration を自動適用する。未設定なら DB なしで起動する(DB を使うエンドポイントは 500 を返す)。
+backend は `DATABASE_URL` と `REDIS_URL` を必須とする。起動時に PostgreSQL と Redis の初期接続を確認し、`backend/internal/store/migrations/` の embedded migration を自動適用する。設定欠落または初期接続失敗時は HTTP server を起動せず終了する。
 
 devShell 内では通常の Go ワークフローも使える:
 
 ```sh
 cd backend
-go test ./...          # DB テストを含む (Docker が必要: testcontainers で PostgreSQL を起動)
-go test -short ./...   # DB テストを skip (nix sandbox の checkPhase はこちら)
+go test ./...          # 外部依存のない unit test
 ```
 
 依存を変更したら `go mod tidy` を実行する。開発向けの backend image build と
@@ -157,7 +156,7 @@ nix run .#k3s-down    # 停止
 
 ## デプロイ (Kustomize)
 
-frontend + backend + Traefik Ingress の共通manifestは `deploy/base/` にあり、環境差は `deploy/overlays/` に限定する。manifestはクラスタのノード構成を仮定しない ([ADR 0008](docs/adr/0008-topology-agnostic-manifests.md))。Helmを使わない理由とimage配送の方針は [ADR 0013](docs/adr/0013-kustomize-deployment-manifests.md) を参照。
+frontend + backend + PostgreSQL + Redis + Traefik Ingress の共通manifestは `deploy/base/` にあり、環境差は `deploy/overlays/` に限定する。manifestはクラスタのノード構成を仮定しない ([ADR 0008](docs/adr/0008-topology-agnostic-manifests.md))。local overlay の PostgreSQL は PVC に永続化し、Redis は非永続である。固定 credentials は local overlay にのみ置く。Helmを使わない理由とimage配送の方針は [ADR 0013](docs/adr/0013-kustomize-deployment-manifests.md) を参照。
 
 k3s 環境が起動済みなら 1 コマンド:
 
@@ -195,4 +194,4 @@ CI や手元での確認に使う。go test / vitest に加え、local / product
 
 GitHub Actions (`.github/workflows/ci.yml`) が PR と main への push で同じ `nix flake check` を実行する。Linux runner では checks にコンテナイメージ (`backend-image` / `frontend-image`) のビルドも含まれる。Nix store は [cache-nix-action](https://github.com/nix-community/cache-nix-action) で GitHub Actions cache にキャッシュされる。
 
-nix sandbox では Docker が使えないため、`nix flake check` の backend テストは `-short`(DB テスト skip)で走る。CI の `codegen-and-db-test` job が runner の Docker を使って DB テスト(testcontainers)と codegen ドリフト検査を補完する。
+PostgreSQL、Redis、実行中の backend、Ingress、frontend を必要とするテストは、ADR 0012 に従い k3s にデプロイしたアプリケーションの公開 HTTP interface 経由で実行する。CI の `codegen-check` job は codegen ドリフト検査を実行する。
