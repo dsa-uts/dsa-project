@@ -1,0 +1,8 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: dsa-dev
+  labels:
+    app.kubernetes.io/name: dsa
+    app.kubernetes.io/part-of: dsa-project
+    app.kubernetes.io/environment: development

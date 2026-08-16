@@ -10,7 +10,7 @@ The application is deployed from a shared Kustomize base with local and producti
 
 ## Consequences
 
-- `deploy/base` owns shared resources; overlays contain only environment-specific image references and pull behavior.
+- `deploy/base` owns shared workload structure. Overlays contain environment-specific namespace and infrastructure bindings, including image references, pull behavior, secret delivery, and storage class selection. The local overlay owns the `dsa-dev` namespace as the lifecycle boundary for development data and operations.
 - Existing `dsa` Helm deployments keep their selector labels so the first Kustomize apply can update them in place; Helm release metadata is no longer used.
 - `task k3s:deploy` is the local deployment interface and generates no tracked manifest changes.
 - Production CD must replace the sentinel production digests with digests returned by GHCR before applying the overlay.

@@ -1,6 +1,15 @@
 #!/usr/bin/env nu
 
 const unit = 'dsa-k3s'
+const development_namespace = 'dsa-dev'
+const application_selector = 'app.kubernetes.io/name=dsa'
+const development_workloads = [
+  { resource: 'statefulset/dsa-postgresql', component: 'postgresql' }
+  { resource: 'deployment/dsa-redis', component: 'redis' }
+  { resource: 'deployment/dsa-backend', component: 'backend' }
+  { resource: 'deployment/dsa-frontend', component: 'frontend' }
+]
+const components = $development_workloads.component
 
 def repo-root [] {
   $env.FILE_PWD | path join .. | path expand
@@ -22,6 +31,74 @@ def run-checked [description: string, args: list<string>] {
 
 def stage [name: string, message: string] {
   print $"[($name)] ($message)"
+}
+
+def kubeconfig [root: path] {
+  state-dir $root | path join kubeconfig
+}
+
+def require-kubeconfig [root: path] {
+  let config = kubeconfig $root
+  if not ($config | path exists) or (($config | path type) != file) {
+    error make { msg: $"kubeconfig not found at ($config); run 'task start' first" }
+  }
+  $config
+}
+
+def print-command-result [result: record] {
+  if not ($result.stdout | str trim | is-empty) {
+    print ($result.stdout | str trim)
+  }
+  if not ($result.stderr | str trim | is-empty) {
+    print --stderr ($result.stderr | str trim)
+  }
+}
+
+def component-logs [component: string] {
+  let selector = $"app.kubernetes.io/component=($component)"
+  stage logs $"Current logs for ($component) ..."
+  let current = do {
+    ^kubectl --namespace $development_namespace logs --selector $selector --all-containers=true --prefix --tail=200
+  } | complete
+  print-command-result $current
+
+  stage logs $"Previous container logs for ($component), when available ..."
+  let previous = do {
+    ^kubectl --namespace $development_namespace logs --selector $selector --all-containers=true --prefix --tail=200 --previous
+  } | complete
+  print-command-result $previous
+}
+
+def development-status [] {
+  stage status $"Workload and Pod state in namespace ($development_namespace) ..."
+  let resources = do {
+    ^kubectl --namespace $development_namespace get statefulset,deployment,pods -o wide
+  } | complete
+  print-command-result $resources
+
+  stage status 'Rollout state ...'
+  for workload in $development_workloads {
+    let rollout = do {
+      ^kubectl --namespace $development_namespace rollout status $workload.resource --timeout=1s
+    } | complete
+    print-command-result $rollout
+  }
+}
+
+def diagnose-development [component?: string] {
+  print --stderr ''
+  development-status
+
+  stage diagnostics 'Recent Kubernetes events ...'
+  let events = do {
+    ^kubectl --namespace $development_namespace get events --sort-by=.metadata.creationTimestamp
+  } | complete
+  print-command-result $events
+
+  let selected_components = if $component == null { $components } else { [$component] }
+  for selected in $selected_components {
+    component-logs $selected
+  }
 }
 
 def unit-active [] {
@@ -105,7 +182,7 @@ def render-local-manifests [root: path, backend_tag: string, frontend_tag: strin
 }
 
 def main [] {
-  error make { msg: 'usage: task {start|redeploy} or task k3s:{up|down|load-images|deploy}' }
+  error make { msg: 'usage: task {start|redeploy|status|logs|stop|reset} or task k3s:{up|down|load-images|deploy}' }
 }
 
 def ensure-cluster [] {
@@ -171,14 +248,10 @@ def 'main load-images' [] {
 
 def converge-development-environment [] {
   let root = repo-root
-  let state_dir = state-dir $root
-  let kubeconfig = $state_dir | path join kubeconfig
-  if not ($kubeconfig | path exists) or (($kubeconfig | path type) != file) {
-    error make { msg: $"kubeconfig not found at ($kubeconfig); run 'task start' first" }
-  }
+  let kubeconfig = require-kubeconfig $root
 
   load-images $root
-  with-env { KUBECONFIG: $kubeconfig } {
+  with-env { KUBECONFIG: $kubeconfig, DSA_APP_NAMESPACE: $development_namespace } {
     stage secrets 'Installing and configuring local OpenBao ...'
     run-checked 'failed to install local OpenBao' [
       nu ($root | path join scripts openbao-install.nu) dev
@@ -200,27 +273,32 @@ def converge-development-environment [] {
     if $apply.exit_code != 0 {
       print --stderr $apply.stdout
       print --stderr $apply.stderr
+      diagnose-development
       error make { msg: 'failed to apply local Kubernetes manifests' }
     }
-    for workload in [
-      'statefulset/dsa-postgresql'
-      'deployment/dsa-redis'
-      'deployment/dsa-backend'
-      'deployment/dsa-frontend'
-    ] {
-      stage rollout $"Waiting for ($workload) ..."
-      run-checked $"rollout failed for ($workload)" [
-        kubectl rollout status $workload --timeout=5m
-      ] | print
+    for workload in $development_workloads {
+      stage rollout $"Waiting for ($workload.resource) ..."
+      let rollout = do {
+        ^kubectl --namespace $development_namespace rollout status $workload.resource --timeout=5m
+      } | complete
+      if $rollout.exit_code != 0 {
+        print-command-result $rollout
+        diagnose-development $workload.component
+        error make { msg: $"rollout failed for ($workload.resource)" }
+      }
+      print-command-result $rollout
     }
 
     stage readiness 'Waiting for all application Pods to become Ready ...'
-    run-checked 'application Pods did not become Ready' [
-      kubectl wait pod
-      --selector=app.kubernetes.io/name=dsa
-      --for=condition=Ready
-      --timeout=5m
-    ] | print
+    let readiness = do {
+      ^kubectl --namespace $development_namespace wait pod $"--selector=($application_selector)" --for=condition=Ready --timeout=5m
+    } | complete
+    if $readiness.exit_code != 0 {
+      print-command-result $readiness
+      diagnose-development
+      error make { msg: 'application Pods did not become Ready' }
+    }
+    print-command-result $readiness
 
     let node_ip = ^kubectl get nodes -o 'jsonpath={.items[0].status.addresses[?(@.type=="InternalIP")].address}'
     print ''
@@ -239,4 +317,103 @@ def 'main start' [] {
 
 def 'main redeploy' [] {
   converge-development-environment
+}
+
+def 'main status' [] {
+  let root = repo-root
+  let config = require-kubeconfig $root
+  with-env { KUBECONFIG: $config } {
+    if not (unit-active) {
+      error make { msg: $"k3s is stopped; run 'task start' to start it. PostgreSQL data remains in namespace ($development_namespace)" }
+    }
+    development-status
+  }
+}
+
+def 'main logs' [component: string = 'all'] {
+  if $component != 'all' and $component not-in $components {
+    error make { msg: $"unknown component '($component)'; expected one of: ($components | str join ', '), all" }
+  }
+  let root = repo-root
+  let config = require-kubeconfig $root
+  with-env { KUBECONFIG: $config } {
+    if not (unit-active) {
+      error make { msg: "k3s is stopped; run 'task start' before requesting logs" }
+    }
+    let selected_components = if $component == 'all' { $components } else { [$component] }
+    for selected in $selected_components {
+      component-logs $selected
+    }
+  }
+}
+
+def 'main stop' [] {
+  main down
+}
+
+def 'main reset' [confirmation?: string] {
+  let root = repo-root
+  let config = require-kubeconfig $root
+  if not (unit-active) {
+    error make { msg: "k3s is stopped; run 'task start' so the reset target can be inspected safely" }
+  }
+
+  with-env { KUBECONFIG: $config } {
+    stage reset $"Destructive target: namespace/($development_namespace)"
+    let namespace = do {
+      ^kubectl get namespace $development_namespace --show-labels
+    } | complete
+    print-command-result $namespace
+    if $namespace.exit_code != 0 {
+      error make { msg: $"reset cancelled; namespace/($development_namespace) could not be inspected" }
+    }
+
+    let verified_namespace = do {
+      ^kubectl get namespace $development_namespace --selector 'app.kubernetes.io/name=dsa,app.kubernetes.io/part-of=dsa-project,app.kubernetes.io/environment=development' -o name
+    } | complete
+    if ($verified_namespace.stdout | str trim) != $"namespace/($development_namespace)" {
+      error make { msg: $"reset cancelled; namespace/($development_namespace) does not carry the expected development labels" }
+    }
+
+    stage reset 'Persistent resources that will be deleted with the namespace:'
+    let persistent = do {
+      ^kubectl --namespace $development_namespace get persistentvolumeclaims -o wide
+    } | complete
+    print-command-result $persistent
+    if $persistent.exit_code != 0 {
+      error make { msg: $"reset cancelled; persistent resources in namespace/($development_namespace) could not be inspected" }
+    }
+
+    let persistent_names = do {
+      ^kubectl --namespace $development_namespace get persistentvolumeclaims -o name
+    } | complete
+    if $persistent_names.exit_code != 0 {
+      print-command-result $persistent_names
+      error make { msg: $"reset cancelled; persistent resources in namespace/($development_namespace) could not be verified" }
+    }
+    let names = $persistent_names.stdout | lines | where { |name| not ($name | is-empty) }
+    if ($names | length) > 0 and $names != ['persistentvolumeclaim/dsa-postgresql'] {
+      error make { msg: $"reset cancelled; unexpected persistent resources found: ($names | str join ', ')" }
+    }
+    if ($names | length) == 1 {
+      let verified_pvc = do {
+        ^kubectl --namespace $development_namespace get persistentvolumeclaim dsa-postgresql --selector 'app.kubernetes.io/name=dsa,app.kubernetes.io/component=postgresql' -o name
+      } | complete
+      if ($verified_pvc.stdout | str trim) != 'persistentvolumeclaim/dsa-postgresql' {
+        error make { msg: 'reset cancelled; persistentvolumeclaim/dsa-postgresql does not carry the expected labels' }
+      }
+    }
+
+    if $confirmation != $development_namespace {
+      error make {
+        msg: $"reset cancelled; inspect the target above, then run: task reset -- ($development_namespace)"
+      }
+    }
+    if $development_namespace in ['default' 'kube-system' 'kube-public' 'kube-node-lease'] {
+      error make { msg: $"refusing to reset protected namespace ($development_namespace)" }
+    }
+
+    stage reset $"Deleting namespace/($development_namespace) and its development data ..."
+    ^kubectl delete namespace $development_namespace --wait=true
+  }
 }
