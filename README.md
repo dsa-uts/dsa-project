@@ -106,13 +106,10 @@ task stop
 次回の `start` ではセッションをまたいでPostgreSQLデータを利用できる。Redisは
 `emptyDir`を使用するため、そのstateは通常の永続データ契約に含まれない。
 
-PostgreSQLを含むdevelopment dataを破棄するときだけ `reset` を使う。最初の実行は
-削除対象のnamespaceとPVCを表示して停止する。内容を確認後、表示されたnamespace名を
-明示して再実行する:
+PostgreSQLを含むdevelopment dataを破棄するときだけ `reset` を使う:
 
 ```sh
 task reset
-task reset -- dsa-dev
 ```
 
 `reset` は `dsa-dev` namespaceだけを削除し、他namespaceやcluster-wide resourceを

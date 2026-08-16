@@ -351,69 +351,15 @@ def 'main stop' [] {
   main down
 }
 
-def 'main reset' [confirmation?: string] {
+def 'main reset' [] {
   let root = repo-root
   let config = require-kubeconfig $root
   if not (unit-active) {
-    error make { msg: "k3s is stopped; run 'task start' so the reset target can be inspected safely" }
+    error make { msg: "k3s is stopped; run 'task start' before resetting the development environment" }
   }
 
   with-env { KUBECONFIG: $config } {
-    stage reset $"Destructive target: namespace/($development_namespace)"
-    let namespace = do {
-      ^kubectl get namespace $development_namespace --show-labels
-    } | complete
-    print-command-result $namespace
-    if $namespace.exit_code != 0 {
-      error make { msg: $"reset cancelled; namespace/($development_namespace) could not be inspected" }
-    }
-
-    let verified_namespace = do {
-      ^kubectl get namespace $development_namespace --selector 'app.kubernetes.io/name=dsa,app.kubernetes.io/part-of=dsa-project,app.kubernetes.io/environment=development' -o name
-    } | complete
-    if ($verified_namespace.stdout | str trim) != $"namespace/($development_namespace)" {
-      error make { msg: $"reset cancelled; namespace/($development_namespace) does not carry the expected development labels" }
-    }
-
-    stage reset 'Persistent resources that will be deleted with the namespace:'
-    let persistent = do {
-      ^kubectl --namespace $development_namespace get persistentvolumeclaims -o wide
-    } | complete
-    print-command-result $persistent
-    if $persistent.exit_code != 0 {
-      error make { msg: $"reset cancelled; persistent resources in namespace/($development_namespace) could not be inspected" }
-    }
-
-    let persistent_names = do {
-      ^kubectl --namespace $development_namespace get persistentvolumeclaims -o name
-    } | complete
-    if $persistent_names.exit_code != 0 {
-      print-command-result $persistent_names
-      error make { msg: $"reset cancelled; persistent resources in namespace/($development_namespace) could not be verified" }
-    }
-    let names = $persistent_names.stdout | lines | where { |name| not ($name | is-empty) }
-    if ($names | length) > 0 and $names != ['persistentvolumeclaim/dsa-postgresql'] {
-      error make { msg: $"reset cancelled; unexpected persistent resources found: ($names | str join ', ')" }
-    }
-    if ($names | length) == 1 {
-      let verified_pvc = do {
-        ^kubectl --namespace $development_namespace get persistentvolumeclaim dsa-postgresql --selector 'app.kubernetes.io/name=dsa,app.kubernetes.io/component=postgresql' -o name
-      } | complete
-      if ($verified_pvc.stdout | str trim) != 'persistentvolumeclaim/dsa-postgresql' {
-        error make { msg: 'reset cancelled; persistentvolumeclaim/dsa-postgresql does not carry the expected labels' }
-      }
-    }
-
-    if $confirmation != $development_namespace {
-      error make {
-        msg: $"reset cancelled; inspect the target above, then run: task reset -- ($development_namespace)"
-      }
-    }
-    if $development_namespace in ['default' 'kube-system' 'kube-public' 'kube-node-lease'] {
-      error make { msg: $"refusing to reset protected namespace ($development_namespace)" }
-    }
-
     stage reset $"Deleting namespace/($development_namespace) and its development data ..."
-    ^kubectl delete namespace $development_namespace --wait=true
+    ^kubectl delete namespace $development_namespace --ignore-not-found --wait=true
   }
 }
