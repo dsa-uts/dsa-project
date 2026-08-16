@@ -30,12 +30,12 @@ def write-policy [namespace: string, pod: string, token: string, name: string, p
   }
 }
 
-def main [environment: string, --repo-root: path] {
+def main [environment: string] {
   if $environment not-in [dev prod] {
     error make { msg: 'environment must be dev or prod' }
   }
 
-  let repo_root = $repo_root | default ($env.FILE_PWD | path join ..) | path expand
+  let repo_root = $env.FILE_PWD | path join .. | path expand
   let openbao_namespace = $env.DSA_OPENBAO_NAMESPACE? | default openbao
   let app_namespace = $env.DSA_APP_NAMESPACE? | default default
   let pod = $env.DSA_OPENBAO_POD? | default openbao-0

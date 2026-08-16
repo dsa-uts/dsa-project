@@ -14,18 +14,19 @@
 
 ```sh
 # API contract を変更したら両側を再生成 (生成物はコミットする)
-cd backend && go generate ./...     # → backend/internal/api/gen.go
-cd frontend && npm run generate     # → frontend/src/api/schema.d.ts
-./scripts/check-codegen.sh          # ドリフト検査 (CI でも実行)
+task codegen:generate
+task codegen:check                  # ドリフト検査 (CI でも実行)
 
 # backend (外部依存のない unit test)
-cd backend && go test ./...
+task backend:test
 
 # frontend
-cd frontend && npm test && npm run typecheck && npm run lint
+task frontend:test
+task frontend:typecheck
+task frontend:lint
 
 # 全体検証
-nix flake check
+task check
 ```
 
 PostgreSQL、Redis、実行中の backend、Ingress、frontend を必要とするテストは、k3s にデプロイしたアプリケーションの公開 HTTP interface 経由で実行する (ADR 0012)。

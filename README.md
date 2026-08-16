@@ -11,7 +11,7 @@
 | `deploy/` | Kubernetes manifest の Kustomize base / overlay |
 | `nix/` | nix 定義の置き場(devShell 定義など)。`flake.nix` から import される |
 | `docs/` | 仕様書(`docs/spec/`)と ADR(`docs/adr/`) |
-| `scripts/` | 開発用スクリプト(codegen ドリフト検査など) |
+| `scripts/` | Taskfile から呼ばれる Nushell 実装 |
 
 エージェント向けの実装規約は [docs/agents/coding-standards.md](docs/agents/coding-standards.md) にある。
 
@@ -41,7 +41,7 @@ experimental-features = nix-command flakes
 nix develop
 ```
 
-これで Go / Node.js / Kustomize / kubectl がすべて使えるシェルに入る。
+これで Task / Nushell / Go / Node.js / k3s / Kustomize / kubectl がすべて使えるシェルに入る。開発・ローカル運用コマンドの公開 interface は `task` であり、利用可能なタスクは `task --list` で確認できる。
 
 ### 3. direnv(推奨)
 
@@ -58,24 +58,22 @@ direnv allow
 クライアント向け REST API は `docs/spec/openapi.yaml` が single source of truth([ADR 0010](docs/adr/0010-openapi-contract-with-codegen.md))。変更したら両側のコードを再生成してコミットする:
 
 ```sh
-cd backend && go generate ./...     # → backend/internal/api/gen.go (oapi-codegen)
-cd frontend && npm run generate     # → frontend/src/api/schema.d.ts (openapi-typescript)
+task codegen:generate
 ```
 
-反映漏れは `./scripts/check-codegen.sh` で検査できる(CI でも実行される)。
+反映漏れは `task codegen:check` で検査できる(CI でも実行される)。
 
 ## backend の実行とビルド
 
 ```sh
-nix run .#backend           # サーバー起動 (PORT 環境変数で変更可、既定 8080)
+task backend:run            # サーバー起動 (PORT 環境変数で変更可、既定 8080)
 nix build .#backend         # バイナリ
-nix run .#backend-image-build  # 依存 metadata を refresh してコンテナイメージをビルド
+task backend:image:build    # 依存 metadata を refresh してコンテナイメージをビルド
 ```
 devShell 内では通常の Go ワークフローも使える:
 
 ```sh
-cd backend
-go test ./...          # 外部依存のない unit test
+task backend:test      # 外部依存のない unit test
 ```
 
 依存を変更したら `go mod tidy` を実行する。開発向けの backend image build と
@@ -85,8 +83,8 @@ deploy は、ビルド前に Nix の依存 metadata (`nix/backend-vendor-hash.ni
 依存 metadata だけを明示的に修復・検査する場合は次を使う:
 
 ```sh
-nix run .#backend-deps-refresh # drift があれば作業ツリーを更新
-nix run .#backend-deps-check   # checkout を変更せず drift を検査 (CI と同じ)
+task backend:deps:refresh # drift があれば作業ツリーを更新
+task backend:deps:check   # checkout を変更せず drift を検査 (CI と同じ)
 ```
 
 ## frontend の開発とビルド
@@ -99,24 +97,23 @@ nix build .#frontend-image    # コンテナイメージ (下記参照)
 devShell 内では通常の npm ワークフローも使える:
 
 ```sh
-cd frontend
-npm install       # 初回と依存変更時
-npm run dev       # dev server (http://localhost:5173)
-npm test          # vitest
-npm run typecheck # tsc -b
-npm run lint      # oxlint
+task frontend:install   # 初回と依存変更時
+task frontend:dev       # dev server (http://localhost:5173)
+task frontend:test      # vitest
+task frontend:typecheck # tsc -b
+task frontend:lint      # oxlint
 ```
 
-dev server は `/health` と `/api` を backend(`http://localhost:8080`)へ proxy する(`frontend/vite.config.ts`)。別ターミナルで `nix run .#backend` を起動しておくと、hello ページに backend の health check 結果が表示される。
+dev server は `/health` と `/api` を backend(`http://localhost:8080`)へ proxy する(`frontend/vite.config.ts`)。別ターミナルで `task backend:run` を起動しておくと、hello ページに backend の health check 結果が表示される。
 
 依存を変更したら `package.json` と `package-lock.json` をコミットする。Nix の frontend build は lockfile から依存を取得するため、Nix 固有の dependency hash の更新は不要。
 
 ## コンテナイメージ
 
-`nix run .#backend-image-build` / `nix build .#frontend-image` の出力はイメージ tar を stdout に流すスクリプト。タグは derivation hash 由来で、内容が変わればタグも変わる。k3s へは registry を経由せず直接 import できる(後述の `nix run .#k3s-load-images` がこれを自動で行う):
+`task backend:image:build` / `task frontend:image:build` で得る Nix の出力はイメージ tar を stdout に流すスクリプト。タグは derivation hash 由来で、内容が変わればタグも変わる。k3s へは registry を経由せず直接 import できる(後述の `task k3s:load-images` がこれを自動で行う):
 
 ```sh
-nix run .#backend-image-build
+task backend:image:build
 ./result | sudo k3s ctr -n k8s.io images import -
 ```
 
@@ -131,18 +128,18 @@ frontend イメージは [static-web-server](https://static-web-server.net/) が
 ### 起動と停止
 
 ```sh
-nix run .#k3s-up      # 起動し、ノードが Ready になるまで待つ
+task k3s:up           # 起動し、ノードが Ready になるまで待つ
 export KUBECONFIG=$PWD/.k3s/kubeconfig
 kubectl get nodes     # 1 ノードが Ready
 
-nix run .#k3s-down    # 停止
+task k3s:down         # 停止
 ```
 
 状態はリポジトリ直下の `.k3s/` に置かれる (`DSA_K3S_STATE_DIR` で変更可):
 
 | ファイル | 内容 |
 | --- | --- |
-| `.k3s/kubeconfig` | ホスト用 kubeconfig (`k3s-up` が生成) |
+| `.k3s/kubeconfig` | ホスト用 kubeconfig (k3s server が直接生成) |
 
 クラスタ状態はホストの `/var/lib/rancher/k3s` にある。
 
@@ -156,13 +153,13 @@ nix run .#k3s-down    # 停止
 k3s 環境が起動済みなら 1 コマンド:
 
 ```sh
-nix run .#k3s-up       # 未起動の場合
-nix run .#k3s-deploy   # イメージ搬入 + local overlay の apply
+task k3s:up            # 未起動の場合
+task k3s:deploy        # イメージ搬入 + local overlay の apply
 ```
 
 `k3s-deploy` は以下を行う:
 
-1. **イメージ搬入** (`nix run .#k3s-load-images` 単体でも実行可)
+1. **イメージ搬入** (`task k3s:load-images` 単体でも実行可)
    - イメージの stream script をホストの containerd へ直接 pipe する (`sudo` が必要)
 2. **Secret基盤の収束** — version固定したSecrets Store CSI DriverとOpenBaoをHelmでinstall/upgradeし、disposableなdev serverへKubernetes auth、最小権限policy/role、既知の開発用passwordを冪等に設定する
 3. **local manifest のrenderとapply** — image tagはderivation hash由来で毎ビルド変わるため、一時コピー上のlocal overlayへ現在のtagを自動注入する。Git管理されたmanifestは変更しない
@@ -183,10 +180,10 @@ kubectl kustomize deploy/overlays/production
 ## flake の検査
 
 ```sh
-nix flake check
+task check
 ```
 
-CI や手元での確認に使う。go test / vitest に加え、local / production Kustomize overlayと動的なローカルtag注入の静的検証 (`nix/manifest-check.nix`) もここで走る。全サポートシステム分を評価する場合は `nix flake check --all-systems`。
+CI や手元での確認に使う。内部では `nix flake check -L` を実行し、go test / vitest も各 derivation の検査として走る。全サポートシステム分を評価する場合は `nix flake check --all-systems`。
 
 GitHub Actions (`.github/workflows/ci.yml`) が PR と main への push で同じ `nix flake check` を実行する。Linux runner では checks にコンテナイメージ (`backend-image` / `frontend-image`) のビルドも含まれる。Nix store は [cache-nix-action](https://github.com/nix-community/cache-nix-action) で GitHub Actions cache にキャッシュされる。
 

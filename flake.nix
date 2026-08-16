@@ -36,31 +36,14 @@
 
       packages = packagesFor;
 
-      apps = lib.genAttrs systems (
-        system:
-        let
-          pkgs = nixpkgs.legacyPackages.${system};
-        in
-        {
-          backend = {
-            type = "app";
-            program = "${self.packages.${system}.backend}/bin/server";
-          };
-        }
-        // import ./nix/backend-deps-apps.nix { inherit pkgs; }
-        // import ./nix/k3s-apps.nix {
-          inherit pkgs;
-        }
-      );
+      apps = lib.genAttrs systems (system: {
+        backend = {
+          type = "app";
+          program = "${self.packages.${system}.backend}/bin/server";
+        };
+      });
 
-      # checks は packages から合成する。go test / vitest は各 derivation の checkPhase で走る。
-      # manifest-check は Kustomize overlay のオフライン検証。
-      checks = eachSystem (
-        pkgs:
-        packagesFor.${pkgs.stdenv.hostPlatform.system}
-        // {
-          manifests = import ./nix/manifest-check.nix { inherit pkgs; };
-        }
-      );
+      # go test / vitest は各 derivation の checkPhase で走る。
+      checks = eachSystem (pkgs: packagesFor.${pkgs.stdenv.hostPlatform.system});
     };
 }

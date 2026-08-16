@@ -1,5 +1,5 @@
 # backend バイナリ。flake.nix から system ごとに import される。
-# vendorHash は nix run .#backend-deps-refresh で更新する。
+# vendorHash は task backend:deps:refresh で更新する。
 {
   pkgs,
   vendorHash ? import ./backend-vendor-hash.nix,

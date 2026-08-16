@@ -1,14 +1,8 @@
 #!/usr/bin/env nu
 # Keep buildGoModule's vendorHash synchronized with backend/go.mod and go.sum.
 
-def resolve-repo-root [requested: any] {
-  let root = if $requested == null {
-    $env.FILE_PWD | path join ..
-  } else {
-    $requested
-  }
-
-  $root | path expand
+def repo-root [] {
+  $env.FILE_PWD | path join .. | path expand
 }
 
 def read-current-hash [metadata: path] {
@@ -83,7 +77,7 @@ def execute-operation [operation: string, repo_root: path] {
           'backend dependency metadata is stale.'
           $"       committed: ($current_hash)"
           $"       expected:  ($expected_hash)"
-          "       Run 'nix run .#backend-deps-refresh' and commit nix/backend-vendor-hash.nix."
+          "       Run 'task backend:deps:refresh' and commit nix/backend-vendor-hash.nix."
         ] | str join (char newline)
       )
     }
@@ -97,13 +91,13 @@ def execute-operation [operation: string, repo_root: path] {
 }
 
 def main [] {
-  error make { msg: 'usage: backend-deps.nu {refresh|check} [--repo-root PATH]' }
+  error make { msg: 'usage: task backend:deps:{refresh|check}' }
 }
 
-def 'main refresh' [--repo-root: path] {
-  execute-operation 'refresh' (resolve-repo-root $repo_root)
+def 'main refresh' [] {
+  execute-operation 'refresh' (repo-root)
 }
 
-def 'main check' [--repo-root: path] {
-  execute-operation 'check' (resolve-repo-root $repo_root)
+def 'main check' [] {
+  execute-operation 'check' (repo-root)
 }

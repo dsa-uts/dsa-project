@@ -12,7 +12,7 @@ The application is deployed from a shared Kustomize base with local and producti
 
 - `deploy/base` owns shared resources; overlays contain only environment-specific image references and pull behavior.
 - Existing `dsa` Helm deployments keep their selector labels so the first Kustomize apply can update them in place; Helm release metadata is no longer used.
-- `nix run .#k3s-deploy` remains the local deployment interface and generates no tracked manifest changes.
+- `task k3s:deploy` is the local deployment interface and generates no tracked manifest changes.
 - Production CD must replace the sentinel production digests with digests returned by GHCR before applying the overlay.
 - Deployed interface tests use an isolated namespace and an ordinary Kubernetes test Job rather than a Helm release and Helm Test hook.
 - This supersedes only the Helm-specific deployment and test-runner consequences in ADR 0005, ADR 0008, and ADR 0012; their Kubernetes, topology, and public-interface decisions remain accepted.
