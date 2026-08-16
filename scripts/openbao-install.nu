@@ -12,14 +12,14 @@ def run-checked [description: string, args: list<string>] {
   }
 }
 
-def main [environment: string] {
+def main [environment: string, --repo-root: path] {
   if $environment not-in [dev prod] {
     error make { msg: 'environment must be dev or prod' }
   }
 
-  let repo_root = $env.FILE_PWD | path join .. | path expand
+  let repo_root = $repo_root | default ($env.FILE_PWD | path join ..) | path expand
   let namespace = $env.DSA_OPENBAO_NAMESPACE? | default openbao
-  let values_environment = if $environment == dev { local } else { production }
+  let values_environment = if $environment == dev { 'local' } else { 'production' }
   let values = $repo_root | path join deploy openbao $'($values_environment)-values.yaml'
 
   if $environment == prod {

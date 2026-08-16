@@ -30,12 +30,12 @@ def write-policy [namespace: string, pod: string, token: string, name: string, p
   }
 }
 
-def main [environment: string] {
+def main [environment: string, --repo-root: path] {
   if $environment not-in [dev prod] {
     error make { msg: 'environment must be dev or prod' }
   }
 
-  let repo_root = $env.FILE_PWD | path join .. | path expand
+  let repo_root = $repo_root | default ($env.FILE_PWD | path join ..) | path expand
   let openbao_namespace = $env.DSA_OPENBAO_NAMESPACE? | default openbao
   let app_namespace = $env.DSA_APP_NAMESPACE? | default default
   let pod = $env.DSA_OPENBAO_POD? | default openbao-0
@@ -46,6 +46,15 @@ def main [environment: string] {
   }
   if ($token | is-empty) {
     error make { msg: 'BAO_TOKEN is required for production configuration' }
+  }
+
+  let ready = do {
+    ^kubectl --namespace $openbao_namespace wait --for=condition=Ready $"pod/($pod)" --timeout=5m
+  } | complete
+  if $ready.exit_code != 0 {
+    print --stderr $ready.stdout
+    print --stderr $ready.stderr
+    error make { msg: $"OpenBao pod did not become ready: ($openbao_namespace)/($pod)" }
   }
 
   let secret_mounts = bao-exec $openbao_namespace $pod $token -- secrets list -format=json
