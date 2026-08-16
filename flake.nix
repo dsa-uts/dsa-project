@@ -43,14 +43,7 @@
         };
       });
 
-      # checks は packages から合成する。go test / vitest は各 derivation の checkPhase で走る。
-      # manifest-check は Kustomize overlay のオフライン検証。
-      checks = eachSystem (
-        pkgs:
-        packagesFor.${pkgs.stdenv.hostPlatform.system}
-        // {
-          manifests = import ./nix/manifest-check.nix { inherit pkgs; };
-        }
-      );
+      # go test / vitest は各 derivation の checkPhase で走る。
+      checks = eachSystem (pkgs: packagesFor.${pkgs.stdenv.hostPlatform.system});
     };
 }

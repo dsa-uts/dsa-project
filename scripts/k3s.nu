@@ -73,6 +73,28 @@ def load-images [root: path] {
   }
 }
 
+def render-local-manifests [root: path, backend_tag: string, frontend_tag: string] {
+  let render_dir = ^mktemp -d | str trim
+  let deploy_dir = $render_dir | path join deploy
+  ^cp -R ($root | path join deploy) $deploy_dir
+  ^chmod -R u+w $deploy_dir
+
+  let result = do {
+    cd ($deploy_dir | path join overlays local)
+    ^kustomize edit set image $"dsa-backend=dsa-backend:($backend_tag)" $"dsa-frontend=dsa-frontend:($frontend_tag)"
+    ^kustomize build .
+  } | complete
+
+  ^chmod -R u+w $render_dir
+  rm --recursive --force $render_dir
+
+  if $result.exit_code != 0 {
+    print --stderr $result.stderr
+    error make { msg: 'failed to render local manifests' }
+  }
+  $result.stdout
+}
+
 def main [] {
   error make { msg: 'usage: task k3s:{up|down|load-images|deploy}' }
 }
@@ -159,9 +181,7 @@ def 'main deploy' [] {
     let frontend_tag = run-checked 'failed to evaluate the frontend image tag' [
       nix eval --raw $"($root)#frontend-image.imageTag"
     ] | str trim
-    let manifests = run-checked 'failed to render local manifests' [
-      nu ($root | path join scripts manifests.nu) render-local $backend_tag $frontend_tag
-    ]
+    let manifests = render-local-manifests $root $backend_tag $frontend_tag
 
     print 'Applying the local Kubernetes manifests ...'
     let apply = $manifests | ^kubectl apply -f - | complete

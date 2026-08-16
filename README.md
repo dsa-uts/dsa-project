@@ -183,7 +183,7 @@ kubectl kustomize deploy/overlays/production
 task check
 ```
 
-CI や手元での確認に使う。内部では `nix flake check -L` を実行する。go test / vitest に加え、local / production Kustomize overlayと動的なローカルtag注入の静的検証 (`nix/manifest-check.nix`) もここで走る。全サポートシステム分を評価する場合は `nix flake check --all-systems`。
+CI や手元での確認に使う。内部では `nix flake check -L` を実行し、go test / vitest も各 derivation の検査として走る。全サポートシステム分を評価する場合は `nix flake check --all-systems`。
 
 GitHub Actions (`.github/workflows/ci.yml`) が PR と main への push で同じ `nix flake check` を実行する。Linux runner では checks にコンテナイメージ (`backend-image` / `frontend-image`) のビルドも含まれる。Nix store は [cache-nix-action](https://github.com/nix-community/cache-nix-action) で GitHub Actions cache にキャッシュされる。
 

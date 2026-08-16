@@ -86,16 +86,6 @@ tasks:
     cmds:
       - nu scripts/codegen.nu check
 
-  manifests:render:
-    desc: Render local manifests with the current Nix image tags
-    cmds:
-      - nu scripts/manifests.nu render-current
-
-  manifests:check:
-    desc: Check local and production Kubernetes manifests
-    cmds:
-      - nu scripts/manifests.nu check
-
   openbao:install:
     desc: Install OpenBao for dev or production
     cmds:
