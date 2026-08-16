@@ -8,11 +8,6 @@ tasks:
     cmds:
       - task --list
 
-  backend:run:
-    desc: Run the backend server
-    cmds:
-      - nix run .#backend
-
   backend:test:
     desc: Run backend unit tests
     dir: backend
@@ -41,12 +36,6 @@ tasks:
     dir: frontend
     cmds:
       - npm ci
-
-  frontend:dev:
-    desc: Run the frontend development server
-    dir: frontend
-    cmds:
-      - npm run dev
 
   frontend:test:
     desc: Run frontend unit tests
@@ -100,6 +89,16 @@ tasks:
     desc: Create an initial production datastore secret
     cmds:
       - nu scripts/openbao-set-production-secret.nu {{.CLI_ARGS}}
+
+  start:
+    desc: Start the complete application on local k3s
+    cmds:
+      - nu scripts/k3s.nu start
+
+  redeploy:
+    desc: Rebuild and redeploy the application on local k3s
+    cmds:
+      - nu scripts/k3s.nu redeploy
 
   k3s:up:
     desc: Start the local single-node k3s server
