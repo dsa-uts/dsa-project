@@ -80,8 +80,8 @@ let
 
         export KUBECONFIG="$kubeconfig"
         echo "Installing and configuring local OpenBao ..."
-        ${pkgs.nushell}/bin/nu ${openbaoInstall} dev
-        ${pkgs.nushell}/bin/nu ${openbaoConfigure} dev
+        ${pkgs.nushell}/bin/nu ${openbaoInstall} dev --repo-root "$PWD"
+        ${pkgs.nushell}/bin/nu ${openbaoConfigure} dev --repo-root "$PWD"
 
         backend_tag=$(nix eval --raw .#backend-image.imageTag)
         frontend_tag=$(nix eval --raw .#frontend-image.imageTag)
