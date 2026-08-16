@@ -78,8 +78,42 @@ task redeploy
 進行状況は `dependencies`、`build`、`import`、`secrets`、`apply`、`rollout`、
 `readiness` の段階ごとに表示される。ホットリロードやファイル監視は行わない。
 
-通常の `start` と `redeploy` はdevelopment PostgreSQLのPVCを削除しないため、
-セッションをまたいでデータを保持する。
+local overlayのapplication resourceは専用namespace `dsa-dev` に配置される。現在の
+rolloutとPodのreadinessは次で確認できる:
+
+```sh
+task status
+```
+
+componentのログは `backend`、`frontend`、`postgresql`、`redis` のいずれかを指定して
+取得する。指定を省略すると全componentのログを取得する:
+
+```sh
+task logs -- backend
+task logs
+```
+
+`start` または `redeploy` のrollout/readinessが失敗した場合は、workloadとPodの状態、
+rollout state、namespace内のKubernetes events、関連component logsが自動表示される。
+
+通常の終了には次を使う:
+
+```sh
+task stop
+```
+
+`stop` はk3s serverを止めるだけで、`dsa-dev` namespaceとPostgreSQL PVCを削除しない。
+次回の `start` ではセッションをまたいでPostgreSQLデータを利用できる。Redisは
+`emptyDir`を使用するため、そのstateは通常の永続データ契約に含まれない。
+
+PostgreSQLを含むdevelopment dataを破棄するときだけ `reset` を使う:
+
+```sh
+task reset
+```
+
+`reset` は `dsa-dev` namespaceだけを削除し、他namespaceやcluster-wide resourceを
+削除対象にしない。次回の `start` で空のdevelopment環境が作成される。
 
 ## API contract と codegen
 

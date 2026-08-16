@@ -100,6 +100,26 @@ tasks:
     cmds:
       - nu scripts/k3s.nu redeploy
 
+  status:
+    desc: Show the status of the development deployment
+    cmds:
+      - nu scripts/k3s.nu status
+
+  logs:
+    desc: Show logs for a development component (backend, frontend, postgresql, redis, or all)
+    cmds:
+      - nu scripts/k3s.nu logs {{.CLI_ARGS}}
+
+  stop:
+    desc: Stop local k3s while preserving development PostgreSQL data
+    cmds:
+      - nu scripts/k3s.nu stop
+
+  reset:
+    desc: Delete the dsa-dev namespace and its development data
+    cmds:
+      - nu scripts/k3s.nu reset {{.CLI_ARGS}}
+
   k3s:up:
     desc: Start the local single-node k3s server
     cmds:
