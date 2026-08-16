@@ -1,0 +1,132 @@
+version: '3'
+
+silent: true
+
+tasks:
+  default:
+    desc: List available development tasks
+    cmds:
+      - task --list
+
+  backend:run:
+    desc: Run the backend server
+    cmds:
+      - nix run .#backend
+
+  backend:test:
+    desc: Run backend unit tests
+    dir: backend
+    cmds:
+      - go test ./...
+
+  backend:deps:refresh:
+    desc: Refresh the backend Nix dependency hash
+    cmds:
+      - nu scripts/backend-deps.nu refresh
+
+  backend:deps:check:
+    desc: Check the backend Nix dependency hash
+    cmds:
+      - nu scripts/backend-deps.nu check
+
+  backend:image:build:
+    desc: Refresh dependencies and build the backend container image
+    deps:
+      - backend:deps:refresh
+    cmds:
+      - nix build .#backend-image
+
+  frontend:install:
+    desc: Install frontend dependencies from the lockfile
+    dir: frontend
+    cmds:
+      - npm ci
+
+  frontend:dev:
+    desc: Run the frontend development server
+    dir: frontend
+    cmds:
+      - npm run dev
+
+  frontend:test:
+    desc: Run frontend unit tests
+    dir: frontend
+    cmds:
+      - npm test
+
+  frontend:typecheck:
+    desc: Type-check the frontend
+    dir: frontend
+    cmds:
+      - npm run typecheck
+
+  frontend:lint:
+    desc: Lint the frontend
+    dir: frontend
+    cmds:
+      - npm run lint
+
+  frontend:image:build:
+    desc: Build the frontend container image
+    cmds:
+      - nix build .#frontend-image
+
+  codegen:generate:
+    desc: Generate backend and frontend code from the OpenAPI contract
+    cmds:
+      - nu scripts/codegen.nu generate
+
+  codegen:check:
+    desc: Check generated code for drift
+    cmds:
+      - nu scripts/codegen.nu check
+
+  manifests:render:
+    desc: Render local manifests with the current Nix image tags
+    cmds:
+      - nu scripts/manifests.nu render-current
+
+  manifests:check:
+    desc: Check local and production Kubernetes manifests
+    cmds:
+      - nu scripts/manifests.nu check
+
+  openbao:install:
+    desc: Install OpenBao for dev or production
+    cmds:
+      - nu scripts/openbao-install.nu {{.CLI_ARGS}}
+
+  openbao:configure:
+    desc: Configure OpenBao for dev or production
+    cmds:
+      - nu scripts/openbao-configure.nu {{.CLI_ARGS}}
+
+  openbao:set-production-secret:
+    desc: Create an initial production datastore secret
+    cmds:
+      - nu scripts/openbao-set-production-secret.nu {{.CLI_ARGS}}
+
+  k3s:up:
+    desc: Start the local single-node k3s server
+    cmds:
+      - nu scripts/k3s.nu up
+
+  k3s:down:
+    desc: Stop the local single-node k3s server
+    cmds:
+      - nu scripts/k3s.nu down
+
+  k3s:load-images:
+    desc: Load the application images into local k3s
+    cmds:
+      - nu scripts/k3s.nu load-images
+
+  k3s:deploy:
+    desc: Build and deploy the application to local k3s
+    cmds:
+      - nu scripts/k3s.nu deploy
+
+  check:
+    desc: Run all Nix flake checks
+    cmds:
+      - nix flake check -L

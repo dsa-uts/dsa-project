@@ -52,7 +52,7 @@ jobs:
       # backend build より先に実行し、stale hash では Nix の hash mismatch ではなく
       # 修復コマンドを含む専用エラーを表示する。check は checkout を変更しない。
       - name: Check backend dependency metadata
-        run: nix run .#backend-deps-check
+        run: nix develop -c task backend:deps:check
 
       - name: nix flake check
         run: nix flake check -L
@@ -86,7 +86,7 @@ jobs:
           purge-primary-key: never
 
       - name: Install frontend dependencies
-        run: nix develop -c bash -c 'cd frontend && npm ci'
+        run: nix develop -c task frontend:install
 
       - name: Check codegen drift
-        run: nix develop -c ./scripts/check-codegen.sh
+        run: nix develop -c task codegen:check

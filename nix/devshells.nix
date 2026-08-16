@@ -10,10 +10,21 @@
       gopls
       # scripts
       nushell
+      go-task
       # Kubernetes manifests
+      k3s
       kustomize
       kubectl
       kubernetes-helm
+      coreutils
+      iptables
+      ipset
+      socat
+      conntrack-tools
+      ethtool
+      kmod
+      findutils
+      gnugrep
     ];
   };
 }

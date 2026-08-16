@@ -24,7 +24,7 @@ charts:
 
 ```sh
 kubectl config current-context
-nu scripts/openbao-install.nu prod
+task openbao:install -- prod
 ```
 
 The server Pods are expected to remain unready and sealed at this point. The
@@ -71,7 +71,7 @@ the idempotent configuration script:
 ```sh
 read -rs BAO_TOKEN
 export BAO_TOKEN
-nu scripts/openbao-configure.nu prod
+task openbao:configure -- prod
 ```
 
 This enables KV v2 and Kubernetes auth, writes least-privilege workload policies
@@ -81,8 +81,8 @@ human administrator authentication before retiring the initial root token.
 Set the initial datastore values interactively:
 
 ```sh
-nu scripts/openbao-set-production-secret.nu postgresql
-nu scripts/openbao-set-production-secret.nu redis
+task openbao:set-production-secret -- postgresql
+task openbao:set-production-secret -- redis
 unset BAO_TOKEN
 ```
 
