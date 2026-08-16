@@ -71,6 +71,11 @@ tasks:
     cmds:
       - nix build .#frontend-image
 
+  images:build:
+    desc: Build the backend and frontend container images
+    cmds:
+      - nix build -L .#backend-image .#frontend-image
+
   codegen:generate:
     desc: Generate backend and frontend code from the OpenAPI contract
     cmds:

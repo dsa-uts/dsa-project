@@ -23,6 +23,7 @@
       conntrack-tools
       ethtool
       kmod
+      util-linux
       findutils
       gnugrep
     ];

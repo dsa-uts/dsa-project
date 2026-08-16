@@ -55,12 +55,12 @@ jobs:
         run: nix develop -c task backend:deps:check
 
       - name: nix flake check
-        run: nix flake check -L
+        run: nix develop -c task check
 
       # flake check でビルド済みなのでここはほぼ no-op だが、
       # イメージビルドの成否を独立したステップとして見えるようにする
       - name: Build container images
-        run: nix build -L .#backend-image .#frontend-image
+        run: nix develop -c task images:build
 
   # openapi.yaml と生成コードの同期を検査する (ADR 0010)。
   codegen-check:

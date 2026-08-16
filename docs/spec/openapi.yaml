@@ -1,7 +1,6 @@
 # クライアント向け REST API の single source of truth (ADR 0010)。
-# ここを変更したら backend / frontend 双方でコードを再生成してコミットする:
-#   backend:  cd backend && go generate ./...
-#   frontend: cd frontend && npm run generate
+# ここを変更したら `task codegen:generate` で backend / frontend 双方の
+# コードを再生成してコミットする。
 # api.md の草稿はエンドポイントの実装時に本ファイルへ移設して削除していく。
 openapi: 3.0.3
 info:
