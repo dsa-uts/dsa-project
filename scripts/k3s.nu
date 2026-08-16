@@ -49,6 +49,9 @@ def wait-for-node [state_dir: path] {
 }
 
 def load-images [root: path] {
+  # sudo commonly replaces PATH with secure_path, which excludes Nix store paths.
+  let k3s = which k3s | get 0.path
+
   run-checked 'failed to refresh backend dependency metadata' [
     nu ($root | path join scripts backend-deps.nu) refresh
   ] | ignore
@@ -61,12 +64,12 @@ def load-images [root: path] {
   ] | str trim
 
   print 'Importing the backend image (requires sudo) ...'
-  run-external $backend_image | ^sudo k3s ctr -n k8s.io images import -
+  run-external $backend_image | ^sudo $k3s ctr -n k8s.io images import -
   if $env.LAST_EXIT_CODE != 0 {
     error make { msg: 'failed to import the backend image' }
   }
   print 'Importing the frontend image ...'
-  run-external $frontend_image | ^sudo k3s ctr -n k8s.io images import -
+  run-external $frontend_image | ^sudo $k3s ctr -n k8s.io images import -
   if $env.LAST_EXIT_CODE != 0 {
     error make { msg: 'failed to import the frontend image' }
   }
