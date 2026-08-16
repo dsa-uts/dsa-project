@@ -53,6 +53,34 @@ direnv をセットアップ済みなら、リポジトリのルートで一度�
 direnv allow
 ```
 
+## 開発ループ
+
+アプリケーションはホスト上で直接起動せず、PostgreSQL、Redis、backend、frontendを
+含む完全な構成をローカルk3sへデプロイして確認する。最初は次を実行する:
+
+```sh
+task start
+```
+
+`start` はk3sクラスタの準備、backend依存metadataのrefresh、content-derived tagを
+持つapplication imageのbuildとimport、local Kustomize overlayのapply、rollout、
+全application Podのreadiness確認まで行う。完了時に表示されるIngressのURLを
+ブラウザで開く。
+
+コードを編集した後は、明示的に再デプロイする:
+
+```sh
+task redeploy
+```
+
+`redeploy` はimageを再構築してk3sへ搬入し、現在のcontent-derived tagをmanifestへ
+注入する。内容が変わればDeploymentのPod templateも変わるため、rolloutが発生する。
+進行状況は `dependencies`、`build`、`import`、`secrets`、`apply`、`rollout`、
+`readiness` の段階ごとに表示される。ホットリロードやファイル監視は行わない。
+
+通常の `start` と `redeploy` はdevelopment PostgreSQLのPVCを削除しないため、
+セッションをまたいでデータを保持する。
+
 ## API contract と codegen
 
 クライアント向け REST API は `docs/spec/openapi.yaml` が single source of truth([ADR 0010](docs/adr/0010-openapi-contract-with-codegen.md))。変更したら両側のコードを再生成してコミットする:
@@ -63,10 +91,9 @@ task codegen:generate
 
 反映漏れは `task codegen:check` で検査できる(CI でも実行される)。
 
-## backend の実行とビルド
+## backend のビルド
 
 ```sh
-task backend:run            # サーバー起動 (PORT 環境変数で変更可、既定 8080)
 nix build .#backend         # バイナリ
 task backend:image:build    # 依存 metadata を refresh してコンテナイメージをビルド
 ```
@@ -87,7 +114,7 @@ task backend:deps:refresh # drift があれば作業ツリーを更新
 task backend:deps:check   # checkout を変更せず drift を検査 (CI と同じ)
 ```
 
-## frontend の開発とビルド
+## frontend の検査とビルド
 
 ```sh
 nix build .#frontend          # 静的ビルド成果物 (Vite の dist)
@@ -98,13 +125,10 @@ devShell 内では通常の npm ワークフローも使える:
 
 ```sh
 task frontend:install   # 初回と依存変更時
-task frontend:dev       # dev server (http://localhost:5173)
 task frontend:test      # vitest
 task frontend:typecheck # tsc -b
 task frontend:lint      # oxlint
 ```
-
-dev server は `/health` と `/api` を backend(`http://localhost:8080`)へ proxy する(`frontend/vite.config.ts`)。別ターミナルで `task backend:run` を起動しておくと、hello ページに backend の health check 結果が表示される。
 
 依存を変更したら `package.json` と `package-lock.json` をコミットする。Nix の frontend build は lockfile から依存を取得するため、Nix 固有の dependency hash の更新は不要。
 
@@ -125,7 +149,9 @@ frontend イメージは [static-web-server](https://static-web-server.net/) が
 
 デプロイの既定はシングルノード k3s クラスタ ([ADR 0008](docs/adr/0008-topology-agnostic-manifests.md))。Linux ホスト上で k3s server が systemd の一時 unit `dsa-k3s` として動く。`k3s-up` は `sudo systemd-run` を使うため、systemd と sudo が必要になる。OrbStack を使う場合も Linux machine 内で以下のコマンドを実行する。
 
-### 起動と停止
+### 低レベルのクラスタ操作
+
+通常は前述の `task start` を使う。クラスタだけを操作または診断する場合は次を使う:
 
 ```sh
 task k3s:up           # 起動し、ノードが Ready になるまで待つ
@@ -148,12 +174,12 @@ task k3s:down         # 停止
 - `k3s-up` は非 NixOS ホストでも動くが、systemd を前提とする
 - `k3s-down` で server を止めてもワークロードのコンテナは残り、次回起動時に再管理される
 
-## デプロイ (Kustomize)
+## 低レベルのデプロイ操作 (Kustomize)
 
-k3s 環境が起動済みなら 1 コマンド:
+通常の開発ループでは `task start` と `task redeploy` を使う。k3s環境が起動済みで、
+デプロイ部分だけを診断する場合は次を実行できる:
 
 ```sh
-task k3s:up            # 未起動の場合
 task k3s:deploy        # イメージ搬入 + local overlay の apply
 ```
 
@@ -163,8 +189,9 @@ task k3s:deploy        # イメージ搬入 + local overlay の apply
    - イメージの stream script をホストの containerd へ直接 pipe する (`sudo` が必要)
 2. **Secret基盤の収束** — version固定したSecrets Store CSI DriverとOpenBaoをHelmでinstall/upgradeし、disposableなdev serverへKubernetes auth、最小権限policy/role、既知の開発用passwordを冪等に設定する
 3. **local manifest のrenderとapply** — image tagはderivation hash由来で毎ビルド変わるため、一時コピー上のlocal overlayへ現在のtagを自動注入する。Git管理されたmanifestは変更しない
-4. **rollout待機** — backend / frontend のDeploymentが完了するまで待つ
-5. 完了後にアクセス URL (`http://<node-ip>/`) を表示する
+4. **rollout待機** — PostgreSQL / Redis / backend / frontend のrollout完了を待つ
+5. **readiness確認** — application PodがすべてReadyになるまで待つ
+6. 完了後にアクセス URL (`http://<node-ip>/`) を表示する
 
 ブラウザで URL を開くと hello ページが表示され、backend の health check 結果 (`ok`) が出る。Ingress は `/health` と `/api` を backend へ、それ以外を frontend へ route する。
 
