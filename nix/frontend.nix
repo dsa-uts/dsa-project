@@ -1,4 +1,4 @@
-# frontend の静的ビルド成果物 (Vite の dist)。flake.nix から system ごとに import される。
+# frontend の静的ビルド成果物 (Vite の dist)
 { pkgs }:
 pkgs.buildNpmPackage {
   pname = "dsa-frontend";

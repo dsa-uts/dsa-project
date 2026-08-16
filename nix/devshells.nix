@@ -1,4 +1,4 @@
-# devShell 定義。flake.nix から system ごとに import される。
+# devShell 定義
 { pkgs }:
 {
   default = pkgs.mkShell {
