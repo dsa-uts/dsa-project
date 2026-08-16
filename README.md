@@ -139,7 +139,7 @@ task k3s:down         # 停止
 
 | ファイル | 内容 |
 | --- | --- |
-| `.k3s/kubeconfig` | ホスト用 kubeconfig (`k3s-up` が生成) |
+| `.k3s/kubeconfig` | ホスト用 kubeconfig (k3s server が直接生成) |
 
 クラスタ状態はホストの `/var/lib/rancher/k3s` にある。
 

@@ -1,7 +1,6 @@
 #!/usr/bin/env nu
 
 const unit = 'dsa-k3s'
-const host_kubeconfig = '/etc/rancher/k3s/k3s.yaml'
 
 def repo-root [] {
   $env.FILE_PWD | path join .. | path expand
@@ -103,24 +102,29 @@ def 'main up' [] {
   let root = repo-root
   let state_dir = state-dir $root
   mkdir $state_dir
+  let kubeconfig = $state_dir | path join kubeconfig
+  let group = ^id -gn | str trim
 
   if (unit-active) {
-    print $"k3s server is already running (systemd unit: ($unit))"
+    print $"k3s server is already running; systemd unit: ($unit)"
   } else {
-    print $"Starting the k3s server as transient systemd unit ($unit) (requires sudo) ..."
+    print $"Starting the k3s server as transient systemd unit ($unit); requires sudo ..."
     let executable_path = $env.PATH | str join ':'
     run-checked 'failed to start the k3s systemd unit' [
       sudo systemd-run $"--unit=($unit)"
       '--description=dsa-project single-node k3s server'
       $"--property=Environment=PATH=($executable_path)"
       (which k3s | get 0.path) server
+      --write-kubeconfig $kubeconfig
+      --write-kubeconfig-group $group
+      --write-kubeconfig-mode 0640
     ] | ignore
   }
 
   print 'Waiting for the kubeconfig ...'
   mut found = false
   for _ in 1..300 {
-    let exists = (do { ^sudo test -s $host_kubeconfig } | complete).exit_code == 0
+    let exists = (do { ^test -s $kubeconfig } | complete).exit_code == 0
     if $exists {
       $found = true
       break
@@ -131,25 +135,19 @@ def 'main up' [] {
     sleep 1sec
   }
   if not $found {
-    error make { msg: $"timed out waiting for ($host_kubeconfig); check: journalctl -u ($unit)" }
+    error make { msg: $"timed out waiting for ($kubeconfig); check: journalctl -u ($unit)" }
   }
 
-  let kubeconfig = $state_dir | path join kubeconfig
-  let user = ^id -un | str trim
-  let group = ^id -gn | str trim
-  run-checked 'failed to copy the k3s kubeconfig' [
-    sudo install -m 600 -o $user -g $group $host_kubeconfig $kubeconfig
-  ] | ignore
   wait-for-node $state_dir
 }
 
 def 'main down' [] {
   if (unit-active) {
-    print $"Stopping systemd unit ($unit) (requires sudo) ..."
+    print $"Stopping systemd unit ($unit); requires sudo ..."
     run-checked 'failed to stop the k3s systemd unit' [sudo systemctl stop $unit] | ignore
     print 'k3s server stopped. Workload containers will be re-managed when it starts again.'
   } else {
-    print $"k3s server is not running (systemd unit: ($unit))"
+    print $"k3s server is not running; systemd unit: ($unit)"
   }
 }
 
