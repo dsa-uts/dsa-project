@@ -86,7 +86,6 @@ flowchart LR
         FE[Frontend]
         BE[Backend]
         DB[(PostgreSQL)]
-        RD[(Redis)]
         OB[OpenBao]
         JD[Judge]
       end
@@ -106,14 +105,11 @@ flowchart LR
   IG -->|/api/...| BE
 
   BE -->|CRUD / auth users / durable job state| DB
-  BE -->|session / progress cache| RD
   OB -->|DB creds| BE
   OB -->|DB creds| JD
   OB -->|dynamic DB user / password| DB
-  RD -->|job queued notification| JD
 
   JD -->|poll / claim jobs / update results| DB
-  JD -->|progress cache| RD
   JD -->|resolve Resource Version image digest| DB
   JD -->|create / delete sandbox Pod| api
   api -->|schedule with gVisor RuntimeClass| sandbox
@@ -123,11 +119,7 @@ flowchart LR
 ```
 
 * PostgreSQL: データの永続化 (User, Resource, Request, etc)
-  - ジョブキューも保存する
-* Redis: 一時的なデータの共有
-  - セッション情報
-  - Workflow などの短期 progress cache
-  - Judgeサーバーへの notify
+  - セッション情報、Workflow の進捗、ジョブキューを保存する
 * OpenBao: secret管理
 * GitHub private repository: Resource の管理
   - main ブランチ更新を Resource 更新の入口とする
@@ -160,7 +152,7 @@ flowchart LR
   - Validator: [GoPlayground/validator](https://github.com/go-playground/validator)
 - 認証: Backend-managed session cookie
 - データベース: PostgreSQL
-- セッション・進捗キャッシュ・ジョブ通知: Redis
+- セッション・進捗・ジョブキュー: PostgreSQL
 - Secret 管理: OpenBao
 - オブジェクトストレージ: Seaweedfs
 - Resource 管理:

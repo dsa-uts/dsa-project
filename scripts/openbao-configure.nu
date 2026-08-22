@@ -74,7 +74,7 @@ def main [environment: string] {
     }
   }
 
-  for workload in [backend postgresql redis] {
+  for workload in [backend postgresql] {
     let policy_name = $"dsa-($environment)-($workload)"
     let policy_path = $repo_root | path join deploy openbao policies $'($workload).hcl'
     let policy = open --raw $policy_path | str replace --all ENVIRONMENT $environment
@@ -84,7 +84,6 @@ def main [environment: string] {
 
   if $environment == dev {
     bao-exec $openbao_namespace $pod $token -- kv put kv/dsa/dev/postgresql password=development-password | ignore
-    bao-exec $openbao_namespace $pod $token -- kv put kv/dsa/dev/redis password=development-password | ignore
   }
 
   print $"Configured OpenBao policies and Kubernetes roles for ($environment)."

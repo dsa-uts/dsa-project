@@ -55,7 +55,7 @@ direnv allow
 
 ## 開発ループ
 
-アプリケーションはホスト上で直接起動せず、PostgreSQL、Redis、backend、frontendを
+アプリケーションはホスト上で直接起動せず、PostgreSQL、backend、frontendを
 含む完全な構成をローカルk3sへデプロイして確認する。最初は次を実行する:
 
 ```sh
@@ -85,7 +85,7 @@ rolloutとPodのreadinessは次で確認できる:
 task status
 ```
 
-componentのログは `backend`、`frontend`、`postgresql`、`redis` のいずれかを指定して
+componentのログは `backend`、`frontend`、`postgresql` のいずれかを指定して
 取得する。指定を省略すると全componentのログを取得する:
 
 ```sh
@@ -103,8 +103,7 @@ task stop
 ```
 
 `stop` はk3s serverを止めるだけで、`dsa-dev` namespaceとPostgreSQL PVCを削除しない。
-次回の `start` ではセッションをまたいでPostgreSQLデータを利用できる。Redisは
-`emptyDir`を使用するため、そのstateは通常の永続データ契約に含まれない。
+次回の `start` ではセッションをまたいでPostgreSQLデータを利用できる。
 
 PostgreSQLを含むdevelopment dataを破棄するときだけ `reset` を使う:
 
@@ -223,7 +222,7 @@ task k3s:deploy        # イメージ搬入 + local overlay の apply
    - イメージの stream script をホストの containerd へ直接 pipe する (`sudo` が必要)
 2. **Secret基盤の収束** — version固定したSecrets Store CSI DriverとOpenBaoをHelmでinstall/upgradeし、disposableなdev serverへKubernetes auth、最小権限policy/role、既知の開発用passwordを冪等に設定する
 3. **local manifest のrenderとapply** — image tagはderivation hash由来で毎ビルド変わるため、一時コピー上のlocal overlayへ現在のtagを自動注入する。Git管理されたmanifestは変更しない
-4. **rollout待機** — PostgreSQL / Redis / backend / frontend のrollout完了を待つ
+4. **rollout待機** — PostgreSQL / backend / frontend のrollout完了を待つ
 5. **readiness確認** — application PodがすべてReadyになるまで待つ
 6. 完了後にアクセス URL (`http://<node-ip>/`) を表示する
 
@@ -248,4 +247,4 @@ CI や手元での確認に使う。内部では `nix flake check -L` を実行�
 
 GitHub Actions (`.github/workflows/ci.yml`) が PR と main への push で同じ `nix flake check` を実行する。Linux runner では checks にコンテナイメージ (`backend-image` / `frontend-image`) のビルドも含まれる。Nix store は [cache-nix-action](https://github.com/nix-community/cache-nix-action) で GitHub Actions cache にキャッシュされる。
 
-PostgreSQL、Redis、実行中の backend、Ingress、frontend を必要とするテストは、ADR 0012 に従い k3s にデプロイしたアプリケーションの公開 HTTP interface 経由で実行する。CI の `codegen-check` job は codegen ドリフト検査を実行する。
+PostgreSQL、実行中の backend、Ingress、frontend を必要とするテストは、ADR 0012 に従い k3s にデプロイしたアプリケーションの公開 HTTP interface 経由で実行する。CI の `codegen-check` job は codegen ドリフト検査を実行する。

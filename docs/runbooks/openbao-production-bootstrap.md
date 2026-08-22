@@ -82,13 +82,12 @@ Set the initial datastore values interactively:
 
 ```sh
 task openbao:set-production-secret -- postgresql
-task openbao:set-production-secret -- redis
 unset BAO_TOKEN
 ```
 
 The command refuses to overwrite an existing path. Password input accepts only
-letters, digits, `_`, and `-`. Initialize the datastores only after both values
-exist, then deploy the production application overlay.
+letters, digits, `_`, and `-`. Initialize PostgreSQL only after the value exists,
+then deploy the production application overlay.
 
 ## Change an existing static credential
 
@@ -107,16 +106,6 @@ For PostgreSQL:
    verify readiness through the public health interface.
 5. Restore the intended replica count and confirm the old password no longer
    authenticates.
-
-For the currently non-persistent Redis:
-
-1. Stop backend traffic and scale `dsa-backend` to zero.
-2. Write the new value to `kv/dsa/prod/redis` using an authorized OpenBao
-   operator session.
-3. Restart `dsa-redis`; its init container renders a new ACL file from the CSI
-   mount. Verify an authenticated `PING` succeeds.
-4. Start one backend Pod and verify readiness, then restore the intended replica
-   count. Confirm the old password no longer authenticates.
 
 If any step fails, keep traffic stopped and restore both the datastore credential
 and OpenBao KV value to the previous matching pair before restarting backend.

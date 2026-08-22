@@ -2,9 +2,12 @@
 
 Status: accepted
 
+The Redis notifier portion of this decision is superseded by ADR 0015. The
+database job queue and seam-limited interface decisions remain accepted.
+
 ADR 0012 supersedes the test strategy described below: tests that require PostgreSQL or a running backend now exercise a deployment in an isolated k3s namespace through its public HTTP interface. The seam-limited interface decision, including the deliberate absence of repository interfaces, remains accepted. ADR 0013 records the Kustomize and Kubernetes Job deployment mechanism.
 
-Go interfaces are introduced only where substitution actually happens: `judge.Executor` (fake worker during the stub-first milestones, sandbox executor later, and the future `cmd/judge` binary), the clock, and the Redis notifier. Store types stay concrete and are tested against a real PostgreSQL (testcontainers or equivalent); handler tests go through httptest with a real store. There is deliberately no repository-interface layer and no mock-based unit isolation between layers.
+Go interfaces are introduced only where substitution actually happens: `judge.Executor` (fake worker during the stub-first milestones, sandbox executor later, and the future `cmd/judge` binary) and the clock. Store types stay concrete and are tested against a real PostgreSQL (testcontainers or equivalent); handler tests go through httptest with a real store. There is deliberately no repository-interface layer and no mock-based unit isolation between layers.
 
 ## Considered Options
 

@@ -5,7 +5,6 @@ const development_namespace = 'dsa-dev'
 const application_selector = 'app.kubernetes.io/name=dsa'
 const development_workloads = [
   { resource: 'statefulset/dsa-postgresql', component: 'postgresql' }
-  { resource: 'deployment/dsa-redis', component: 'redis' }
   { resource: 'deployment/dsa-backend', component: 'backend' }
   { resource: 'deployment/dsa-frontend', component: 'frontend' }
 ]

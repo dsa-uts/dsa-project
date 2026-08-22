@@ -1,5 +1,8 @@
 # OpenBao Static Secret Delivery
 
+The Redis-specific parts of this decision are superseded by ADR 0015. OpenBao
+continues to deliver the PostgreSQL credential to the backend and database.
+
 OpenBao is the source of truth for application secrets. Workloads authenticate
 with dedicated Kubernetes ServiceAccounts and receive only their permitted KV v2
 values through OpenBao CSI Provider files. Kubernetes Secret synchronization is
@@ -22,11 +25,11 @@ initial root token are stored outside Kubernetes and OpenBao.
 - Use environment variables populated from synchronized Kubernetes Secrets.
   Rejected because values remain in Kubernetes Secrets and the process
   environment. CSI files provide the required startup-only interface directly.
-- Give all datastore workloads one OpenBao role. Rejected because PostgreSQL and
-  Redis do not need each other's password. Each workload has its own
-  ServiceAccount, policy and role; backend alone can read both.
-- Enable automatic CSI rotation immediately. Deferred because PostgreSQL and
-  Redis credential changes require coordinated source-side updates, and the
+- Give all datastore workloads one OpenBao role. Rejected because each workload
+  should receive only the credential it needs. PostgreSQL and backend retain
+  separate ServiceAccounts, policies, and roles.
+- Enable automatic CSI rotation immediately. Deferred because PostgreSQL
+  credential changes require coordinated source-side updates, and the
   application does not yet reload credentials while running.
 - Use auto-unseal without an existing independent KMS or HSM. Rejected because
   placing the unseal root inside the same cluster creates a circular recovery
@@ -42,9 +45,6 @@ initial root token are stored outside Kubernetes and OpenBao.
 - PostgreSQL's initialization password is only applied to an empty data
   directory. Operators must keep the PostgreSQL role password and OpenBao KV
   value consistent; changing one without the other is an outage.
-- The Redis password is restricted to `A-Z`, `a-z`, `0-9`, `_`, and `-`. This
-  allows an init container to render an ACL file without exposing the password
-  in the Redis server command line.
 - TLS material for OpenBao itself is a trust-bootstrap input and cannot come
   from OpenBao. Production operators provide `openbao-server-tls` before
   installing OpenBao and protect its private key independently.

@@ -20,7 +20,7 @@
 
 ## テスト (ADR 0012)
 
-- PostgreSQL、Redis、実行中の backend、Ingress、frontend を必要とするテストは、k3s の隔離 namespace にKustomizeでデプロイし、公開 HTTP interface を通して観測する。テスト内で server を組み立てたり、testcontainers で依存を起動したりする第二の実行経路は作らない。
+- PostgreSQL、実行中の backend、Ingress、frontend を必要とするテストは、k3s の隔離 namespace にKustomizeでデプロイし、公開 HTTP interface を通して観測する。テスト内で server を組み立てたり、testcontainers で依存を起動したりする第二の実行経路は作らない。
 - 主要な正常系はKubernetes test Jobからbrowser E2Eで確認し、画面から到達しにくいAPI contractは同じJobから公開HTTP APIを直接検査する。テストデータは公開interface経由で作り、DBをassertion seamにしない。
 - 外部依存なしで観測できる純粋なロジックだけを通常の unit test に残す。store は具象型のままとし、DB fake や repository interface を作らない(interface の方針は ADR 0011)。
 - frontend のテストは vitest + happy-dom。fetch は `vi.stubGlobal('fetch', ...)` でスタブする(MSW は導入しない)。
