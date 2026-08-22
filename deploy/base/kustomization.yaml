@@ -15,4 +15,4 @@ resources:
 labels:
   - pairs:
       app.kubernetes.io/name: dsa
-      app.kubernetes.io/part-of: dsa
+      app.kubernetes.io/part-of: dsa-project
