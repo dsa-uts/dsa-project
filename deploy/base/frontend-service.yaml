@@ -7,7 +7,6 @@ metadata:
 spec:
   selector:
     app.kubernetes.io/name: dsa
-    app.kubernetes.io/instance: dsa
     app.kubernetes.io/component: frontend
   ports:
     - name: http
