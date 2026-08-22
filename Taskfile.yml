@@ -106,7 +106,7 @@ tasks:
       - nu scripts/k3s.nu status
 
   logs:
-    desc: Show logs for a development component (backend, frontend, postgresql, redis, or all)
+    desc: Show logs for a development component (backend, frontend, postgresql, or all)
     cmds:
       - nu scripts/k3s.nu logs {{.CLI_ARGS}}
 

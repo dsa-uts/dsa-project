@@ -29,4 +29,4 @@ task frontend:lint
 task check
 ```
 
-PostgreSQL、Redis、実行中の backend、Ingress、frontend を必要とするテストは、k3s にデプロイしたアプリケーションの公開 HTTP interface 経由で実行する (ADR 0012)。
+PostgreSQL、実行中の backend、Ingress、frontend を必要とするテストは、k3s にデプロイしたアプリケーションの公開 HTTP interface 経由で実行する (ADR 0012)。

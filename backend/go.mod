@@ -9,7 +9,6 @@ require (
 	github.com/labstack/echo/v4 v4.15.4
 	github.com/oapi-codegen/echo-middleware v1.1.0
 	github.com/oapi-codegen/runtime v1.6.0
-	github.com/redis/go-redis/v9 v9.12.1
 	github.com/uptrace/bun v1.2.18
 	github.com/uptrace/bun/dialect/pgdialect v1.2.18
 	github.com/uptrace/bun/driver/pgdriver v1.2.18
@@ -17,7 +16,6 @@ require (
 
 require (
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
-	github.com/dgryski/go-rendezvous v0.0.0-20200823014737-9f7001d12a5f // indirect
 	github.com/dprotaso/go-yit v0.0.0-20220510233725-9ba8df137936 // indirect
 	github.com/go-openapi/jsonpointer v1.0.0 // indirect
 	github.com/gorilla/mux v1.8.1 // indirect

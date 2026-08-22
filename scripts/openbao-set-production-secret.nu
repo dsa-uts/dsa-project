@@ -1,8 +1,8 @@
 #!/usr/bin/env nu
 
 def main [datastore: string] {
-  if $datastore not-in [postgresql redis] {
-    error make { msg: 'datastore must be postgresql or redis' }
+  if $datastore != postgresql {
+    error make { msg: 'datastore must be postgresql' }
   }
 
   let token = $env.BAO_TOKEN? | default ''

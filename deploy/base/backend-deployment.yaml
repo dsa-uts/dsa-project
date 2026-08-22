@@ -35,14 +35,6 @@ spec:
               value: dsa
             - name: DATABASE_PASSWORD_FILE
               value: /run/secrets/dsa/postgres-password
-            - name: REDIS_HOST
-              value: dsa-redis
-            - name: REDIS_PORT
-              value: "6379"
-            - name: REDIS_DATABASE
-              value: "0"
-            - name: REDIS_PASSWORD_FILE
-              value: /run/secrets/dsa/redis-password
           readinessProbe:
             httpGet:
               path: /health

@@ -18,15 +18,12 @@ func main() {
 	if err != nil {
 		log.Fatalf("load configuration: %v", err)
 	}
-	datastores, err := app.ConnectDatastores(startupCtx, app.DatastoreConfig{
-		DatabaseURL: cfg.DatabaseURL,
-		RedisURL:    cfg.RedisURL,
-	})
+	db, err := app.ConnectDatabase(startupCtx, cfg.DatabaseURL)
 	if err != nil {
 		log.Fatalf("initialize datastores: %v", err)
 	}
-	defer datastores.Close()
+	defer db.Close()
 
-	e := server.New(datastores.DB)
+	e := server.New(db)
 	log.Fatal(e.Start(net.JoinHostPort("", cfg.Port)))
 }

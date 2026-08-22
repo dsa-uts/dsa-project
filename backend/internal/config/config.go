@@ -17,7 +17,6 @@ import (
 type Configuration struct {
 	Port        string
 	DatabaseURL string
-	RedisURL    string
 }
 
 type specification struct {
@@ -27,10 +26,6 @@ type specification struct {
 	DatabaseUser         string     `envconfig:"DATABASE_USER" required:"true"`
 	DatabaseName         string     `envconfig:"DATABASE_NAME" required:"true"`
 	DatabasePasswordFile secretFile `envconfig:"DATABASE_PASSWORD_FILE" required:"true"`
-	RedisHost            string     `envconfig:"REDIS_HOST" required:"true"`
-	RedisPort            string     `envconfig:"REDIS_PORT" required:"true"`
-	RedisDatabase        string     `envconfig:"REDIS_DATABASE" required:"true"`
-	RedisPasswordFile    secretFile `envconfig:"REDIS_PASSWORD_FILE" required:"true"`
 }
 
 type secretFile string
@@ -77,16 +72,8 @@ func load() (Configuration, error) {
 		Path:     "/" + spec.DatabaseName,
 		RawQuery: "sslmode=disable",
 	}).String()
-	redisURL := (&url.URL{
-		Scheme: "redis",
-		User:   url.UserPassword("", string(spec.RedisPasswordFile)),
-		Host:   net.JoinHostPort(spec.RedisHost, spec.RedisPort),
-		Path:   "/" + spec.RedisDatabase,
-	}).String()
-
 	return Configuration{
 		Port:        spec.Port,
 		DatabaseURL: databaseURL,
-		RedisURL:    redisURL,
 	}, nil
 }

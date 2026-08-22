@@ -18,7 +18,7 @@ OpenBao server は Integrated Storage (Raft) を使う。永続 volume、TLS、�
 
 OpenBao CSI Provider は、要求元 Pod の ServiceAccount を使って OpenBao に認証する。通信には TLS を使用し、server/chart/provider/driver の version は固定する（[OpenBao CSI documentation](https://openbao.org/docs/2.5.x/platform/k8s/csi/)、[OpenBao CSI Provider](https://github.com/openbao/openbao-csi-provider)）。
 
-アプリケーションと PostgreSQL/Redis は、起動時にマウントされたファイルから値を読む。既存の Kubernetes Secret 名や環境変数 interface は維持しない。
+アプリケーションと PostgreSQL は、起動時にマウントされたファイルから値を読む。既存の Kubernetes Secret 名や環境変数 interface は維持しない。
 
 ## Secret の更新
 
