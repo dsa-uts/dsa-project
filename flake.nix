@@ -22,11 +22,14 @@
         let
           backend = import ./nix/backend.nix { inherit pkgs; };
           frontend = import ./nix/frontend.nix { inherit pkgs; };
+          e2e = import ./nix/e2e.nix { inherit pkgs; };
         in
         {
-          inherit backend frontend;
+          inherit backend frontend e2e;
           backend-image = import ./nix/backend-image.nix { inherit pkgs backend; };
           frontend-image = import ./nix/frontend-image.nix { inherit pkgs frontend; };
+          e2e-image = import ./nix/e2e-image.nix { inherit pkgs e2e; };
+          kustomize-build = import ./nix/kustomize-check.nix { inherit pkgs; };
         }
       );
     in

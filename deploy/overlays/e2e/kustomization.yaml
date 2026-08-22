@@ -1,0 +1,64 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: dsa-e2e
+resources:
+  - namespace.yaml
+  - ../../base
+  - datastore-secret.yaml
+  - test-job.yaml
+images:
+  - name: dsa-backend
+    newTag: e2e
+  - name: dsa-frontend
+    newTag: e2e
+  - name: dsa-e2e
+    newTag: e2e
+patches:
+  - target:
+      kind: Deployment
+      name: dsa-(backend|frontend)
+    patch: |-
+      - op: replace
+        path: /spec/template/spec/containers/0/imagePullPolicy
+        value: Never
+  - target:
+      kind: Job
+      name: dsa-e2e
+    patch: |-
+      - op: replace
+        path: /spec/template/spec/containers/0/imagePullPolicy
+        value: Never
+  - target:
+      kind: PersistentVolumeClaim
+      name: dsa-postgresql
+    patch: |-
+      - op: add
+        path: /spec/storageClassName
+        value: local-path
+  - target:
+      kind: Deployment
+      name: dsa-backend
+    patch: |-
+      - op: replace
+        path: /spec/template/spec/volumes/0
+        value:
+          name: datastore-secrets
+          secret:
+            secretName: dsa-datastore
+  - target:
+      kind: StatefulSet
+      name: dsa-postgresql
+    patch: |-
+      - op: replace
+        path: /spec/template/spec/volumes/1
+        value:
+          name: datastore-secrets
+          secret:
+            secretName: dsa-datastore
+  - target:
+      kind: Ingress
+      name: dsa
+    patch: |-
+      - op: add
+        path: /spec/rules/0/host
+        value: traefik.kube-system.svc.cluster.local
