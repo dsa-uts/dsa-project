@@ -2,6 +2,7 @@
 
 const unit = 'dsa-k3s'
 const development_namespace = 'dsa-dev'
+const e2e_namespace = 'dsa-e2e'
 const application_selector = 'app.kubernetes.io/name=dsa'
 const development_workloads = [
   { resource: 'statefulset/dsa-postgresql', component: 'postgresql' }
@@ -158,15 +159,15 @@ def load-images [root: path] {
   }
 }
 
-def render-local-manifests [root: path, backend_tag: string, frontend_tag: string] {
+def render-manifests [root: path, overlay: string, images: list<string>] {
   let render_dir = ^mktemp -d | str trim
   let deploy_dir = $render_dir | path join deploy
   ^cp -R ($root | path join deploy) $deploy_dir
   ^chmod -R u+w $deploy_dir
 
   let result = do {
-    cd ($deploy_dir | path join overlays local)
-    ^kustomize edit set image $"dsa-backend=dsa-backend:($backend_tag)" $"dsa-frontend=dsa-frontend:($frontend_tag)"
+    cd ($deploy_dir | path join overlays $overlay)
+    ^kustomize edit set image ...$images
     ^kustomize build .
   } | complete
 
@@ -175,13 +176,48 @@ def render-local-manifests [root: path, backend_tag: string, frontend_tag: strin
 
   if $result.exit_code != 0 {
     print --stderr $result.stderr
-    error make { msg: 'failed to render local manifests' }
+    error make { msg: $"failed to render ($overlay) manifests" }
   }
   $result.stdout
 }
 
+def render-local-manifests [root: path, backend_tag: string, frontend_tag: string] {
+  render-manifests $root local [
+    $"dsa-backend=dsa-backend:($backend_tag)"
+    $"dsa-frontend=dsa-frontend:($frontend_tag)"
+  ]
+}
+
+def render-e2e-manifests [root: path, backend_tag: string, frontend_tag: string, e2e_tag: string] {
+  render-manifests $root e2e [
+    $"dsa-backend=dsa-backend:($backend_tag)"
+    $"dsa-frontend=dsa-frontend:($frontend_tag)"
+    $"dsa-e2e=dsa-e2e:($e2e_tag)"
+  ]
+}
+
+def diagnose-e2e [] {
+  stage diagnostics $"Workload and Pod state in namespace ($e2e_namespace) ..."
+  let resources = do {
+    ^kubectl --namespace $e2e_namespace get statefulset,deployment,job,pods -o wide
+  } | complete
+  print-command-result $resources
+
+  stage diagnostics 'E2E Job logs ...'
+  let logs = do {
+    ^kubectl --namespace $e2e_namespace logs job/dsa-e2e --all-containers=true --tail=300
+  } | complete
+  print-command-result $logs
+
+  stage diagnostics 'Recent Kubernetes events ...'
+  let events = do {
+    ^kubectl --namespace $e2e_namespace get events --sort-by=.metadata.creationTimestamp
+  } | complete
+  print-command-result $events
+}
+
 def main [] {
-  error make { msg: 'usage: task {start|redeploy|status|logs|stop|reset} or task k3s:{up|down|load-images|deploy}' }
+  error make { msg: 'usage: task {start|redeploy|test|status|logs|stop|reset} or task k3s:{up|down|load-images|deploy}' }
 }
 
 def ensure-cluster [] {
@@ -316,6 +352,81 @@ def 'main start' [] {
 
 def 'main redeploy' [] {
   converge-development-environment
+}
+
+def 'main e2e' [] {
+  ensure-cluster
+  let root = repo-root
+  let config = require-kubeconfig $root
+  let k3s = which k3s | get 0.path
+
+  load-images $root
+  stage build 'Building the E2E image ...'
+  let e2e_image = run-checked 'failed to build the E2E image' [
+    nix build --no-link --print-out-paths $"($root)#e2e-image"
+  ] | str trim
+  stage import 'Importing the E2E image (requires sudo) ...'
+  run-external $e2e_image | ^sudo $k3s ctr -n k8s.io images import -
+  if $env.LAST_EXIT_CODE != 0 {
+    error make { msg: 'failed to import the E2E image' }
+  }
+
+  let backend_tag = run-checked 'failed to evaluate the backend image tag' [
+    nix eval --raw $"($root)#backend-image.imageTag"
+  ] | str trim
+  let frontend_tag = run-checked 'failed to evaluate the frontend image tag' [
+    nix eval --raw $"($root)#frontend-image.imageTag"
+  ] | str trim
+  let e2e_tag = run-checked 'failed to evaluate the E2E image tag' [
+    nix eval --raw $"($root)#e2e-image.imageTag"
+  ] | str trim
+  let manifests = render-e2e-manifests $root $backend_tag $frontend_tag $e2e_tag
+
+  with-env { KUBECONFIG: $config } {
+    stage reset $"Replacing namespace/($e2e_namespace) to guarantee clean PostgreSQL state ..."
+    run-checked 'failed to reset the E2E namespace' [
+      kubectl delete namespace $e2e_namespace --ignore-not-found --wait=true --timeout=2m
+    ] | ignore
+
+    stage apply 'Applying the E2E Kubernetes manifests ...'
+    let apply = $manifests | ^kubectl apply -f - | complete
+    if $apply.exit_code != 0 {
+      print-command-result $apply
+      error make { msg: 'failed to apply E2E manifests' }
+    }
+    print-command-result $apply
+
+    stage test 'Waiting for the finite E2E Job ...'
+    mut outcome = 'timeout'
+    for _ in 1..300 {
+      let state = do {
+        ^kubectl --namespace $e2e_namespace get job/dsa-e2e -o 'jsonpath={.status.conditions[?(@.type=="Complete")].status}{"|"}{.status.conditions[?(@.type=="Failed")].status}'
+      } | complete
+      if $state.exit_code == 0 {
+        let value = $state.stdout | str trim
+        if $value == 'True|' {
+          $outcome = 'complete'
+          break
+        }
+        if $value == '|True' {
+          $outcome = 'failed'
+          break
+        }
+      }
+      sleep 1sec
+    }
+
+    if $outcome != 'complete' {
+      diagnose-e2e
+      error make { msg: $"E2E Job ($outcome); namespace/($e2e_namespace) was preserved for inspection" }
+    }
+
+    ^kubectl --namespace $e2e_namespace logs job/dsa-e2e --all-containers=true --tail=300
+    stage cleanup $"Deleting successful namespace/($e2e_namespace) ..."
+    run-checked 'E2E tests passed, but failed to delete the E2E namespace' [
+      kubectl delete namespace $e2e_namespace --wait=true --timeout=2m
+    ] | ignore
+  }
 }
 
 def 'main status' [] {

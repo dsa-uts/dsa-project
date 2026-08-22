@@ -60,10 +60,21 @@ tasks:
     cmds:
       - nix build .#frontend-image
 
-  images:build:
-    desc: Build the backend and frontend container images
+  e2e:image:build:
+    desc: Build the deployed public-interface test image
     cmds:
-      - nix build -L .#backend-image .#frontend-image
+      - nix build .#e2e-image
+
+  images:build:
+    desc: Build all container images
+    cmds:
+      - nix build -L .#backend-image .#frontend-image .#e2e-image
+
+  test:
+    aliases: [e2e:test]
+    desc: Run deployed public-interface tests on local k3s
+    cmds:
+      - nu scripts/k3s.nu e2e
 
   codegen:generate:
     desc: Generate backend and frontend code from the OpenAPI contract
