@@ -61,21 +61,21 @@ direnv allow
 ```sh
 kubectl config current-context
 kubectl get nodes
-task start
+task deploy
 ```
 
-`start` は接続確認、backend依存metadataのrefresh、content-derived tagを
+`deploy` は接続確認、backend依存metadataのrefresh、content-derived tagを
 持つapplication imageのbuildとimport、dev Kustomize overlayのapply、rollout、
 全application Podのreadiness確認まで行う。完了時に表示されるIngressのURLを
 ブラウザで開く。クラスタに接続できない場合は明示的に失敗し、k3sの起動や修復は行わない。
 
-コードを編集した後は、明示的に再デプロイする:
+コードを編集した後も、同じコマンドで明示的に再デプロイする:
 
 ```sh
-task redeploy
+task deploy
 ```
 
-`redeploy` はimageを再構築してk3sへ搬入し、現在のcontent-derived tagをmanifestへ
+`deploy` はimageを再構築してk3sへ搬入し、現在のcontent-derived tagをmanifestへ
 注入する。内容が変わればDeploymentのPod templateも変わるため、rolloutが発生する。
 進行状況は `dependencies`、`build`、`import`、`apply`、`rollout`、
 `readiness` の段階ごとに表示される。ホットリロードやファイル監視は行わない。
@@ -95,7 +95,7 @@ task logs -- backend
 task logs
 ```
 
-`start` または `redeploy` のrollout/readinessが失敗した場合は、workloadとPodの状態、
+`deploy` のrollout/readinessが失敗した場合は、workloadとPodの状態、
 rollout state、namespace内のKubernetes events、関連component logsが自動表示される。
 
 PostgreSQLを含むdevelopment dataを破棄するときだけ `reset` を使う:
@@ -105,7 +105,7 @@ task reset
 ```
 
 `reset` は `dsa-dev` namespaceだけを削除し、他namespaceやcluster-wide resourceを
-削除対象にしない。次回の `start` で空のdevelopment環境が作成される。
+削除対象にしない。次回の `deploy` で空のdevelopment環境が作成される。
 
 ## API contract と codegen
 
@@ -160,7 +160,7 @@ task frontend:lint      # oxlint
 
 ## コンテナイメージ
 
-`task backend:image:build` / `task frontend:image:build` で得る Nix の出力はイメージ tar を stdout に流すスクリプト。タグは derivation hash 由来で、内容が変わればタグも変わる。k3s へは registry を経由せず直接 import できる(後述の `task k3s:load-images` がこれを自動で行う):
+`task backend:image:build` / `task frontend:image:build` で得る Nix の出力はイメージ tar を stdout に流すスクリプト。タグは derivation hash 由来で、内容が変わればタグも変わる。`task deploy` はk3sへregistryを経由せず直接importする:
 
 ```sh
 task backend:image:build
@@ -180,18 +180,17 @@ kubectl config current-context
 kubectl get nodes
 ```
 
-## 低レベルのデプロイ操作 (Kustomize)
+## デプロイ処理 (Kustomize)
 
-通常の開発ループでは `task start` と `task redeploy` を使う。k3s環境が利用可能で、
-デプロイ部分だけを診断する場合は次を実行できる:
+通常の開発ループでは、k3s環境が利用可能な状態で次を実行する:
 
 ```sh
-task k3s:deploy        # イメージ搬入 + dev overlay の apply
+task deploy        # イメージ搬入 + dev overlay の apply
 ```
 
-`k3s-deploy` は以下を行う:
+`deploy` は以下を行う:
 
-1. **イメージ搬入** (`task k3s:load-images` 単体でも実行可)
+1. **イメージのbuildと搬入**
    - イメージの stream script をホストの containerd へ直接 pipe する (`sudo` が必要)
 2. **dev manifest のrenderとapply** — image tagはderivation hash由来で毎ビルド変わるため、一時コピー上のdev overlayへ現在のtagを自動注入する。Git管理されたmanifestは変更しない。dev overlayは非production用途の固定PostgreSQL passwordをKubernetes Secretとして提供する
 3. **rollout待機** — PostgreSQL / backend / frontend のrollout完了を待つ
@@ -200,7 +199,7 @@ task k3s:deploy        # イメージ搬入 + dev overlay の apply
 
 ブラウザで URL を開くと hello ページが表示され、backend の health check 結果 (`ok`) が出る。Ingress は `/health` と `/api` を backend へ、それ以外を frontend へ route する。
 
-追跡されているdev / e2e overlayの静的なrender結果は次で確認できる。devの実際のNix hash tag注入は`k3s-deploy`が一時コピー上で行う:
+追跡されているdev / e2e overlayの静的なrender結果は次で確認できる。devの実際のNix hash tag注入は`deploy`が一時コピー上で行う:
 
 ```sh
 kubectl kustomize deploy/overlays/dev
@@ -219,4 +218,4 @@ CI や手元での確認に使う。内部では `nix flake check -L` を実行�
 
 GitHub Actions (`.github/workflows/ci.yml`) が PR と main への push で同じ `nix flake check` を実行する。Linux runner では checks にコンテナイメージ (`backend-image` / `frontend-image`) のビルドも含まれる。Nix store は [cache-nix-action](https://github.com/nix-community/cache-nix-action) で GitHub Actions cache にキャッシュされる。
 
-PostgreSQL、実行中の backend、Ingress、frontend を必要とするテストは、ADR 0012 に従い k3s にデプロイしたアプリケーションの公開 HTTP interface 経由で実行する。CI の `codegen-check` job は codegen ドリフト検査を実行する。
+PostgreSQL、実行中の backend、Ingress、frontend を必要とするテストは、ADR 0012 に従いデプロイしたアプリケーションの公開 HTTP interface 経由で実行する。ローカルの `task test` は外部管理の k3s、CI の `deployed-e2e` job は一時 k3d cluster を使うが、どちらもテストの内容は同じ。CI の `codegen-check` job は codegen ドリフト検査を実行する。

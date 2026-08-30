@@ -13,6 +13,7 @@
       go-task
       # Kubernetes manifests
       k3s
+      k3d
       kustomize
       kubectl
       coreutils

@@ -27,6 +27,41 @@ test('a user creates a greeting and sees it in the list', async ({ page }) => {
   await expect(page.getByRole('listitem').filter({ hasText: `hello, ${name}` })).toBeVisible()
 })
 
+test('the public API creates a persisted greeting', async ({ request }) => {
+  const name = `api-create-${Date.now()}`
+  const response = await request.post('/api/hello', { data: { name } })
+
+  expect(response.status()).toBe(201)
+  const greeting = (await response.json()) as { id: string; message: string; created_at: string }
+  expect(greeting.message).toBe(`hello, ${name}`)
+  expect(greeting.id).toEqual(expect.any(String))
+  expect(greeting.id).not.toBe('')
+  expect(greeting.created_at).toEqual(expect.any(String))
+  expect(greeting.created_at).not.toBe('')
+})
+
+test('the public API lists greetings newest first', async ({ request }) => {
+  const run = `${Date.now()}-${Math.random().toString(36).slice(2)}`
+  const olderName = `api-order-older-${run}`
+  const newerName = `api-order-newer-${run}`
+
+  expect((await request.post('/api/hello', { data: { name: olderName } })).status()).toBe(201)
+  expect((await request.post('/api/hello', { data: { name: newerName } })).status()).toBe(201)
+
+  const response = await request.get('/api/hello')
+  expect(response.status()).toBe(200)
+
+  const body = (await response.json()) as { greetings: Array<{ message: string }> }
+  const greetings = body.greetings
+  const messages = greetings.map(({ message }) => message)
+  const olderIndex = messages.indexOf(`hello, ${olderName}`)
+  const newerIndex = messages.indexOf(`hello, ${newerName}`)
+
+  expect(olderIndex).toBeGreaterThanOrEqual(0)
+  expect(newerIndex).toBeGreaterThanOrEqual(0)
+  expect(newerIndex).toBeLessThan(olderIndex)
+})
+
 test('invalid public API input uses the OpenAPI error envelope', async ({ request }) => {
   const response = await request.post('/api/hello', { data: { name: '' } })
 
@@ -34,6 +69,30 @@ test('invalid public API input uses the OpenAPI error envelope', async ({ reques
   await expect(response.json()).resolves.toMatchObject({
     error: {
       code: 'validation_failed',
+      message: expect.any(String),
+    },
+  })
+})
+
+test('missing public API input uses the OpenAPI error envelope', async ({ request }) => {
+  const response = await request.post('/api/hello', { data: {} })
+
+  expect(response.status()).toBe(422)
+  await expect(response.json()).resolves.toMatchObject({
+    error: {
+      code: 'validation_failed',
+      message: expect.any(String),
+    },
+  })
+})
+
+test('an unknown public API route uses the OpenAPI error envelope', async ({ request }) => {
+  const response = await request.get('/api/unknown')
+
+  expect(response.status()).toBe(404)
+  await expect(response.json()).resolves.toMatchObject({
+    error: {
+      code: 'not_found',
       message: expect.any(String),
     },
   })

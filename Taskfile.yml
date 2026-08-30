@@ -74,7 +74,14 @@ tasks:
     aliases: [e2e:test]
     desc: Run deployed public-interface tests on the configured k3s cluster
     cmds:
-      - nu scripts/k3s.nu e2e
+      - nu scripts/e2e.nu
+
+  k3d:test:
+    desc: Run deployed public-interface tests on an existing k3d cluster
+    requires:
+      vars: [K3D_CLUSTER]
+    cmds:
+      - nu scripts/e2e.nu --k3d-cluster {{.K3D_CLUSTER}}
 
   codegen:generate:
     desc: Generate backend and frontend code from the OpenAPI contract
@@ -86,40 +93,25 @@ tasks:
     cmds:
       - nu scripts/codegen.nu check
 
-  start:
+  deploy:
     desc: Build and deploy the complete application to the configured k3s cluster
     cmds:
-      - nu scripts/k3s.nu start
-
-  redeploy:
-    desc: Rebuild and redeploy the application to the configured k3s cluster
-    cmds:
-      - nu scripts/k3s.nu redeploy
+      - nu scripts/deploy.nu deploy
 
   status:
     desc: Show the status of the development deployment
     cmds:
-      - nu scripts/k3s.nu status
+      - nu scripts/deploy.nu status
 
   logs:
     desc: Show logs for a development component (backend, frontend, postgresql, or all)
     cmds:
-      - nu scripts/k3s.nu logs {{.CLI_ARGS}}
+      - nu scripts/deploy.nu logs {{.CLI_ARGS}}
 
   reset:
     desc: Delete the dsa-dev namespace and its development data
     cmds:
-      - nu scripts/k3s.nu reset {{.CLI_ARGS}}
-
-  k3s:load-images:
-    desc: Load the application images into the configured k3s node
-    cmds:
-      - nu scripts/k3s.nu load-images
-
-  k3s:deploy:
-    desc: Build and deploy the application to the configured k3s cluster
-    cmds:
-      - nu scripts/k3s.nu deploy
+      - nu scripts/deploy.nu reset
 
   check:
     desc: Run all Nix flake checks
