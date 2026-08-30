@@ -1,49 +1,8 @@
 import { useState, type ReactNode, type SubmitEventHandler } from 'react'
-import { useQueryClient } from '@tanstack/react-query'
-import { Navigate, Outlet, Route, Routes, useOutletContext } from 'react-router-dom'
+import { Navigate, Route, Routes } from 'react-router-dom'
 import { $api } from '@/api/client'
-import type { components } from '@/api/schema'
+import { AuthLayout, ProtectedLayout, useAuth } from '@/auth'
 import { Button } from '@/components/ui/button'
-
-type CurrentUser = components['schemas']['CurrentUser']
-
-type AuthContext = {
-  user: CurrentUser | null
-  authenticated: boolean
-}
-
-function AuthLayout() {
-  const me = $api.useQuery('get', '/api/me', {}, { retry: false })
-
-  if (me.isPending) {
-    return <Page>Loading...</Page>
-  }
-
-  const user = me.isError ? null : me.data
-
-  return (
-    <Outlet
-      context={{
-        user,
-        authenticated: user !== null,
-      } satisfies AuthContext}
-    />
-  )
-}
-
-function useAuth() {
-  return useOutletContext<AuthContext>()
-}
-
-function ProtectedLayout() {
-  const auth = useAuth()
-
-  return auth.authenticated
-    ? <Outlet context={auth} />
-    : <Navigate to="/login" replace />
-}
-
-const meQueryKey = $api.queryOptions('get', '/api/me', {}).queryKey
 
 function Page({ children }: { children: ReactNode }) {
   return (
@@ -56,13 +15,12 @@ function Page({ children }: { children: ReactNode }) {
 }
 
 function LoginPage() {
-  const { authenticated } = useAuth()
-  const queryClient = useQueryClient()
+  const { authenticated, setUser } = useAuth()
   const [userid, setUserid] = useState('')
   const [password, setPassword] = useState('')
   const login = $api.useMutation('post', '/api/session', {
     onSuccess: (user) => {
-      queryClient.setQueryData(meQueryKey, user)
+      setUser(user)
     },
   })
 
@@ -106,12 +64,10 @@ function LoginPage() {
 }
 
 function HomePage() {
-  const { user } = useAuth()
-
-  const queryClient = useQueryClient()
+  const { user, setUser } = useAuth()
   const logout = $api.useMutation('delete', '/api/session', {
     onSuccess: () => {
-      queryClient.setQueryData(meQueryKey, null)
+      setUser(null)
     },
   })
 
@@ -145,7 +101,7 @@ function NotFoundPage() {
 function App() {
   return (
     <Routes>
-      <Route element={<AuthLayout />}>
+      <Route element={<AuthLayout loadingElement={<Page>Loading...</Page>} />}>
         <Route path="/login" element={<LoginPage />} />
 
         <Route element={<ProtectedLayout />}>
