@@ -10,11 +10,12 @@
 | --- | --- |
 | `frontend/` | React / TypeScript製のWebフロントエンド |
 | `backend/` | Go製のAPIサーバー |
+| `api/` | OpenAPI contract |
 | `e2e/` | デプロイ済みの公開HTTP interfaceを検査するE2Eテスト |
 | `deploy/` | Kubernetes manifestのKustomize baseと環境別overlay |
 | `nix/` | devShell、ビルド、コンテナイメージのNix定義 |
 | `scripts/` | Taskfileから呼び出すNushellスクリプト |
-| `docs/spec/` | システム仕様とOpenAPI contract |
+| `docs/spec/` | システム仕様 |
 | `docs/adr/` | Architecture Decision Record |
 | `docs/agents/` | エージェント向け実装規約 |
 
@@ -107,6 +108,6 @@ frontend/backendの直接起動は標準の開発経路に含めない。
 - deployのrolloutまたはreadinessが失敗すると、workload、Pod、Kubernetes events、関連component logsが自動表示される。追加確認には`task status`と`task logs`を使う。
 - application imageはホスト側でビルドし、同じVMのk3s containerdへ搬入するため、deploy時に`sudo`が必要になる。
 - backend依存metadataが自動更新された場合、`nix/backend-vendor-hash.nix`はレビュー可能なworking tree変更として残る。
-- REST APIを変更するときは`docs/spec/openapi.yaml`を先に編集し、`task codegen:generate`で生成物を更新する。
+- REST APIを変更するときは`api/openapi.yaml`を先に編集し、`task codegen:generate`で生成物を更新する。
 - dev/E2E overlayの固定credentialをproductionへ流用しない。production deploymentとcredential管理は未定義である。
 - コーディング規約は[docs/agents/coding-standards.md](docs/agents/coding-standards.md)を参照する。

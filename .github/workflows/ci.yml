@@ -7,8 +7,20 @@ name: CI
 
 on:
   pull_request:
+    paths-ignore:
+      - 'docs/**'
+      - 'README.md'
+      - 'CONTEXT.md'
+      - 'CLAUDE.md'
+      - 'LICENSE'
   push:
     branches: [main]
+    paths-ignore:
+      - 'docs/**'
+      - 'README.md'
+      - 'CONTEXT.md'
+      - 'CLAUDE.md'
+      - 'LICENSE'
 
 # 同一 ref の実行は 1 つに絞り、PR への連続 push では古い実行をキャンセルする
 concurrency:
