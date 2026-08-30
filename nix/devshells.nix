@@ -15,14 +15,7 @@
       k3s
       kustomize
       kubectl
-      kubernetes-helm
       coreutils
-      iptables
-      ipset
-      socat
-      conntrack-tools
-      ethtool
-      kmod
       util-linux
       findutils
       gnugrep

@@ -41,7 +41,7 @@ experimental-features = nix-command flakes
 nix develop
 ```
 
-これで Task / Nushell / Go / Node.js / k3s / Kustomize / kubectl がすべて使えるシェルに入る。開発・ローカル運用コマンドの公開 interface は `task` であり、利用可能なタスクは `task --list` で確認できる。
+これで Task / Nushell / Go / Node.js / k3s CLI / Kustomize / kubectl が使えるシェルに入る。k3s server 自体の導入・起動・保守はこのリポジトリの対象外である。開発・運用コマンドの公開 interface は `task` であり、利用可能なタスクは `task --list` で確認できる。
 
 ### 3. direnv(推奨)
 
@@ -56,16 +56,17 @@ direnv allow
 ## 開発ループ
 
 アプリケーションはホスト上で直接起動せず、PostgreSQL、backend、frontendを
-含む完全な構成をローカルk3sへデプロイして確認する。最初は次を実行する:
+含む完全な構成を、外部で管理されるk3sへデプロイして確認する。接続先を明示してから実行する:
 
 ```sh
+export KUBECONFIG=/path/to/kubeconfig
 task start
 ```
 
-`start` はk3sクラスタの準備、backend依存metadataのrefresh、content-derived tagを
-持つapplication imageのbuildとimport、local Kustomize overlayのapply、rollout、
+`start` は接続確認、backend依存metadataのrefresh、content-derived tagを
+持つapplication imageのbuildとimport、dev Kustomize overlayのapply、rollout、
 全application Podのreadiness確認まで行う。完了時に表示されるIngressのURLを
-ブラウザで開く。
+ブラウザで開く。クラスタに接続できない場合は明示的に失敗し、k3sの起動や修復は行わない。
 
 コードを編集した後は、明示的に再デプロイする:
 
@@ -75,10 +76,10 @@ task redeploy
 
 `redeploy` はimageを再構築してk3sへ搬入し、現在のcontent-derived tagをmanifestへ
 注入する。内容が変わればDeploymentのPod templateも変わるため、rolloutが発生する。
-進行状況は `dependencies`、`build`、`import`、`secrets`、`apply`、`rollout`、
+進行状況は `dependencies`、`build`、`import`、`apply`、`rollout`、
 `readiness` の段階ごとに表示される。ホットリロードやファイル監視は行わない。
 
-local overlayのapplication resourceは専用namespace `dsa-dev` に配置される。現在の
+dev overlayのapplication resourceは専用namespace `dsa-dev` に配置される。現在の
 rolloutとPodのreadinessは次で確認できる:
 
 ```sh
@@ -95,15 +96,6 @@ task logs
 
 `start` または `redeploy` のrollout/readinessが失敗した場合は、workloadとPodの状態、
 rollout state、namespace内のKubernetes events、関連component logsが自動表示される。
-
-通常の終了には次を使う:
-
-```sh
-task stop
-```
-
-`stop` はk3s serverを止めるだけで、`dsa-dev` namespaceとPostgreSQL PVCを削除しない。
-次回の `start` ではセッションをまたいでPostgreSQLデータを利用できる。
 
 PostgreSQLを含むdevelopment dataを破棄するときだけ `reset` を使う:
 
@@ -176,66 +168,45 @@ task backend:image:build
 
 frontend イメージは [static-web-server](https://static-web-server.net/) が `:8080` で静的ファイルを配信する。
 
-この直接 import は既定のシングルノードローカル環境だけを対象とする。local overlay は `imagePullPolicy: Never` なので、マルチノードクラスタでは import されていないノードで `ErrImageNeverPull` になる。マルチノードで動かす場合はレジストリを立ててpushするか、全ノードにimportすること。本番CDはGHCRからdigest指定でpullする。
+この直接 import は、リポジトリとk3sが同じVM上にある現在のシングルノード開発環境だけを対象とする。dev overlay は `imagePullPolicy: Never` なので、マルチノードクラスタでは import されていないノードで `ErrImageNeverPull` になる。
 
-## k3s 環境 (シングルノード)
+## k3s 接続
 
-デプロイの既定はシングルノード k3s クラスタ ([ADR 0008](docs/adr/0008-topology-agnostic-manifests.md))。Linux ホスト上で k3s server が systemd の一時 unit `dsa-k3s` として動く。`k3s-up` は `sudo systemd-run` を使うため、systemd と sudo が必要になる。OrbStack を使う場合も Linux machine 内で以下のコマンドを実行する。
-
-### 低レベルのクラスタ操作
-
-通常は前述の `task start` を使う。クラスタだけを操作または診断する場合は次を使う:
+利用可能な長時間稼働のk3sクラスタを別途用意し、`KUBECONFIG`で指定する。このリポジトリはクラスタをinstall、start、stop、reset、upgrade、backup、recoveryしない ([ADR 0016](docs/adr/0016-externally-managed-k3s.md))。
 
 ```sh
-task k3s:up           # 起動し、ノードが Ready になるまで待つ
-export KUBECONFIG=$PWD/.k3s/kubeconfig
-kubectl get nodes     # 1 ノードが Ready
-
-task k3s:down         # 停止
+export KUBECONFIG=/path/to/kubeconfig
+kubectl get nodes
 ```
-
-状態はリポジトリ直下の `.k3s/` に置かれる (`DSA_K3S_STATE_DIR` で変更可):
-
-| ファイル | 内容 |
-| --- | --- |
-| `.k3s/kubeconfig` | ホスト用 kubeconfig (k3s server が直接生成) |
-
-クラスタ状態はホストの `/var/lib/rancher/k3s` にある。
-
-### 制約と補足
-
-- `k3s-up` は非 NixOS ホストでも動くが、systemd を前提とする
-- `k3s-down` で server を止めてもワークロードのコンテナは残り、次回起動時に再管理される
 
 ## 低レベルのデプロイ操作 (Kustomize)
 
-通常の開発ループでは `task start` と `task redeploy` を使う。k3s環境が起動済みで、
+通常の開発ループでは `task start` と `task redeploy` を使う。k3s環境が利用可能で、
 デプロイ部分だけを診断する場合は次を実行できる:
 
 ```sh
-task k3s:deploy        # イメージ搬入 + local overlay の apply
+task k3s:deploy        # イメージ搬入 + dev overlay の apply
 ```
 
 `k3s-deploy` は以下を行う:
 
 1. **イメージ搬入** (`task k3s:load-images` 単体でも実行可)
    - イメージの stream script をホストの containerd へ直接 pipe する (`sudo` が必要)
-2. **Secret基盤の収束** — version固定したSecrets Store CSI DriverとOpenBaoをHelmでinstall/upgradeし、disposableなdev serverへKubernetes auth、最小権限policy/role、既知の開発用passwordを冪等に設定する
-3. **local manifest のrenderとapply** — image tagはderivation hash由来で毎ビルド変わるため、一時コピー上のlocal overlayへ現在のtagを自動注入する。Git管理されたmanifestは変更しない
-4. **rollout待機** — PostgreSQL / backend / frontend のrollout完了を待つ
-5. **readiness確認** — application PodがすべてReadyになるまで待つ
-6. 完了後にアクセス URL (`http://<node-ip>/`) を表示する
+2. **dev manifest のrenderとapply** — image tagはderivation hash由来で毎ビルド変わるため、一時コピー上のdev overlayへ現在のtagを自動注入する。Git管理されたmanifestは変更しない。dev overlayは非production用途の固定PostgreSQL passwordをKubernetes Secretとして提供する
+3. **rollout待機** — PostgreSQL / backend / frontend のrollout完了を待つ
+4. **readiness確認** — application PodがすべてReadyになるまで待つ
+5. 完了後にアクセス URL (`http://<node-ip>/`) を表示する
 
 ブラウザで URL を開くと hello ページが表示され、backend の health check 結果 (`ok`) が出る。Ingress は `/health` と `/api` を backend へ、それ以外を frontend へ route する。
 
-追跡されているlocal / production overlayの静的なrender結果は次で確認できる。localの実際のNix hash tag注入は`k3s-deploy`が一時コピー上で行う:
+追跡されているdev / e2e overlayの静的なrender結果は次で確認できる。devの実際のNix hash tag注入は`k3s-deploy`が一時コピー上で行う:
 
 ```sh
-kubectl kustomize deploy/overlays/local
-kubectl kustomize deploy/overlays/production
+kubectl kustomize deploy/overlays/dev
+kubectl kustomize deploy/overlays/e2e
 ```
 
-本番overlay (`deploy/overlays/production`) のimage repositoryはGHCRを指す。記載されているゼロdigestは誤デプロイを防ぐsentinelであり、本番CDがGHCRへのpushで得たbackend/frontendのdigestに一時コピー上で置き換えてからapplyする。本番OpenBaoの初期化、unseal、初期Secret投入は [production bootstrap runbook](docs/runbooks/openbao-production-bootstrap.md) に従う。
+production deploymentとcredential管理は、要件が設計されるまで未定義である。dev用Secretをproductionへ流用してはならない。
 
 ## flake の検査
 

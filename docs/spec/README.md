@@ -59,8 +59,8 @@
   - 24時間稼働
 - 可搬性
   - 簡単にデプロイできる
-    - 環境共通の設定はKustomize base、環境差はlocal / production overlayにまとまっている。
-    - k3sの起動と環境overlayの適用をデプロイコマンド一つで行える。
+    - 環境共通の設定はKustomize base、開発環境差はdev overlayにまとまっている。
+    - 外部管理のk3sへ環境overlayをデプロイコマンド一つで適用できる。
     - 初回起動時にのみ初期設定用 Web UI が表示され、Admin アカウントのパスワード等を指定できる。
 
 ## システム構成
@@ -86,7 +86,6 @@ flowchart LR
         FE[Frontend]
         BE[Backend]
         DB[(PostgreSQL)]
-        OB[OpenBao]
         JD[Judge]
       end
 
@@ -105,9 +104,6 @@ flowchart LR
   IG -->|/api/...| BE
 
   BE -->|CRUD / auth users / durable job state| DB
-  OB -->|DB creds| BE
-  OB -->|DB creds| JD
-  OB -->|dynamic DB user / password| DB
 
   JD -->|poll / claim jobs / update results| DB
   JD -->|resolve Resource Version image digest| DB
@@ -120,7 +116,6 @@ flowchart LR
 
 * PostgreSQL: データの永続化 (User, Resource, Request, etc)
   - セッション情報、Workflow の進捗、ジョブキューを保存する
-* OpenBao: secret管理
 * GitHub private repository: Resource の管理
   - main ブランチ更新を Resource 更新の入口とする
 * GitHub Actions: sandbox 用コンテナイメージの build / push と Resource Version 登録
@@ -153,7 +148,7 @@ flowchart LR
 - 認証: Backend-managed session cookie
 - データベース: PostgreSQL
 - セッション・進捗・ジョブキュー: PostgreSQL
-- Secret 管理: OpenBao
+- Secret 管理: 環境が `dsa-datastore` Kubernetes Secret を提供する。production方式は未定
 - オブジェクトストレージ: Seaweedfs
 - Resource 管理:
   - GitHub org private repository
