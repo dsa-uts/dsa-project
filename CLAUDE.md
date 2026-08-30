@@ -8,7 +8,8 @@
 - [docs/agents/coding-standards.md](docs/agents/coding-standards.md) — codegen ポリシー、テストポリシー、no-raw-colors ルール
 - [docs/agents/domain.md](docs/agents/domain.md) — ドメインモデル
 - [docs/adr/](docs/adr/) — アーキテクチャ決定(特に 0010: OpenAPI codegen、0011: seam-limited interfaces、0012: deployed public interface tests)
-- [docs/spec/](docs/spec/) — 仕様書。REST API は `docs/spec/openapi.yaml` が正
+- [docs/spec/](docs/spec/) — 仕様書
+- [api/openapi.yaml](api/openapi.yaml) — REST API contract の正
 
 ## 主要コマンド
 

@@ -8,6 +8,7 @@
 | --- | --- |
 | `frontend/` | Web フロントエンド(Node.js / TypeScript) |
 | `backend/` | API サーバー(Go) |
+| `api/` | REST API contract (`api/openapi.yaml`) |
 | `deploy/` | Kubernetes manifest の Kustomize base / overlay |
 | `nix/` | nix 定義の置き場(devShell 定義など)。`flake.nix` から import される |
 | `docs/` | 仕様書(`docs/spec/`)と ADR(`docs/adr/`) |
@@ -109,7 +110,7 @@ task reset
 
 ## API contract と codegen
 
-クライアント向け REST API は `docs/spec/openapi.yaml` が single source of truth([ADR 0010](docs/adr/0010-openapi-contract-with-codegen.md))。変更したら両側のコードを再生成してコミットする:
+クライアント向け REST API は `api/openapi.yaml` が single source of truth([ADR 0010](docs/adr/0010-openapi-contract-with-codegen.md))。変更したら両側のコードを再生成してコミットする:
 
 ```sh
 task codegen:generate
