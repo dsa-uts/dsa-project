@@ -14,66 +14,103 @@ import (
 	"net/url"
 	"path"
 	"strings"
-	"time"
 
 	"github.com/getkin/kin-openapi/openapi3"
 	"github.com/labstack/echo/v4"
+	"github.com/oapi-codegen/runtime"
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
-// CreateGreetingRequest defines model for CreateGreetingRequest.
-type CreateGreetingRequest struct {
-	// Name Example: dsa
-	Name string `json:"name"`
+// Defines values for CurrentUserRole.
+const (
+	Admin   CurrentUserRole = "admin"
+	Manager CurrentUserRole = "manager"
+	Student CurrentUserRole = "student"
+)
+
+// Valid indicates whether the value is a known member of the CurrentUserRole enum.
+func (e CurrentUserRole) Valid() bool {
+	switch e {
+	case Admin:
+		return true
+	case Manager:
+		return true
+	case Student:
+		return true
+	default:
+		return false
+	}
 }
 
-// Error 統一エラー封筒 (api.md Conventions)
+// CreateSessionRequest defines model for CreateSessionRequest.
+type CreateSessionRequest struct {
+	Password string `json:"password"`
+	Userid   string `json:"userid"`
+}
+
+// CurrentUser defines model for CurrentUser.
+type CurrentUser struct {
+	Id     openapi_types.UUID `json:"id"`
+	Name   string             `json:"name"`
+	Role   CurrentUserRole    `json:"role"`
+	Userid string             `json:"userid"`
+}
+
+// CurrentUserRole defines model for CurrentUser.Role.
+type CurrentUserRole string
+
+// Error defines model for Error.
 type Error struct {
 	Error struct {
-		// Code snake_case の機械可読文字列
-		//
-		// Example: validation_failed
-		Code string `json:"code"`
-
-		// Message 開発者向けの英語文。UI にそのまま表示しない
+		Code    string `json:"code"`
 		Message string `json:"message"`
 	} `json:"error"`
 }
 
-// Greeting defines model for Greeting.
-type Greeting struct {
-	// CreatedAt RFC 3339 UTC
-	CreatedAt time.Time `json:"created_at"`
+// SessionToken defines model for SessionCookie.
+type SessionToken = string
 
-	// Id opaque な UUID 文字列
-	Id openapi_types.UUID `json:"id"`
-
-	// Message Example: hello, dsa
-	Message string `json:"message"`
-}
-
-// GreetingList 一覧レスポンスのトップレベルは配列ではなく object (api.md Conventions)
-type GreetingList struct {
-	Greetings []Greeting `json:"greetings"`
-}
-
-// InternalError 統一エラー封筒 (api.md Conventions)
+// InternalError defines model for InternalError.
 type InternalError = Error
 
-// ValidationError 統一エラー封筒 (api.md Conventions)
+// InvalidCredentials defines model for InvalidCredentials.
+type InvalidCredentials = Error
+
+// Unauthorized defines model for Unauthorized.
+type Unauthorized = Error
+
+// ValidationError defines model for ValidationError.
 type ValidationError = Error
 
-// CreateGreetingJSONRequestBody defines body for CreateGreeting for application/json ContentType.
-type CreateGreetingJSONRequestBody = CreateGreetingRequest
+// GetCurrentUserParams defines parameters for GetCurrentUser.
+type GetCurrentUserParams struct {
+	SessionToken *SessionToken `form:"__Host-dsa_session,omitempty" json:"__Host-dsa_session,omitempty"`
+}
+
+// DeleteSessionParams defines parameters for DeleteSession.
+type DeleteSessionParams struct {
+	SessionToken *SessionToken `form:"__Host-dsa_session,omitempty" json:"__Host-dsa_session,omitempty"`
+}
+
+// CreateSessionParams defines parameters for CreateSession.
+type CreateSessionParams struct {
+	SessionToken *SessionToken `form:"__Host-dsa_session,omitempty" json:"__Host-dsa_session,omitempty"`
+}
+
+// CreateSessionJSONRequestBody defines body for CreateSession for application/json ContentType.
+type CreateSessionJSONRequestBody = CreateSessionRequest
 
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
-	// ListGreetings 保存済みの greeting を新しい順に返す
-	// (GET /api/hello)
-	ListGreetings(ctx echo.Context) error
-	// CreateGreeting greeting を作成して保存する
-	// (POST /api/hello)
-	CreateGreeting(ctx echo.Context) error
+	// GetCurrentUser 現在の User Account を返す
+	// (GET /api/me)
+	GetCurrentUser(ctx echo.Context, params GetCurrentUserParams) error
+	// DeleteSession 現在のセッションからログアウトする
+	// (DELETE /api/session)
+	DeleteSession(ctx echo.Context, params DeleteSessionParams) error
+	// CreateSession userid と password でログインする
+	// (POST /api/session)
+	CreateSession(ctx echo.Context, params CreateSessionParams) error
 }
 
 // ServerInterfaceWrapper converts echo contexts to parameters.
@@ -81,21 +118,72 @@ type ServerInterfaceWrapper struct {
 	Handler ServerInterface
 }
 
-// ListGreetings converts echo context to params.
-func (w *ServerInterfaceWrapper) ListGreetings(ctx echo.Context) error {
+// GetCurrentUser converts echo context to params.
+func (w *ServerInterfaceWrapper) GetCurrentUser(ctx echo.Context) error {
 	var err error
 
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetCurrentUserParams
+
+	if cookie, err := ctx.Cookie("__Host-dsa_session"); err == nil {
+
+		var value SessionToken
+		err = runtime.BindStyledParameterWithOptions("simple", "__Host-dsa_session", cookie.Value, &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationCookie, Explode: true, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Invalid format for parameter __Host-dsa_session: %s", err))
+		}
+		params.SessionToken = &value
+
+	}
+
 	// Invoke the callback with all the unmarshaled arguments
-	err = w.Handler.ListGreetings(ctx)
+	err = w.Handler.GetCurrentUser(ctx, params)
 	return err
 }
 
-// CreateGreeting converts echo context to params.
-func (w *ServerInterfaceWrapper) CreateGreeting(ctx echo.Context) error {
+// DeleteSession converts echo context to params.
+func (w *ServerInterfaceWrapper) DeleteSession(ctx echo.Context) error {
 	var err error
 
+	// Parameter object where we will unmarshal all parameters from the context
+	var params DeleteSessionParams
+
+	if cookie, err := ctx.Cookie("__Host-dsa_session"); err == nil {
+
+		var value SessionToken
+		err = runtime.BindStyledParameterWithOptions("simple", "__Host-dsa_session", cookie.Value, &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationCookie, Explode: true, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Invalid format for parameter __Host-dsa_session: %s", err))
+		}
+		params.SessionToken = &value
+
+	}
+
 	// Invoke the callback with all the unmarshaled arguments
-	err = w.Handler.CreateGreeting(ctx)
+	err = w.Handler.DeleteSession(ctx, params)
+	return err
+}
+
+// CreateSession converts echo context to params.
+func (w *ServerInterfaceWrapper) CreateSession(ctx echo.Context) error {
+	var err error
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params CreateSessionParams
+
+	if cookie, err := ctx.Cookie("__Host-dsa_session"); err == nil {
+
+		var value SessionToken
+		err = runtime.BindStyledParameterWithOptions("simple", "__Host-dsa_session", cookie.Value, &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationCookie, Explode: true, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Invalid format for parameter __Host-dsa_session: %s", err))
+		}
+		params.SessionToken = &value
+
+	}
+
+	// Invoke the callback with all the unmarshaled arguments
+	err = w.Handler.CreateSession(ctx, params)
 	return err
 }
 
@@ -146,25 +234,38 @@ func RegisterHandlersWithOptions(router EchoRouter, si ServerInterface, options 
 		Handler: si,
 	}
 
-	router.GET(options.BaseURL+"/api/hello", wrapper.ListGreetings, options.OperationMiddlewares["listGreetings"]...)
-	router.POST(options.BaseURL+"/api/hello", wrapper.CreateGreeting, options.OperationMiddlewares["createGreeting"]...)
+	router.DELETE(options.BaseURL+"/api/session", wrapper.DeleteSession, options.OperationMiddlewares["deleteSession"]...)
+	router.POST(options.BaseURL+"/api/session", wrapper.CreateSession, options.OperationMiddlewares["createSession"]...)
+	router.GET(options.BaseURL+"/api/me", wrapper.GetCurrentUser, options.OperationMiddlewares["getCurrentUser"]...)
 
 }
 
 type InternalErrorJSONResponse Error
 
+type InvalidCredentialsJSONResponse Error
+
+type UnauthorizedResponseHeaders struct {
+	SetCookie *string
+}
+type UnauthorizedJSONResponse struct {
+	Body Error
+
+	Headers UnauthorizedResponseHeaders
+}
+
 type ValidationErrorJSONResponse Error
 
-type ListGreetingsRequestObject struct {
+type GetCurrentUserRequestObject struct {
+	Params GetCurrentUserParams
 }
 
-type ListGreetingsResponseObject interface {
-	VisitListGreetingsResponse(w http.ResponseWriter) error
+type GetCurrentUserResponseObject interface {
+	VisitGetCurrentUserResponse(w http.ResponseWriter) error
 }
 
-type ListGreetings200JSONResponse GreetingList
+type GetCurrentUser200JSONResponse CurrentUser
 
-func (response ListGreetings200JSONResponse) VisitListGreetingsResponse(w http.ResponseWriter) error {
+func (response GetCurrentUser200JSONResponse) VisitGetCurrentUserResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response); err != nil {
@@ -176,9 +277,26 @@ func (response ListGreetings200JSONResponse) VisitListGreetingsResponse(w http.R
 	return err
 }
 
-type ListGreetings500JSONResponse struct{ InternalErrorJSONResponse }
+type GetCurrentUser401JSONResponse struct{ UnauthorizedJSONResponse }
 
-func (response ListGreetings500JSONResponse) VisitListGreetingsResponse(w http.ResponseWriter) error {
+func (response GetCurrentUser401JSONResponse) VisitGetCurrentUserResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.SetCookie != nil {
+		w.Header().Set("Set-Cookie", fmt.Sprint(*response.Headers.SetCookie))
+	}
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetCurrentUser500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response GetCurrentUser500JSONResponse) VisitGetCurrentUserResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response); err != nil {
@@ -190,31 +308,94 @@ func (response ListGreetings500JSONResponse) VisitListGreetingsResponse(w http.R
 	return err
 }
 
-type CreateGreetingRequestObject struct {
-	Body *CreateGreetingJSONRequestBody
+type DeleteSessionRequestObject struct {
+	Params DeleteSessionParams
 }
 
-type CreateGreetingResponseObject interface {
-	VisitCreateGreetingResponse(w http.ResponseWriter) error
+type DeleteSessionResponseObject interface {
+	VisitDeleteSessionResponse(w http.ResponseWriter) error
 }
 
-type CreateGreeting201JSONResponse Greeting
+type DeleteSession204ResponseHeaders struct {
+	SetCookie *string
+}
 
-func (response CreateGreeting201JSONResponse) VisitCreateGreetingResponse(w http.ResponseWriter) error {
+type DeleteSession204Response struct {
+	Headers DeleteSession204ResponseHeaders
+}
+
+func (response DeleteSession204Response) VisitDeleteSessionResponse(w http.ResponseWriter) error {
+	if response.Headers.SetCookie != nil {
+		w.Header().Set("Set-Cookie", fmt.Sprint(*response.Headers.SetCookie))
+	}
+	w.WriteHeader(204)
+	return nil
+}
+
+type DeleteSession500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response DeleteSession500JSONResponse) VisitDeleteSessionResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response); err != nil {
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(201)
+	w.WriteHeader(500)
 	_, err := buf.WriteTo(w)
 	return err
 }
 
-type CreateGreeting422JSONResponse struct{ ValidationErrorJSONResponse }
+type CreateSessionRequestObject struct {
+	Params CreateSessionParams
+	Body   *CreateSessionJSONRequestBody
+}
 
-func (response CreateGreeting422JSONResponse) VisitCreateGreetingResponse(w http.ResponseWriter) error {
+type CreateSessionResponseObject interface {
+	VisitCreateSessionResponse(w http.ResponseWriter) error
+}
+
+type CreateSession200ResponseHeaders struct {
+	SetCookie *string
+}
+
+type CreateSession200JSONResponse struct {
+	Body    CurrentUser
+	Headers CreateSession200ResponseHeaders
+}
+
+func (response CreateSession200JSONResponse) VisitCreateSessionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.SetCookie != nil {
+		w.Header().Set("Set-Cookie", fmt.Sprint(*response.Headers.SetCookie))
+	}
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateSession401JSONResponse struct{ InvalidCredentialsJSONResponse }
+
+func (response CreateSession401JSONResponse) VisitCreateSessionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateSession422JSONResponse struct{ ValidationErrorJSONResponse }
+
+func (response CreateSession422JSONResponse) VisitCreateSessionResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response); err != nil {
@@ -226,9 +407,9 @@ func (response CreateGreeting422JSONResponse) VisitCreateGreetingResponse(w http
 	return err
 }
 
-type CreateGreeting500JSONResponse struct{ InternalErrorJSONResponse }
+type CreateSession500JSONResponse struct{ InternalErrorJSONResponse }
 
-func (response CreateGreeting500JSONResponse) VisitCreateGreetingResponse(w http.ResponseWriter) error {
+func (response CreateSession500JSONResponse) VisitCreateSessionResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response); err != nil {
@@ -242,12 +423,15 @@ func (response CreateGreeting500JSONResponse) VisitCreateGreetingResponse(w http
 
 // StrictServerInterface represents all server handlers.
 type StrictServerInterface interface {
-	// ListGreetings 保存済みの greeting を新しい順に返す
-	// (GET /api/hello)
-	ListGreetings(ctx context.Context, request ListGreetingsRequestObject) (ListGreetingsResponseObject, error)
-	// CreateGreeting greeting を作成して保存する
-	// (POST /api/hello)
-	CreateGreeting(ctx context.Context, request CreateGreetingRequestObject) (CreateGreetingResponseObject, error)
+	// GetCurrentUser 現在の User Account を返す
+	// (GET /api/me)
+	GetCurrentUser(ctx context.Context, request GetCurrentUserRequestObject) (GetCurrentUserResponseObject, error)
+	// DeleteSession 現在のセッションからログアウトする
+	// (DELETE /api/session)
+	DeleteSession(ctx context.Context, request DeleteSessionRequestObject) (DeleteSessionResponseObject, error)
+	// CreateSession userid と password でログインする
+	// (POST /api/session)
+	CreateSession(ctx context.Context, request CreateSessionRequestObject) (CreateSessionResponseObject, error)
 }
 
 type StrictHandlerFunc func(ctx echo.Context, request any) (any, error)
@@ -262,34 +446,63 @@ type strictHandler struct {
 	middlewares []StrictMiddlewareFunc
 }
 
-// ListGreetings operation middleware
-func (sh *strictHandler) ListGreetings(ctx echo.Context) error {
-	var request ListGreetingsRequestObject
+// GetCurrentUser operation middleware
+func (sh *strictHandler) GetCurrentUser(ctx echo.Context, params GetCurrentUserParams) error {
+	var request GetCurrentUserRequestObject
+
+	request.Params = params
 
 	handler := func(ctx echo.Context, request interface{}) (interface{}, error) {
-		return sh.ssi.ListGreetings(ctx.Request().Context(), request.(ListGreetingsRequestObject))
+		return sh.ssi.GetCurrentUser(ctx.Request().Context(), request.(GetCurrentUserRequestObject))
 	}
 	for _, middleware := range sh.middlewares {
-		handler = middleware(handler, "ListGreetings")
+		handler = middleware(handler, "GetCurrentUser")
 	}
 
 	response, err := handler(ctx, request)
 
 	if err != nil {
 		return err
-	} else if validResponse, ok := response.(ListGreetingsResponseObject); ok {
-		return validResponse.VisitListGreetingsResponse(ctx.Response())
+	} else if validResponse, ok := response.(GetCurrentUserResponseObject); ok {
+		return validResponse.VisitGetCurrentUserResponse(ctx.Response())
 	} else if response != nil {
 		return fmt.Errorf("unexpected response type: %T", response)
 	}
 	return nil
 }
 
-// CreateGreeting operation middleware
-func (sh *strictHandler) CreateGreeting(ctx echo.Context) error {
-	var request CreateGreetingRequestObject
+// DeleteSession operation middleware
+func (sh *strictHandler) DeleteSession(ctx echo.Context, params DeleteSessionParams) error {
+	var request DeleteSessionRequestObject
 
-	var body CreateGreetingJSONRequestBody
+	request.Params = params
+
+	handler := func(ctx echo.Context, request interface{}) (interface{}, error) {
+		return sh.ssi.DeleteSession(ctx.Request().Context(), request.(DeleteSessionRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "DeleteSession")
+	}
+
+	response, err := handler(ctx, request)
+
+	if err != nil {
+		return err
+	} else if validResponse, ok := response.(DeleteSessionResponseObject); ok {
+		return validResponse.VisitDeleteSessionResponse(ctx.Response())
+	} else if response != nil {
+		return fmt.Errorf("unexpected response type: %T", response)
+	}
+	return nil
+}
+
+// CreateSession operation middleware
+func (sh *strictHandler) CreateSession(ctx echo.Context, params CreateSessionParams) error {
+	var request CreateSessionRequestObject
+
+	request.Params = params
+
+	var body CreateSessionJSONRequestBody
 	var err error
 	if binder, ok := ctx.Echo().Binder.(*echo.DefaultBinder); ok {
 		// Bind only the request body, so that path and query parameters
@@ -306,18 +519,18 @@ func (sh *strictHandler) CreateGreeting(ctx echo.Context) error {
 	request.Body = &body
 
 	handler := func(ctx echo.Context, request interface{}) (interface{}, error) {
-		return sh.ssi.CreateGreeting(ctx.Request().Context(), request.(CreateGreetingRequestObject))
+		return sh.ssi.CreateSession(ctx.Request().Context(), request.(CreateSessionRequestObject))
 	}
 	for _, middleware := range sh.middlewares {
-		handler = middleware(handler, "CreateGreeting")
+		handler = middleware(handler, "CreateSession")
 	}
 
 	response, err := handler(ctx, request)
 
 	if err != nil {
 		return err
-	} else if validResponse, ok := response.(CreateGreetingResponseObject); ok {
-		return validResponse.VisitCreateGreetingResponse(ctx.Response())
+	} else if validResponse, ok := response.(CreateSessionResponseObject); ok {
+		return validResponse.VisitCreateSessionResponse(ctx.Response())
 	} else if response != nil {
 		return fmt.Errorf("unexpected response type: %T", response)
 	}
@@ -329,26 +542,21 @@ func (sh *strictHandler) CreateGreeting(ctx echo.Context) error {
 // const string: with thousands of chunks the chained `+` fold is several
 // times slower for the Go compiler than parsing a slice literal.
 var swaggerSpec = []string{
-	"vJbbbhNHGMdfZTT0IpEWO5Byge9ooMgSalNI2kpthYbdiTPUe2BmjBohSzu7HEwpBSKISQWEQkqM0ySg",
-	"FDXQlLxLv6wPb1HNbOLEsUV6EfXK69nRd/j9//PNXsG27wa+Rz0pcO4K5lQEvieo+ZP3JOUeKZ7i3Od6",
-	"wfY9ST2pH0kQFJlNJPO97EXhe3pN2JPUJfrpI04ncA4fyu5Ez6ZvRTaNVi6XLexQYXMW6CA4hyF6A/E6",
-	"xHchXk+uX2vHNYhqEL+EeB2XLfwlKTLHJPy/6tGV1CG+oauK/oR4AeLVZP5140EV691bAXT8EU6JpKc5",
-	"pZJ5hbP0UokKU1bA/YByyVKgHnGp/qU/EDcoUpzDjiDYwi7zzlCvICdx7oiF5VSgXwnJmVcwmTi9VGKc",
-	"Ojj3TRrju84u/8JFakvNp0Olu4vmm9eba2GHZPJKNZem0QAJWMZ10IjvXaae3ioGsbWnXLodsXvZ9h3a",
-	"m0d45Ht63iaCIlDLjZdzjWevkjsrrfpSY+ZGslRNKlVs7er8ckfO8xOEFamDezq3sEuFIIU+2dozt5qz",
-	"71rhteTuPVD3QC23br1u1Z80Zm5AGI3nEahFUI9BLYN6D+p969dac/4dqCqoOqireD/Kpsed/L289+xP",
-	"UfWTZdsUfTga0zjniezt7+ynI2h4ePg4Gh8bwRae8Lmrt2GHSHpYMpf2o8Wc3kB+QC6VtCR1ND6eP4l2",
-	"i9GJWiqx/fDvCDdJi0XfQqlzP0zRRN0OYu1u+EOkzjDRh8jmWth6sQDx7xC9hfgxxKv6QS1DXIE4hriq",
-	"X8WzEC+CWmlfu51UqqAWQK0Yxe+gNM9/M35hqxLzh0nqiv2GSEflcqcxwjmZ6kGyE7qPp7SG3oTf2zxE",
-	"dd1w/BKiedP5GsTPddvRGvqKXkAQPTME6hpItLK1US+uQlxJzwg6e+rcGDoxmocwQs37tVb9CagaGuXM",
-	"s1lQpAKBWkEjn382durrsYzrQKhaL+40/7g6sGd4QKjyJyFUEG2Ycp5qIaINk6s6qIM4vi2yIqB2dos2",
-	"qOXdxBFE042l56BqoGYhugVh9K2n3cTk9lQ8HHDfCHZiNI8tfJlykaIYyhzJDGnMfkA9EjCcw8OZocyw",
-	"FpHISaOUTps1PjVq0j52EjaZmPCLDvMKGoYxUgjxnJn1NdPLTW2zlHdcQQNMiBJFh44fG9QA9dXDiS1R",
-	"wAJaZB5FA1sFZaaIW0T/XJ9GzftzjcpdiFbNtXbTrAnpc2qeRn0hC5ye++LMoOHTnPm5Hf7SfPauVb9t",
-	"5tYcRArUUzPeFpOlh8mjmh5goTpRkpPIHINU5rebf/3Wnr0NaiG5+WN7dh7UA4h+2sVVe9uM2ryDc1if",
-	"r9MdG1rdd/7RoaEDu1m7DnSfC3b7LOj20+OtdT2WVtAvcKfSbPenibmNS65L+JSeFBuPk6WHjbUKqA0N",
-	"didNNN2YeWUugavtp9dBLbY27oOa1VkDXxycS3qQd38f4HQkUCE/8Z2pA8Pd/yOk3D2BJC/Rco/mRw5c",
-	"8356b/79SJ+H1J1qriOM5v/x0aP7q773E/Ag3LLbHdsFVkG9SF2UzifdTPnfAAAA//8=",
+	"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",
 }
 
 // decodeSpec returns the embedded OpenAPI spec as raw JSON bytes,

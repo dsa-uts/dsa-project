@@ -53,42 +53,6 @@
 | Admin | ユーザー、Project の表示順、Resource 登録の credential を管理する。 |
 | System Account | システムが自動作成する Request の actor。ログイン不可。 |
 
-## Auth
-
-### `POST /api/session`
-
-セッションを作成する。
-
-```json
-{
-  "userid": "student001",
-  "password": "..."
-}
-```
-
-- Response: `200` + [`GET /api/me`](#get-apime) と同一の User オブジェクト。cookie を設定する。
-- Errors: `401 invalid_credentials`(userid 不存在とパスワード誤りは区別しない)
-
-### `DELETE /api/session`
-
-現在のセッションを削除する。冪等: セッションが既に無くても `204` を返す。
-
-### `GET /api/me`
-
-現在の User Account を返す。
-
-```json
-{
-  "id": "uuid",
-  "userid": "student001",
-  "name": "山田 太郎",
-  "role": "student"
-}
-```
-
-- `role`: `student` / `manager` / `admin`
-- Errors: `401`
-
 ## Projects
 
 ### `GET /api/projects`

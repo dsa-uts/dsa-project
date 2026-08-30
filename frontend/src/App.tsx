@@ -1,126 +1,127 @@
-import { useEffect, useState, type FormEvent } from 'react'
+import { useState, type FormEvent, type ReactNode } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
+import { Navigate, Route, Routes, useNavigate } from 'react-router-dom'
 import { $api } from '@/api/client'
 import { Button } from '@/components/ui/button'
 
-interface HealthResponse {
-  status: string
+type CurrentUser = {
+  id: string
+  userid: string
+  name: string
+  role: 'student' | 'manager' | 'admin'
 }
 
-// backend の /health を叩いた結果。取得前は null。
-type HealthState = HealthResponse | null
+const meQueryKey = $api.queryOptions('get', '/api/me', {}).queryKey
 
-// /health は openapi.yaml の対象外 (インフラ疎通用) なので raw fetch のまま。
-function HealthIndicator() {
-  const [health, setHealth] = useState<HealthState>(null)
-
-  useEffect(() => {
-    let cancelled = false
-    fetch('/health')
-      .then((res) => {
-        if (!res.ok) throw new Error(`unexpected status ${res.status}`)
-        return res.json() as Promise<HealthResponse>
-      })
-      .then((body) => {
-        if (!cancelled) setHealth({ status: body.status })
-      })
-      .catch(() => {
-        if (!cancelled) setHealth({ status: 'unreachable' })
-      })
-    return () => {
-      cancelled = true
-    }
-  }, [])
-
-  const ok = health?.status === 'ok'
-
+function Page({ children }: { children: ReactNode }) {
   return (
-    <section className="flex items-center gap-3 rounded-lg border bg-card px-6 py-4 shadow-sm">
-      <span
-        className={`size-3 rounded-full ${
-          health === null ? 'bg-muted-foreground/40' : ok ? 'bg-success' : 'bg-destructive'
-        }`}
-        aria-hidden="true"
-      />
-      <p>
-        backend health:{' '}
-        {health === null ? (
-          <span className="text-muted-foreground">checking…</span>
-        ) : (
-          <span className={ok ? 'text-success' : 'text-destructive'}>{health.status}</span>
-        )}
-      </p>
-    </section>
+    <main className="flex min-h-svh items-center justify-center bg-background px-4 text-foreground">
+      <section className="flex w-full max-w-sm flex-col gap-5 rounded-lg border bg-card p-6 shadow-sm">
+        {children}
+      </section>
+    </main>
   )
 }
 
-// openapi.yaml → schema.d.ts → $api の contract pipeline 疎通確認用 (issue #95)。
-// Auth スライス以降で /api/hello ごと削除される。
-function Greetings() {
-  const [name, setName] = useState('')
+function LoginPage({ authenticated }: { authenticated: boolean }) {
+  const navigate = useNavigate()
   const queryClient = useQueryClient()
-
-  const list = $api.useQuery('get', '/api/hello')
-  const create = $api.useMutation('post', '/api/hello', {
-    onSuccess: () => {
-      setName('')
-      return queryClient.invalidateQueries({
-        queryKey: $api.queryOptions('get', '/api/hello').queryKey,
-      })
+  const [userid, setUserid] = useState('')
+  const [password, setPassword] = useState('')
+  const login = $api.useMutation('post', '/api/session', {
+    onSuccess: (user) => {
+      queryClient.setQueryData(meQueryKey, user)
+      navigate('/', { replace: true })
     },
   })
 
+  if (authenticated) return <Navigate to="/" replace />
+
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
-    if (name.trim() === '') return
-    create.mutate({ body: { name } })
+    login.mutate({ body: { userid, password } })
   }
 
   return (
-    <section className="flex w-full max-w-md flex-col gap-4 rounded-lg border bg-card px-6 py-4 shadow-sm">
-      <h2 className="text-lg font-semibold">Greetings</h2>
-      <form onSubmit={submit} className="flex gap-2">
-        <input
-          type="text"
-          value={name}
-          onChange={(event) => setName(event.target.value)}
-          placeholder="name"
-          aria-label="name"
-          className="h-9 flex-1 rounded-md border bg-background px-3 text-sm outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
-        />
-        <Button type="submit" disabled={create.isPending || name.trim() === ''}>
-          Greet
+    <Page>
+      <h1 className="text-2xl font-semibold">DSA Project</h1>
+      <form className="flex flex-col gap-4" onSubmit={submit}>
+        <label className="flex flex-col gap-1 text-sm">
+          User ID
+          <input
+            autoComplete="username"
+            className="h-10 rounded-md border bg-background px-3 outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+            value={userid}
+            onChange={(event) => setUserid(event.target.value)}
+          />
+        </label>
+        <label className="flex flex-col gap-1 text-sm">
+          Password
+          <input
+            type="password"
+            autoComplete="current-password"
+            className="h-10 rounded-md border bg-background px-3 outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+            value={password}
+            onChange={(event) => setPassword(event.target.value)}
+          />
+        </label>
+        {login.isError && <p className="text-sm text-destructive">Invalid user ID or password.</p>}
+        <Button type="submit" disabled={login.isPending || userid === '' || password === ''}>
+          Log in
         </Button>
       </form>
-      {create.isError && (
-        <p className="text-sm text-destructive">failed to create greeting</p>
-      )}
-      {list.isPending ? (
-        <p className="text-sm text-muted-foreground">loading…</p>
-      ) : list.isError ? (
-        <p className="text-sm text-destructive">failed to load greetings</p>
-      ) : list.data.greetings.length === 0 ? (
-        <p className="text-sm text-muted-foreground">no greetings yet</p>
-      ) : (
-        <ul className="flex flex-col gap-1">
-          {list.data.greetings.map((greeting) => (
-            <li key={greeting.id} className="text-sm">
-              {greeting.message}
-            </li>
-          ))}
-        </ul>
-      )}
-    </section>
+    </Page>
+  )
+}
+
+function HomePage({ user }: { user: CurrentUser }) {
+  const navigate = useNavigate()
+  const queryClient = useQueryClient()
+  const logout = $api.useMutation('delete', '/api/session', {
+    onSuccess: () => {
+      queryClient.setQueryData(meQueryKey, null)
+      navigate('/login', { replace: true })
+    },
+  })
+  return (
+    <Page>
+      <h1 className="text-2xl font-semibold">DSA Project</h1>
+      <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2">
+        <dt className="text-muted-foreground">Name</dt>
+        <dd>{user.name}</dd>
+        <dt className="text-muted-foreground">Role</dt>
+        <dd>{user.role}</dd>
+      </dl>
+      <Button variant="outline" onClick={() => logout.mutate({})} disabled={logout.isPending}>
+        Log out
+      </Button>
+    </Page>
+  )
+}
+
+function NotFoundPage() {
+  return (
+    <Page>
+      <h1 className="text-2xl font-semibold">404</h1>
+      <p className="text-muted-foreground">Page not found.</p>
+    </Page>
   )
 }
 
 function App() {
+  const me = $api.useQuery('get', '/api/me', {}, { retry: false })
+  if (me.isPending) return <Page><p className="text-muted-foreground">Loading…</p></Page>
+
+  const authenticated = !me.isError && me.data != null
+  const user = me.data as CurrentUser | undefined
+  const protectedRoute = (page: ReactNode) => authenticated ? page : <Navigate to="/login" replace />
+
   return (
-    <main className="flex min-h-svh flex-col items-center justify-center gap-6 bg-background text-foreground">
-      <h1 className="text-4xl font-bold">Hello, DSA Project</h1>
-      <HealthIndicator />
-      <Greetings />
-    </main>
+    <Routes>
+      <Route path="/login" element={<LoginPage authenticated={authenticated} />} />
+      <Route path="/" element={protectedRoute(<HomePage user={user!} />)} />
+      <Route path="*" element={protectedRoute(<NotFoundPage />)} />
+    </Routes>
   )
 }
 

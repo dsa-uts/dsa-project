@@ -15,8 +15,9 @@ import (
 // Configuration is the process configuration loaded when this package is
 // initialized. Use Get to obtain the initialized value and any loading error.
 type Configuration struct {
-	Port        string
-	DatabaseURL string
+	Port            string
+	DatabaseURL     string
+	DevelopmentSeed bool
 }
 
 type specification struct {
@@ -26,6 +27,7 @@ type specification struct {
 	DatabaseUser         string     `envconfig:"DATABASE_USER" required:"true"`
 	DatabaseName         string     `envconfig:"DATABASE_NAME" required:"true"`
 	DatabasePasswordFile secretFile `envconfig:"DATABASE_PASSWORD_FILE" required:"true"`
+	DevelopmentSeed      bool       `envconfig:"DEVELOPMENT_SEED" default:"false"`
 }
 
 type secretFile string
@@ -73,7 +75,8 @@ func load() (Configuration, error) {
 		RawQuery: "sslmode=disable",
 	}).String()
 	return Configuration{
-		Port:        spec.Port,
-		DatabaseURL: databaseURL,
+		Port:            spec.Port,
+		DatabaseURL:     databaseURL,
+		DevelopmentSeed: spec.DevelopmentSeed,
 	}, nil
 }

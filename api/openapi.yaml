@@ -1,114 +1,116 @@
 # クライアント向け REST API の single source of truth (ADR 0010)。
-# ここを変更したら `task codegen:generate` で backend / frontend 双方の
-# コードを再生成してコミットする。
-# api.md の草稿はエンドポイントの実装時に本ファイルへ移設して削除していく。
 openapi: 3.0.3
 info:
   title: dsa-project API
   version: 0.1.0
-  description: >
-    オンラインジャッジ Web アプリのクライアント向け REST API。
-    用語と Principles は CONTEXT.md、規約(エラー封筒、ID、タイムスタンプ)は
-    docs/spec/api.md の Conventions を正とする。
 paths:
-  /api/hello:
-    get:
-      operationId: listGreetings
-      summary: 保存済みの greeting を新しい順に返す
-      description: >
-        scaffolding 用のダミーエンドポイント (issue #95)。
-        contract pipeline (openapi.yaml → 生成コード → store → PostgreSQL) の
-        疎通確認のためだけに存在し、Auth スライス以降で削除される。
-      responses:
-        "200":
-          description: greeting の一覧
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/GreetingList"
-        "500":
-          $ref: "#/components/responses/InternalError"
+  /api/session:
     post:
-      operationId: createGreeting
-      summary: greeting を作成して保存する
-      description: scaffolding 用のダミーエンドポイント (issue #95)。listGreetings の説明を参照。
+      operationId: createSession
+      summary: userid と password でログインする
+      parameters:
+        - $ref: "#/components/parameters/SessionCookie"
       requestBody:
         required: true
         content:
           application/json:
-            schema:
-              $ref: "#/components/schemas/CreateGreetingRequest"
+            schema: { $ref: "#/components/schemas/CreateSessionRequest" }
       responses:
-        "201":
-          description: 作成された greeting
+        "200":
+          description: ログインした User Account
+          headers:
+            Set-Cookie:
+              schema: { type: string }
           content:
             application/json:
-              schema:
-                $ref: "#/components/schemas/Greeting"
-        "422":
-          $ref: "#/components/responses/ValidationError"
-        "500":
-          $ref: "#/components/responses/InternalError"
+              schema: { $ref: "#/components/schemas/CurrentUser" }
+        "401": { $ref: "#/components/responses/InvalidCredentials" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+        "500": { $ref: "#/components/responses/InternalError" }
+    delete:
+      operationId: deleteSession
+      summary: 現在のセッションからログアウトする
+      parameters:
+        - $ref: "#/components/parameters/SessionCookie"
+      responses:
+        "204":
+          description: セッションを削除した（セッションがなくても成功）
+          headers:
+            Set-Cookie:
+              schema: { type: string }
+        "500": { $ref: "#/components/responses/InternalError" }
+  /api/me:
+    get:
+      operationId: getCurrentUser
+      summary: 現在の User Account を返す
+      parameters:
+        - $ref: "#/components/parameters/SessionCookie"
+      responses:
+        "200":
+          description: 現在の User Account
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CurrentUser" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "500": { $ref: "#/components/responses/InternalError" }
 components:
+  parameters:
+    SessionCookie:
+      name: __Host-dsa_session
+      x-go-name: SessionToken
+      in: cookie
+      required: false
+      schema: { type: string }
   schemas:
-    Greeting:
+    CreateSessionRequest:
       type: object
-      required: [id, message, created_at]
+      additionalProperties: false
+      required: [userid, password]
       properties:
-        id:
-          type: string
-          format: uuid
-          description: opaque な UUID 文字列
-        message:
-          type: string
-          example: "hello, dsa"
-        created_at:
-          type: string
-          format: date-time
-          description: RFC 3339 UTC
-    GreetingList:
+        userid: { type: string, minLength: 1 }
+        password: { type: string, minLength: 1 }
+    CurrentUser:
       type: object
-      required: [greetings]
-      description: 一覧レスポンスのトップレベルは配列ではなく object (api.md Conventions)
+      additionalProperties: false
+      required: [id, userid, name, role]
       properties:
-        greetings:
-          type: array
-          items:
-            $ref: "#/components/schemas/Greeting"
-    CreateGreetingRequest:
-      type: object
-      required: [name]
-      properties:
-        name:
+        id: { type: string, format: uuid }
+        userid: { type: string }
+        name: { type: string }
+        role:
           type: string
-          minLength: 1
-          example: "dsa"
+          enum: [student, manager, admin]
     Error:
       type: object
       required: [error]
-      description: 統一エラー封筒 (api.md Conventions)
       properties:
         error:
           type: object
           required: [code, message]
           properties:
-            code:
-              type: string
-              description: snake_case の機械可読文字列
-              example: validation_failed
-            message:
-              type: string
-              description: 開発者向けの英語文。UI にそのまま表示しない
+            code: { type: string }
+            message: { type: string }
   responses:
     ValidationError:
       description: バリデーション失敗
       content:
         application/json:
-          schema:
-            $ref: "#/components/schemas/Error"
+          schema: { $ref: "#/components/schemas/Error" }
+    InvalidCredentials:
+      description: 認証情報が無効
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    Unauthorized:
+      description: 未認証
+      headers:
+        Set-Cookie:
+          schema: { type: string }
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
     InternalError:
       description: サーバー内部エラー
       content:
         application/json:
-          schema:
-            $ref: "#/components/schemas/Error"
+          schema: { $ref: "#/components/schemas/Error" }
