@@ -219,4 +219,4 @@ CI や手元での確認に使う。内部では `nix flake check -L` を実行�
 
 GitHub Actions (`.github/workflows/ci.yml`) が PR と main への push で同じ `nix flake check` を実行する。Linux runner では checks にコンテナイメージ (`backend-image` / `frontend-image`) のビルドも含まれる。Nix store は [cache-nix-action](https://github.com/nix-community/cache-nix-action) で GitHub Actions cache にキャッシュされる。
 
-PostgreSQL、実行中の backend、Ingress、frontend を必要とするテストは、ADR 0012 に従い k3s にデプロイしたアプリケーションの公開 HTTP interface 経由で実行する。CI の `codegen-check` job は codegen ドリフト検査を実行する。
+PostgreSQL、実行中の backend、Ingress、frontend を必要とするテストは、ADR 0012 に従いデプロイしたアプリケーションの公開 HTTP interface 経由で実行する。ローカルの `task test` は外部管理の k3s、CI の `deployed-e2e` job は一時 k3d cluster を使うが、どちらも同じ content-derived images、E2E overlay、finite Kubernetes Job、Playwright suite を実行する。CI の `codegen-check` job は codegen ドリフト検査を実行する。

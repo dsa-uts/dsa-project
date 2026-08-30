@@ -172,6 +172,21 @@ def diagnose-e2e [] {
   } | complete
   print-command-result $logs
 
+  for component in [postgresql backend frontend] {
+    let selector = $"app.kubernetes.io/component=($component)"
+    stage diagnostics $"Current ($component) logs ..."
+    let current = do {
+      ^kubectl --namespace $e2e_namespace logs --selector $selector --all-containers=true --prefix --tail=200
+    } | complete
+    print-command-result $current
+
+    stage diagnostics $"Previous ($component) logs, when available ..."
+    let previous = do {
+      ^kubectl --namespace $e2e_namespace logs --selector $selector --all-containers=true --prefix --tail=200 --previous
+    } | complete
+    print-command-result $previous
+  }
+
   stage diagnostics 'Recent Kubernetes events ...'
   let events = do {
     ^kubectl --namespace $e2e_namespace get events --sort-by=.metadata.creationTimestamp
@@ -258,21 +273,43 @@ def 'main redeploy' [] {
   converge-development-environment
 }
 
-def 'main e2e' [] {
+def import-k3d-images [cluster: string, images: list<record>] {
+  for image in $images {
+    stage import $"Loading ($image.name) into Docker ..."
+    let load = run-external $image.path | ^docker image load | complete
+    if $load.exit_code != 0 {
+      print-command-result $load
+      error make { msg: $"failed to load ($image.name) into Docker" }
+    }
+    print-command-result $load
+  }
+
+  stage import $"Importing application and test images into k3d cluster/($cluster) ..."
+  run-checked 'failed to import images into the k3d cluster' (
+    [k3d image import --cluster $cluster] | append ($images | each { |image| $image.name })
+  ) | ignore
+}
+
+def 'main e2e' [--k3d-cluster: string] {
   let root = repo-root
   require-cluster | ignore
-  let k3s = which k3s | get 0.path
 
-  load-images $root
+  stage dependencies 'Refreshing backend dependency metadata ...'
+  run-checked 'failed to refresh backend dependency metadata' [
+    nu ($root | path join scripts backend-deps.nu) refresh
+  ] | ignore
+  stage build 'Building the backend image ...'
+  let backend_image = run-checked 'failed to build the backend image' [
+    nix build --no-link --print-out-paths $"($root)#backend-image"
+  ] | str trim
+  stage build 'Building the frontend image ...'
+  let frontend_image = run-checked 'failed to build the frontend image' [
+    nix build --no-link --print-out-paths $"($root)#frontend-image"
+  ] | str trim
   stage build 'Building the E2E image ...'
   let e2e_image = run-checked 'failed to build the E2E image' [
     nix build --no-link --print-out-paths $"($root)#e2e-image"
   ] | str trim
-  stage import 'Importing the E2E image (requires sudo) ...'
-  run-external $e2e_image | ^sudo $k3s ctr -n k8s.io images import -
-  if $env.LAST_EXIT_CODE != 0 {
-    error make { msg: 'failed to import the E2E image' }
-  }
 
   let backend_tag = run-checked 'failed to evaluate the backend image tag' [
     nix eval --raw $"($root)#backend-image.imageTag"
@@ -283,6 +320,25 @@ def 'main e2e' [] {
   let e2e_tag = run-checked 'failed to evaluate the E2E image tag' [
     nix eval --raw $"($root)#e2e-image.imageTag"
   ] | str trim
+  let images = [
+    { name: $"dsa-backend:($backend_tag)", path: $backend_image }
+    { name: $"dsa-frontend:($frontend_tag)", path: $frontend_image }
+    { name: $"dsa-e2e:($e2e_tag)", path: $e2e_image }
+  ]
+
+  if $k3d_cluster == null {
+    let k3s = which k3s | get 0.path
+    for image in $images {
+      stage import $"Importing ($image.name) into k3s; sudo is required ..."
+      run-external $image.path | ^sudo $k3s ctr -n k8s.io images import -
+      if $env.LAST_EXIT_CODE != 0 {
+        error make { msg: $"failed to import ($image.name) into k3s" }
+      }
+    }
+  } else {
+    import-k3d-images $k3d_cluster $images
+  }
+
   let manifests = render-e2e-manifests $root $backend_tag $frontend_tag $e2e_tag
 
   do {

@@ -76,6 +76,13 @@ tasks:
     cmds:
       - nu scripts/k3s.nu e2e
 
+  k3d:test:
+    desc: Run deployed public-interface tests on an existing k3d cluster
+    requires:
+      vars: [K3D_CLUSTER]
+    cmds:
+      - nu scripts/k3s.nu e2e --k3d-cluster {{.K3D_CLUSTER}}
+
   codegen:generate:
     desc: Generate backend and frontend code from the OpenAPI contract
     cmds:

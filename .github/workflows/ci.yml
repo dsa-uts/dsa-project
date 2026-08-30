@@ -90,3 +90,42 @@ jobs:
 
       - name: Check codegen drift
         run: nix develop -c task codegen:check
+
+  deployed-e2e:
+    needs: flake-check
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      K3D_CLUSTER: dsa-e2e
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: nixbuild/nix-quick-install-action@v35
+        with:
+          nix_conf: |
+            keep-env-derivations = true
+            keep-outputs = true
+
+      - name: Restore Nix store
+        uses: nix-community/cache-nix-action@v7
+        with:
+          primary-key: nix-${{ runner.os }}-${{ hashFiles('**/*.nix', '**/flake.lock') }}
+          restore-prefixes-first-match: nix-${{ runner.os }}-
+          save: false
+
+      - name: Create k3d cluster
+        run: nix develop -c k3d cluster create "$K3D_CLUSTER" --wait --timeout 2m
+
+      - name: Run deployed public-interface tests
+        run: nix develop -c task k3d:test
+
+      - name: Print Kubernetes diagnostics
+        if: ${{ failure() }}
+        run: |
+          nix develop -c kubectl --namespace dsa-e2e get statefulset,deployment,job,pods -o wide || true
+          nix develop -c kubectl --namespace dsa-e2e logs job/dsa-e2e --all-containers=true --tail=300 || true
+          nix develop -c kubectl --namespace dsa-e2e get events --sort-by=.metadata.creationTimestamp || true
+
+      - name: Delete k3d cluster
+        if: ${{ always() }}
+        run: nix develop -c k3d cluster delete "$K3D_CLUSTER"
