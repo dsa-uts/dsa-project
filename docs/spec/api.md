@@ -7,7 +7,7 @@
 ## Conventions
 
 - Base path: `/api`
-- 認証: backend-managed session cookie。`HttpOnly` / `Secure` / `SameSite=Lax`。例外として [`POST /api/admin/resource-versions`](#post-apiadminresource-versions) のみ Bearer token 認証。
+- 認証: backend-managed session cookie。`HttpOnly` / `Secure` / `SameSite=Lax`。例外として [`POST /api/admin/resource-versions`](#post-apiadminresource-versions) の認証方式は未決定。
 - ID: opaque な UUID 文字列。
 - Timestamp: RFC 3339 UTC 文字列。
 - User の埋め込みは常に 3 点セット `{"id": "uuid", "userid": "student001", "name": "山田 太郎"}` で統一する。
@@ -36,7 +36,7 @@
 
 | status | 意味 |
 | --- | --- |
-| `401` | 未認証。セッションなし・期限切れ・Bearer token 不正。 |
+| `401` | 未認証。セッションなし・期限切れ、またはregistration credential不正。 |
 | `403` | 存在が自明なリソース・エンドポイントへの Role 不足。 |
 | `404` | リソースが存在しない、**または現在の Role から不可視**。存在を漏らさないため両者を区別しない。 |
 | `409` | 状態競合。 |
@@ -572,7 +572,7 @@ soft delete。ログインを無効化し、レコードは保持する(Submissi
 
 Registration-only API。sandbox image の build / push 後に GitHub Actions が呼ぶ。登録フロー、Backend 側の validation、payload の意味は [resource.md](./resource.md) の「Resource Version 登録フロー」を正とする。
 
-- 認証: `Authorization: Bearer <registration-token>`。session cookie は使わない。token はデプロイ時に OpenBao 側で設定する static credential であり、MVP では token 管理 API を作らない(ローテーションは運用作業)。
+- 認証: GitHub Actionsからの登録を認可する必要がある。具体的なcredentialと認証方式は未決定。
 
 ```json
 {

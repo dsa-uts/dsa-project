@@ -16,7 +16,6 @@ spec:
         app.kubernetes.io/name: dsa
         app.kubernetes.io/component: backend
     spec:
-      serviceAccountName: dsa-backend
       containers:
         - name: backend
           image: dsa-backend:required
@@ -50,8 +49,5 @@ spec:
               readOnly: true
       volumes:
         - name: datastore-secrets
-          csi:
-            driver: secrets-store.csi.k8s.io
-            readOnly: true
-            volumeAttributes:
-              secretProviderClass: dsa-backend-secrets
+          secret:
+            secretName: dsa-datastore

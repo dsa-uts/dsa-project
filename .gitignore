@@ -11,6 +11,3 @@ tmp/
 # nix build outputs
 result
 result-*
-
-# ローカル k3s 環境の状態 (task k3s:up)
-.k3s/

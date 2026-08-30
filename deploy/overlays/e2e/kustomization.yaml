@@ -36,26 +36,6 @@ patches:
         path: /spec/storageClassName
         value: local-path
   - target:
-      kind: Deployment
-      name: dsa-backend
-    patch: |-
-      - op: replace
-        path: /spec/template/spec/volumes/0
-        value:
-          name: datastore-secrets
-          secret:
-            secretName: dsa-datastore
-  - target:
-      kind: StatefulSet
-      name: dsa-postgresql
-    patch: |-
-      - op: replace
-        path: /spec/template/spec/volumes/1
-        value:
-          name: datastore-secrets
-          secret:
-            secretName: dsa-datastore
-  - target:
       kind: Ingress
       name: dsa
     patch: |-

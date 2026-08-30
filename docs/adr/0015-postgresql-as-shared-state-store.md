@@ -1,5 +1,8 @@
 # PostgreSQL as the Shared State Store
 
+The OpenBao integration mentioned below is superseded by ADR 0017. PostgreSQL
+remains the shared state store.
+
 Status: accepted
 
 Redis is removed from the deployment before the first production release.

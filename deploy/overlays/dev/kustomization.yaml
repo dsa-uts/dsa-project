@@ -4,12 +4,12 @@ namespace: dsa-dev
 resources:
   - namespace.yaml
   - ../../base
-  - secret-provider-classes.yaml
+  - datastore-secret.yaml
 images:
   - name: dsa-backend
-    newTag: local
+    newTag: dev
   - name: dsa-frontend
-    newTag: local
+    newTag: dev
 patches:
   - target:
       kind: Deployment

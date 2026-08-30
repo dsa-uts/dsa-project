@@ -1,6 +1,8 @@
 # Topology-Agnostic Manifests, Single-Node Default Deployment
 
-ADR 0013 replaces the Helm packaging described below with Kustomize overlays. The topology-agnostic manifest decision remains accepted.
+ADR 0013 replaces the Helm packaging described below with Kustomize overlays.
+ADR 0016 supersedes the default deployment topology described below. The
+topology-agnostic manifest decision remains accepted.
 
 We considered splitting the cluster into a control-plane node plus worker node(s), then retracted it. Deployment targets provide a single Linux machine, so the default deployment is one single-node k3s cluster running directly on that host. Separately from how we deploy, the application manifests must not assume any cluster topology: the platform must run unchanged on a multi-node cluster, and no mechanism may depend on two Pods sharing a node. This retires hostPath-based Sandbox Workspace injection even on single-node deployments.
 

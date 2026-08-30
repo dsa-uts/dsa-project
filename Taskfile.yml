@@ -72,7 +72,7 @@ tasks:
 
   test:
     aliases: [e2e:test]
-    desc: Run deployed public-interface tests on local k3s
+    desc: Run deployed public-interface tests on the configured k3s cluster
     cmds:
       - nu scripts/k3s.nu e2e
 
@@ -86,28 +86,13 @@ tasks:
     cmds:
       - nu scripts/codegen.nu check
 
-  openbao:install:
-    desc: Install OpenBao for dev or production
-    cmds:
-      - nu scripts/openbao-install.nu {{.CLI_ARGS}}
-
-  openbao:configure:
-    desc: Configure OpenBao for dev or production
-    cmds:
-      - nu scripts/openbao-configure.nu {{.CLI_ARGS}}
-
-  openbao:set-production-secret:
-    desc: Create an initial production datastore secret
-    cmds:
-      - nu scripts/openbao-set-production-secret.nu {{.CLI_ARGS}}
-
   start:
-    desc: Start the complete application on local k3s
+    desc: Build and deploy the complete application to the configured k3s cluster
     cmds:
       - nu scripts/k3s.nu start
 
   redeploy:
-    desc: Rebuild and redeploy the application on local k3s
+    desc: Rebuild and redeploy the application to the configured k3s cluster
     cmds:
       - nu scripts/k3s.nu redeploy
 
@@ -121,33 +106,18 @@ tasks:
     cmds:
       - nu scripts/k3s.nu logs {{.CLI_ARGS}}
 
-  stop:
-    desc: Stop local k3s while preserving development PostgreSQL data
-    cmds:
-      - nu scripts/k3s.nu stop
-
   reset:
     desc: Delete the dsa-dev namespace and its development data
     cmds:
       - nu scripts/k3s.nu reset {{.CLI_ARGS}}
 
-  k3s:up:
-    desc: Start the local single-node k3s server
-    cmds:
-      - nu scripts/k3s.nu up
-
-  k3s:down:
-    desc: Stop the local single-node k3s server
-    cmds:
-      - nu scripts/k3s.nu down
-
   k3s:load-images:
-    desc: Load the application images into local k3s
+    desc: Load the application images into the configured k3s node
     cmds:
       - nu scripts/k3s.nu load-images
 
   k3s:deploy:
-    desc: Build and deploy the application to local k3s
+    desc: Build and deploy the application to the configured k3s cluster
     cmds:
       - nu scripts/k3s.nu deploy
 

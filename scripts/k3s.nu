@@ -1,6 +1,5 @@
 #!/usr/bin/env nu
 
-const unit = 'dsa-k3s'
 const development_namespace = 'dsa-dev'
 const e2e_namespace = 'dsa-e2e'
 const application_selector = 'app.kubernetes.io/name=dsa'
@@ -13,10 +12,6 @@ const components = $development_workloads.component
 
 def repo-root [] {
   $env.FILE_PWD | path join .. | path expand
-}
-
-def state-dir [root: path] {
-  ($env.DSA_K3S_STATE_DIR? | default ($root | path join .k3s)) | path expand
 }
 
 def run-checked [description: string, args: list<string>] {
@@ -33,16 +28,12 @@ def stage [name: string, message: string] {
   print $"[($name)] ($message)"
 }
 
-def kubeconfig [root: path] {
-  state-dir $root | path join kubeconfig
-}
-
-def require-kubeconfig [root: path] {
-  let config = kubeconfig $root
-  if not ($config | path exists) or (($config | path type) != file) {
-    error make { msg: $"kubeconfig not found at ($config); run 'task start' first" }
+def require-cluster [] {
+  let connection = do { ^kubectl --request-timeout=5s get --raw=/readyz } | complete
+  if $connection.exit_code != 0 {
+    print --stderr ($connection.stderr | str trim)
+    error make { msg: 'the current kubectl context is unavailable; select a working externally managed cluster before retrying' }
   }
-  $config
 }
 
 def print-command-result [result: record] {
@@ -101,34 +92,6 @@ def diagnose-development [component?: string] {
   }
 }
 
-def unit-active [] {
-  (do { ^systemctl is-active --quiet $unit } | complete).exit_code == 0
-}
-
-def wait-for-node [state_dir: path] {
-  let kubeconfig = $state_dir | path join kubeconfig
-  stage cluster 'Waiting for the node to become Ready ...'
-  mut ready = false
-  for _ in 1..180 {
-    let nodes = do { ^kubectl --kubeconfig $kubeconfig get nodes --no-headers } | complete
-    if $nodes.exit_code == 0 and ($nodes.stdout | lines | any { |line| $line =~ '\sReady\s' }) {
-      $ready = true
-      break
-    }
-    sleep 1sec
-  }
-  if not $ready {
-    let nodes = do { ^kubectl --kubeconfig $kubeconfig get nodes } | complete
-    print --stderr $nodes.stdout
-    print --stderr $nodes.stderr
-    error make { msg: 'timed out waiting for the node to become Ready' }
-  }
-  ^kubectl --kubeconfig $kubeconfig get nodes
-  print ''
-  print 'k3s is up. Point kubectl at it with:'
-  print $"  export KUBECONFIG=($kubeconfig)"
-}
-
 def load-images [root: path] {
   # sudo commonly replaces PATH with secure_path, which excludes Nix store paths.
   let k3s = which k3s | get 0.path
@@ -181,8 +144,8 @@ def render-manifests [root: path, overlay: string, images: list<string>] {
   $result.stdout
 }
 
-def render-local-manifests [root: path, backend_tag: string, frontend_tag: string] {
-  render-manifests $root local [
+def render-development-manifests [root: path, backend_tag: string, frontend_tag: string] {
+  render-manifests $root dev [
     $"dsa-backend=dsa-backend:($backend_tag)"
     $"dsa-frontend=dsa-frontend:($frontend_tag)"
   ]
@@ -216,65 +179,15 @@ def diagnose-e2e [] {
   print-command-result $events
 }
 
+def remove-e2e-namespace [failure: string] {
+  stage cleanup $"Deleting namespace/($e2e_namespace) ..."
+  run-checked $failure [
+    kubectl delete namespace $e2e_namespace --ignore-not-found --wait=true --timeout=2m
+  ] | ignore
+}
+
 def main [] {
-  error make { msg: 'usage: task {start|redeploy|test|status|logs|stop|reset} or task k3s:{up|down|load-images|deploy}' }
-}
-
-def ensure-cluster [] {
-  let root = repo-root
-  let state_dir = state-dir $root
-  mkdir $state_dir
-  let kubeconfig = $state_dir | path join kubeconfig
-  let group = ^id -gn | str trim
-
-  if (unit-active) {
-    stage cluster $"k3s server is already running; systemd unit: ($unit)"
-  } else {
-    stage cluster $"Starting the k3s server as transient systemd unit ($unit); requires sudo ..."
-    let executable_path = $env.PATH | str join ':'
-    run-checked 'failed to start the k3s systemd unit' [
-      sudo systemd-run $"--unit=($unit)"
-      '--description=dsa-project single-node k3s server'
-      $"--property=Environment=PATH=($executable_path)"
-      (which k3s | get 0.path) server
-      --write-kubeconfig $kubeconfig
-      --write-kubeconfig-group $group
-      --write-kubeconfig-mode 0640
-    ] | ignore
-  }
-
-  stage cluster 'Waiting for the kubeconfig ...'
-  mut found = false
-  for _ in 1..300 {
-    let exists = (do { ^test -s $kubeconfig } | complete).exit_code == 0
-    if $exists {
-      $found = true
-      break
-    }
-    if not (unit-active) {
-      error make { msg: $"unit ($unit) is not running; check: journalctl -u ($unit)" }
-    }
-    sleep 1sec
-  }
-  if not $found {
-    error make { msg: $"timed out waiting for ($kubeconfig); check: journalctl -u ($unit)" }
-  }
-
-  wait-for-node $state_dir
-}
-
-def 'main up' [] {
-  ensure-cluster
-}
-
-def 'main down' [] {
-  if (unit-active) {
-    print $"Stopping systemd unit ($unit); requires sudo ..."
-    run-checked 'failed to stop the k3s systemd unit' [sudo systemctl stop $unit] | ignore
-    print 'k3s server stopped. Workload containers will be re-managed when it starts again.'
-  } else {
-    print $"k3s server is not running; systemd unit: ($unit)"
-  }
+  error make { msg: 'usage: task {start|redeploy|test|status|logs|reset} or task k3s:{load-images|deploy}' }
 }
 
 def 'main load-images' [] {
@@ -283,33 +196,25 @@ def 'main load-images' [] {
 
 def converge-development-environment [] {
   let root = repo-root
-  let kubeconfig = require-kubeconfig $root
+  require-cluster | ignore
 
   load-images $root
-  with-env { KUBECONFIG: $kubeconfig, DSA_APP_NAMESPACE: $development_namespace } {
-    stage secrets 'Installing and configuring local OpenBao ...'
-    run-checked 'failed to install local OpenBao' [
-      nu ($root | path join scripts openbao-install.nu) dev
-    ] | ignore
-    run-checked 'failed to configure local OpenBao' [
-      nu ($root | path join scripts openbao-configure.nu) dev
-    ] | ignore
-
+  do {
     let backend_tag = run-checked 'failed to evaluate the backend image tag' [
       nix eval --raw $"($root)#backend-image.imageTag"
     ] | str trim
     let frontend_tag = run-checked 'failed to evaluate the frontend image tag' [
       nix eval --raw $"($root)#frontend-image.imageTag"
     ] | str trim
-    let manifests = render-local-manifests $root $backend_tag $frontend_tag
+    let manifests = render-development-manifests $root $backend_tag $frontend_tag
 
-    stage apply 'Applying the local Kubernetes manifests ...'
+    stage apply 'Applying the development Kubernetes manifests ...'
     let apply = $manifests | ^kubectl apply -f - | complete
     if $apply.exit_code != 0 {
       print --stderr $apply.stdout
       print --stderr $apply.stderr
       diagnose-development
-      error make { msg: 'failed to apply local Kubernetes manifests' }
+      error make { msg: 'failed to apply development Kubernetes manifests' }
     }
     for workload in $development_workloads {
       stage rollout $"Waiting for ($workload.resource) ..."
@@ -346,7 +251,6 @@ def 'main deploy' [] {
 }
 
 def 'main start' [] {
-  ensure-cluster
   converge-development-environment
 }
 
@@ -355,9 +259,8 @@ def 'main redeploy' [] {
 }
 
 def 'main e2e' [] {
-  ensure-cluster
   let root = repo-root
-  let config = require-kubeconfig $root
+  require-cluster | ignore
   let k3s = which k3s | get 0.path
 
   load-images $root
@@ -382,7 +285,7 @@ def 'main e2e' [] {
   ] | str trim
   let manifests = render-e2e-manifests $root $backend_tag $frontend_tag $e2e_tag
 
-  with-env { KUBECONFIG: $config } {
+  do {
     stage reset $"Replacing namespace/($e2e_namespace) to guarantee clean PostgreSQL state ..."
     run-checked 'failed to reset the E2E namespace' [
       kubectl delete namespace $e2e_namespace --ignore-not-found --wait=true --timeout=2m
@@ -392,6 +295,7 @@ def 'main e2e' [] {
     let apply = $manifests | ^kubectl apply -f - | complete
     if $apply.exit_code != 0 {
       print-command-result $apply
+      remove-e2e-namespace 'failed to apply E2E manifests and then failed to delete the E2E namespace'
       error make { msg: 'failed to apply E2E manifests' }
     }
     print-command-result $apply
@@ -418,24 +322,18 @@ def 'main e2e' [] {
 
     if $outcome != 'complete' {
       diagnose-e2e
-      error make { msg: $"E2E Job ($outcome); namespace/($e2e_namespace) was preserved for inspection" }
+      remove-e2e-namespace $"E2E Job ($outcome), and cleanup of namespace/($e2e_namespace) also failed"
+      error make { msg: $"E2E Job ($outcome); diagnostics were printed before namespace cleanup" }
     }
 
     ^kubectl --namespace $e2e_namespace logs job/dsa-e2e --all-containers=true --tail=300
-    stage cleanup $"Deleting successful namespace/($e2e_namespace) ..."
-    run-checked 'E2E tests passed, but failed to delete the E2E namespace' [
-      kubectl delete namespace $e2e_namespace --wait=true --timeout=2m
-    ] | ignore
+    remove-e2e-namespace 'E2E tests passed, but failed to delete the E2E namespace'
   }
 }
 
 def 'main status' [] {
-  let root = repo-root
-  let config = require-kubeconfig $root
-  with-env { KUBECONFIG: $config } {
-    if not (unit-active) {
-      error make { msg: $"k3s is stopped; run 'task start' to start it. PostgreSQL data remains in namespace ($development_namespace)" }
-    }
+  require-cluster | ignore
+  do {
     development-status
   }
 }
@@ -444,12 +342,8 @@ def 'main logs' [component: string = 'all'] {
   if $component != 'all' and $component not-in $components {
     error make { msg: $"unknown component '($component)'; expected one of: ($components | str join ', '), all" }
   }
-  let root = repo-root
-  let config = require-kubeconfig $root
-  with-env { KUBECONFIG: $config } {
-    if not (unit-active) {
-      error make { msg: "k3s is stopped; run 'task start' before requesting logs" }
-    }
+  require-cluster | ignore
+  do {
     let selected_components = if $component == 'all' { $components } else { [$component] }
     for selected in $selected_components {
       component-logs $selected
@@ -457,18 +351,9 @@ def 'main logs' [component: string = 'all'] {
   }
 }
 
-def 'main stop' [] {
-  main down
-}
-
 def 'main reset' [] {
-  let root = repo-root
-  let config = require-kubeconfig $root
-  if not (unit-active) {
-    error make { msg: "k3s is stopped; run 'task start' before resetting the development environment" }
-  }
-
-  with-env { KUBECONFIG: $config } {
+  require-cluster | ignore
+  do {
     stage reset $"Deleting namespace/($development_namespace) and its development data ..."
     ^kubectl delete namespace $development_namespace --ignore-not-found --wait=true
   }
