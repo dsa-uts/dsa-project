@@ -1,14 +1,46 @@
-import { useState, type FormEvent, type ReactNode } from 'react'
+import { useState, type ReactNode, type SubmitEventHandler } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
-import { Navigate, Route, Routes, useNavigate } from 'react-router-dom'
+import { Navigate, Outlet, Route, Routes, useOutletContext } from 'react-router-dom'
 import { $api } from '@/api/client'
+import type { components } from '@/api/schema'
 import { Button } from '@/components/ui/button'
 
-type CurrentUser = {
-  id: string
-  userid: string
-  name: string
-  role: 'student' | 'manager' | 'admin'
+type CurrentUser = components['schemas']['CurrentUser']
+
+type AuthContext = {
+  user: CurrentUser | null
+  authenticated: boolean
+}
+
+function AuthLayout() {
+  const me = $api.useQuery('get', '/api/me', {}, { retry: false })
+
+  if (me.isPending) {
+    return <Page>Loading...</Page>
+  }
+
+  const user = me.isError ? null : me.data
+
+  return (
+    <Outlet
+      context={{
+        user,
+        authenticated: user !== null,
+      } satisfies AuthContext}
+    />
+  )
+}
+
+function useAuth() {
+  return useOutletContext<AuthContext>()
+}
+
+function ProtectedLayout() {
+  const auth = useAuth()
+
+  return auth.authenticated
+    ? <Outlet context={auth} />
+    : <Navigate to="/login" replace />
 }
 
 const meQueryKey = $api.queryOptions('get', '/api/me', {}).queryKey
@@ -23,21 +55,20 @@ function Page({ children }: { children: ReactNode }) {
   )
 }
 
-function LoginPage({ authenticated }: { authenticated: boolean }) {
-  const navigate = useNavigate()
+function LoginPage() {
+  const { authenticated } = useAuth()
   const queryClient = useQueryClient()
   const [userid, setUserid] = useState('')
   const [password, setPassword] = useState('')
   const login = $api.useMutation('post', '/api/session', {
     onSuccess: (user) => {
       queryClient.setQueryData(meQueryKey, user)
-      navigate('/', { replace: true })
     },
   })
 
   if (authenticated) return <Navigate to="/" replace />
 
-  const submit = (event: FormEvent<HTMLFormElement>) => {
+  const submit: SubmitEventHandler = (event) => {
     event.preventDefault()
     login.mutate({ body: { userid, password } })
   }
@@ -74,15 +105,18 @@ function LoginPage({ authenticated }: { authenticated: boolean }) {
   )
 }
 
-function HomePage({ user }: { user: CurrentUser }) {
-  const navigate = useNavigate()
+function HomePage() {
+  const { user } = useAuth()
+
   const queryClient = useQueryClient()
   const logout = $api.useMutation('delete', '/api/session', {
     onSuccess: () => {
       queryClient.setQueryData(meQueryKey, null)
-      navigate('/login', { replace: true })
     },
   })
+
+  if (user === null) return <Navigate to="/login" replace />
+
   return (
     <Page>
       <h1 className="text-2xl font-semibold">DSA Project</h1>
@@ -109,18 +143,16 @@ function NotFoundPage() {
 }
 
 function App() {
-  const me = $api.useQuery('get', '/api/me', {}, { retry: false })
-  if (me.isPending) return <Page><p className="text-muted-foreground">Loading…</p></Page>
-
-  const authenticated = !me.isError && me.data != null
-  const user = me.data as CurrentUser | undefined
-  const protectedRoute = (page: ReactNode) => authenticated ? page : <Navigate to="/login" replace />
-
   return (
     <Routes>
-      <Route path="/login" element={<LoginPage authenticated={authenticated} />} />
-      <Route path="/" element={protectedRoute(<HomePage user={user!} />)} />
-      <Route path="*" element={protectedRoute(<NotFoundPage />)} />
+      <Route element={<AuthLayout />}>
+        <Route path="/login" element={<LoginPage />} />
+
+        <Route element={<ProtectedLayout />}>
+          <Route path="/" element={<HomePage />} />
+          <Route path="*" element={<NotFoundPage />} />
+        </Route>
+      </Route>
     </Routes>
   )
 }

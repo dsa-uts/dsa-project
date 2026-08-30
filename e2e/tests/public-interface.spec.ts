@@ -50,6 +50,7 @@ test('the browser logs in, shows the User Account, logs out, and guards routes',
 test('login validates input and makes authentication failures indistinguishable', async ({ request }) => {
   const missing = await request.post('/api/session', { data: { password: 'admin' } })
   expect(missing.status()).toBe(422)
+  expect(missing.headers()['cache-control']).toBe('no-store')
   await expect(missing.json()).resolves.toMatchObject({ error: { code: 'validation_failed' } })
 
   const attempts = [

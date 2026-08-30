@@ -64,7 +64,7 @@ func (s *AuthStore) ReplaceSession(ctx context.Context, previousHash []byte, use
 	})
 }
 
-func (s *AuthStore) CurrentUser(ctx context.Context, tokenHash []byte, now time.Time) (*UserAccount, bool, error) {
+func (s *AuthStore) CurrentUser(ctx context.Context, tokenHash []byte, now time.Time) (*UserAccount, error) {
 	user := new(UserAccount)
 	err := s.db.NewSelect().Model(user).
 		Join("JOIN sessions AS session ON session.user_account_id = user_account.id").
@@ -73,25 +73,25 @@ func (s *AuthStore) CurrentUser(ctx context.Context, tokenHash []byte, now time.
 		Where("user_account.disabled_at IS NULL").
 		Scan(ctx)
 	if err == nil {
-		return user, false, nil
+		return user, nil
 	}
 	if !errors.Is(err, sql.ErrNoRows) {
-		return nil, false, err
+		return nil, err
 	}
 
 	var expired bool
 	err = s.db.NewSelect().Model((*Session)(nil)).ColumnExpr("expires_at <= ?", now).
 		Where("token_hash = ?", tokenHash).Scan(ctx, &expired)
 	if errors.Is(err, sql.ErrNoRows) {
-		return nil, false, ErrNotFound
+		return nil, ErrNotFound
 	}
 	if err != nil {
-		return nil, false, err
+		return nil, err
 	}
 	if expired {
 		if err := s.DeleteSession(ctx, tokenHash); err != nil {
-			return nil, false, err
+			return nil, err
 		}
 	}
-	return nil, expired, ErrNotFound
+	return nil, ErrNotFound
 }

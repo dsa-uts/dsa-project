@@ -87,7 +87,7 @@ func (h *Handler) GetCurrentUser(ctx context.Context, req GetCurrentUserRequestO
 	if req.Params.SessionToken == nil {
 		return unauthorizedCurrentUser(), nil
 	}
-	user, _, err := h.auth.CurrentUser(ctx, auth.HashToken(*req.Params.SessionToken), time.Now())
+	user, err := h.auth.CurrentUser(ctx, auth.HashToken(*req.Params.SessionToken), time.Now())
 	if errors.Is(err, store.ErrNotFound) {
 		return unauthorizedCurrentUser(), nil
 	}

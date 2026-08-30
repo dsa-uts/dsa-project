@@ -54,14 +54,15 @@ func New(db *bun.DB) *echo.Echo {
 	}
 	h := api.NewHandler(authStore)
 
-	// validator は spec 由来のルートにだけ掛ける (group 経由で登録)
-	g := e.Group("", validator)
-	g.Use(func(next echo.HandlerFunc) echo.HandlerFunc {
+	// validator は spec 由来のルートにだけ掛ける (group 経由で登録)。
+	// no-store は validator の外側に置き、validation error にも適用する。
+	noStore := func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {
 			c.Response().Header().Set("Cache-Control", "no-store")
 			return next(c)
 		}
-	})
+	}
+	g := e.Group("", noStore, validator)
 	api.RegisterHandlers(g, api.NewStrictHandler(h, nil))
 
 	return e

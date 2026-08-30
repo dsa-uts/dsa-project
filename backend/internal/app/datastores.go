@@ -14,7 +14,7 @@ import (
 
 // ConnectDatabase verifies PostgreSQL and applies embedded migrations before
 // the HTTP server is allowed to start.
-func ConnectDatabase(ctx context.Context, databaseURL string, developmentSeed ...bool) (*bun.DB, error) {
+func ConnectDatabase(ctx context.Context, databaseURL string, developmentSeed bool) (*bun.DB, error) {
 	if databaseURL == "" {
 		return nil, errors.New("PostgreSQL configuration is required (DATABASE_URL)")
 	}
@@ -37,7 +37,7 @@ func ConnectDatabase(ctx context.Context, databaseURL string, developmentSeed ..
 		_ = db.Close()
 		return nil, fmt.Errorf("apply PostgreSQL migrations: %w", err)
 	}
-	if len(developmentSeed) > 0 && developmentSeed[0] {
+	if developmentSeed {
 		if err := store.SeedDevelopment(ctx, db); err != nil {
 			_ = db.Close()
 			return nil, fmt.Errorf("seed development data: %w", err)
