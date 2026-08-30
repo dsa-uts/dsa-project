@@ -1,221 +1,112 @@
 # dsa-project
 
-データ構造とアルゴリズム演習のためのオンラインジャッジシステム。ドメイン言語の定義は [CONTEXT.md](CONTEXT.md) を参照。
+データ構造とアルゴリズム演習のためのオンラインジャッジシステム。
+ドメイン言語の定義は [CONTEXT.md](CONTEXT.md)、仕様は
+[docs/spec/](docs/spec/README.md) を参照する。
 
 ## ディレクトリ構成
 
-| ディレクトリ | 役割 |
+| ディレクトリ | 内容 |
 | --- | --- |
-| `frontend/` | Web フロントエンド(Node.js / TypeScript) |
-| `backend/` | API サーバー(Go) |
-| `deploy/` | Kubernetes manifest の Kustomize base / overlay |
-| `nix/` | nix 定義の置き場(devShell 定義など)。`flake.nix` から import される |
-| `docs/` | 仕様書(`docs/spec/`)と ADR(`docs/adr/`) |
-| `scripts/` | Taskfile から呼ばれる Nushell 実装 |
+| `frontend/` | React / TypeScript製のWebフロントエンド |
+| `backend/` | Go製のAPIサーバー |
+| `e2e/` | デプロイ済みの公開HTTP interfaceを検査するE2Eテスト |
+| `deploy/` | Kubernetes manifestのKustomize baseと環境別overlay |
+| `nix/` | devShell、ビルド、コンテナイメージのNix定義 |
+| `scripts/` | Taskfileから呼び出すNushellスクリプト |
+| `docs/spec/` | システム仕様とOpenAPI contract |
+| `docs/adr/` | Architecture Decision Record |
+| `docs/agents/` | エージェント向け実装規約 |
 
-エージェント向けの実装規約は [docs/agents/coding-standards.md](docs/agents/coding-standards.md) にある。
+## 前提条件
+
+- macOS上の[OrbStack](https://orbstack.dev/) 2.2.3以降
+- [dsa-uts/ubuntu-config](https://github.com/dsa-uts/ubuntu-config)を実行するためのNix
+- `direnv`と`nix-direnv`（推奨）
+- GitHub上の対象リポジトリをcloneできる認証設定
+- VMとk3sの作成・保守は`ubuntu-config`が担当し、このリポジトリは既存のk3sへアプリケーションをデプロイする
+
+Linux上に同等の環境を用意する場合も、リポジトリと単一ノードk3sを同じマシン上に配置し、
+現在の`kubectl` contextからクラスタを操作できるようにする。
 
 ## 開発環境のセットアップ
 
-開発に必要なツールチェーン(Go / Node.js / Kustomize / kubectl)は nix flake で管理している。サポート対象は Linux(x86_64 / aarch64)である。macOS では OrbStack の Linux machine に SSH 接続し、その中でリポジトリを clone して開発する。
+### 1. OrbStack VMを作成する
 
-### 1. Nix のインストール
+macOS上で`ubuntu-config`をcloneし、そのREADMEに従って`dsa-dev` VMを作成する。
 
-flakes を有効にした Nix をインストールする。[Determinate Systems installer](https://github.com/DeterminateSystems/nix-installer) を使うと flakes が最初から有効になる:
-
-```sh
-curl -fsSL https://install.determinate.systems/nix | sh -s -- install
-```
-
-[公式インストーラ](https://nixos.org/download/) を使う場合は、`~/.config/nix/nix.conf` に以下を追記して flakes を有効にする:
-
-```
-experimental-features = nix-command flakes
-```
-
-### 2. devShell に入る
-
-リポジトリのルートで:
-
-```sh
-nix develop
-```
-
-これで Task / Nushell / Go / Node.js / k3s CLI / Kustomize / kubectl が使えるシェルに入る。k3s server 自体の導入・起動・保守はこのリポジトリの対象外である。開発・運用コマンドの公開 interface は `task` であり、利用可能なタスクは `task --list` で確認できる。
-
-### 3. direnv(推奨)
-
-[direnv](https://direnv.net/) を使うと、ディレクトリに `cd` するだけで devShell が自動で有効になる。[nix-direnv](https://github.com/nix-community/nix-direnv) の併用を推奨(評価結果がキャッシュされ、シェル起動が速くなる)。
-
-direnv をセットアップ済みなら、リポジトリのルートで一度だけ:
-
-```sh
+```console
+git clone git@github.com:dsa-uts/ubuntu-config.git
+cd ubuntu-config
 direnv allow
+task up
+orb shell dsa-dev
 ```
 
-## 開発ループ
+`task up`はUbuntu 26.04 VM、Nix、単一ノードk3s、開発ユーザーの権限を
+非破壊かつ冪等に設定する。通常の再適用ではVM内のk3s dataを保持する。
 
-アプリケーションはホスト上で直接起動せず、PostgreSQL、backend、frontendを
-含む完全な構成を、外部で管理されるk3sへデプロイして確認する。現在のkubectl contextが意図したクラスタを指すことを確認してから実行する:
+### 2. VM内でdsa-projectをセットアップする
 
-```sh
+```console
+git clone git@github.com:dsa-uts/dsa-project.git
+cd dsa-project
+nix develop
 kubectl config current-context
 kubectl get nodes
 task deploy
 ```
 
-`deploy` は接続確認、backend依存metadataのrefresh、content-derived tagを
-持つapplication imageのbuildとimport、dev Kustomize overlayのapply、rollout、
-全application Podのreadiness確認まで行う。完了時に表示されるIngressのURLを
-ブラウザで開く。クラスタに接続できない場合は明示的に失敗し、k3sの起動や修復は行わない。
+`task deploy`はbackendの依存metadataを必要に応じて更新し、アプリケーションイメージを
+ビルドしてk3sへ搬入し、`dsa-dev` namespaceへKustomize manifestを適用する。
+rolloutとreadinessの完了後に表示されるURLをブラウザで開く。
 
-コードを編集した後も、同じコマンドで明示的に再デプロイする:
+コードを変更した後も`task deploy`を再実行する。ホットリロードやホスト上での
+frontend/backendの直接起動は標準の開発経路に含めない。
 
-```sh
-task deploy
-```
+`direnv`を利用する場合は、リポジトリのルートで一度`direnv allow`を実行すれば、
+以後は`nix develop`を明示せずにTaskを実行できる。
 
-`deploy` はimageを再構築してk3sへ搬入し、現在のcontent-derived tagをmanifestへ
-注入する。内容が変わればDeploymentのPod templateも変わるため、rolloutが発生する。
-進行状況は `dependencies`、`build`、`import`、`apply`、`rollout`、
-`readiness` の段階ごとに表示される。ホットリロードやファイル監視は行わない。
+## Task
 
-dev overlayのapplication resourceは専用namespace `dsa-dev` に配置される。現在の
-rolloutとPodのreadinessは次で確認できる:
+利用可能なTaskは`task --list`でも確認できる。
 
-```sh
-task status
-```
+| Task | 内容 |
+| --- | --- |
+| `task` | 利用可能なTaskの一覧を表示する |
+| `task deploy` | application imageをビルドし、既存のk3sへデプロイまたは再デプロイする |
+| `task test` | k3s上の隔離環境で公開HTTP interfaceのE2Eテストを実行する |
+| `task status` | `dsa-dev`のworkload、Pod、rollout状態を表示する |
+| `task logs` | backend、frontend、PostgreSQLのログをまとめて表示する |
+| `task logs -- backend` | 指定componentの現在および直前のコンテナログを表示する |
+| `task reset` | `dsa-dev` namespaceと開発データを削除する |
+| `task backend:test` | 外部依存のないbackend unit testを実行する |
+| `task backend:deps:refresh` | backendのNix依存metadataを更新する |
+| `task backend:deps:check` | backendのNix依存metadataにdriftがないか検査する |
+| `task backend:image:build` | 依存metadataを更新し、backend imageをビルドする |
+| `task frontend:install` | lockfileからfrontend依存をインストールする |
+| `task frontend:test` | frontend unit testを実行する |
+| `task frontend:typecheck` | frontendを型検査する |
+| `task frontend:lint` | frontendをlintする |
+| `task frontend:image:build` | frontend imageをビルドする |
+| `task e2e:image:build` | E2E test imageをビルドする |
+| `task images:build` | applicationとE2Eの全imageをビルドする |
+| `task k3d:test` | `K3D_CLUSTER`で指定した既存のk3d clusterでE2Eテストを実行する |
+| `task codegen:generate` | OpenAPI contractからbackend/frontendコードを再生成する |
+| `task codegen:check` | OpenAPI contractと生成コードのdriftを検査する |
+| `task check` | unit test、静的検査、image buildを含むNix flake checksを実行する |
 
-componentのログは `backend`、`frontend`、`postgresql` のいずれかを指定して
-取得する。指定を省略すると全componentのログを取得する:
+## 注意事項
 
-```sh
-task logs -- backend
-task logs
-```
-
-`deploy` のrollout/readinessが失敗した場合は、workloadとPodの状態、
-rollout state、namespace内のKubernetes events、関連component logsが自動表示される。
-
-PostgreSQLを含むdevelopment dataを破棄するときだけ `reset` を使う:
-
-```sh
-task reset
-```
-
-`reset` は `dsa-dev` namespaceだけを削除し、他namespaceやcluster-wide resourceを
-削除対象にしない。次回の `deploy` で空のdevelopment環境が作成される。
-
-## API contract と codegen
-
-クライアント向け REST API は `docs/spec/openapi.yaml` が single source of truth([ADR 0010](docs/adr/0010-openapi-contract-with-codegen.md))。変更したら両側のコードを再生成してコミットする:
-
-```sh
-task codegen:generate
-```
-
-反映漏れは `task codegen:check` で検査できる(CI でも実行される)。
-
-## backend のビルド
-
-```sh
-nix build .#backend         # バイナリ
-task backend:image:build    # 依存 metadata を refresh してコンテナイメージをビルド
-```
-devShell 内では通常の Go ワークフローも使える:
-
-```sh
-task backend:test      # 外部依存のない unit test
-```
-
-依存を変更したら `go mod tidy` を実行する。開発向けの backend image build と
-deploy は、ビルド前に Nix の依存 metadata (`nix/backend-vendor-hash.nix`) を検査し、
-必要なら自動更新する。更新結果はコミットされず、レビュー可能な作業ツリー変更として残る。
-
-依存 metadata だけを明示的に修復・検査する場合は次を使う:
-
-```sh
-task backend:deps:refresh # drift があれば作業ツリーを更新
-task backend:deps:check   # checkout を変更せず drift を検査 (CI と同じ)
-```
-
-## frontend の検査とビルド
-
-```sh
-nix build .#frontend          # 静的ビルド成果物 (Vite の dist)
-nix build .#frontend-image    # コンテナイメージ (下記参照)
-```
-
-devShell 内では通常の npm ワークフローも使える:
-
-```sh
-task frontend:install   # 初回と依存変更時
-task frontend:test      # vitest
-task frontend:typecheck # tsc -b
-task frontend:lint      # oxlint
-```
-
-依存を変更したら `package.json` と `package-lock.json` をコミットする。Nix の frontend build は lockfile から依存を取得するため、Nix 固有の dependency hash の更新は不要。
-
-## コンテナイメージ
-
-`task backend:image:build` / `task frontend:image:build` で得る Nix の出力はイメージ tar を stdout に流すスクリプト。タグは derivation hash 由来で、内容が変わればタグも変わる。`task deploy` はk3sへregistryを経由せず直接importする:
-
-```sh
-task backend:image:build
-./result | sudo k3s ctr -n k8s.io images import -
-```
-
-frontend イメージは [static-web-server](https://static-web-server.net/) が `:8080` で静的ファイルを配信する。
-
-この直接 import は、リポジトリとk3sが同じVM上にある現在のシングルノード開発環境だけを対象とする。dev overlay は `imagePullPolicy: Never` なので、マルチノードクラスタでは import されていないノードで `ErrImageNeverPull` になる。
-
-## k3s 接続
-
-利用可能な長時間稼働のk3sクラスタを別途用意し、kubectlのcurrent contextで選択する。このリポジトリはクラスタをinstall、start、stop、reset、upgrade、backup、recoveryしない ([ADR 0016](docs/adr/0016-externally-managed-k3s.md))。
-
-```sh
-kubectl config current-context
-kubectl get nodes
-```
-
-## デプロイ処理 (Kustomize)
-
-通常の開発ループでは、k3s環境が利用可能な状態で次を実行する:
-
-```sh
-task deploy        # イメージ搬入 + dev overlay の apply
-```
-
-`deploy` は以下を行う:
-
-1. **イメージのbuildと搬入**
-   - イメージの stream script をホストの containerd へ直接 pipe する (`sudo` が必要)
-2. **dev manifest のrenderとapply** — image tagはderivation hash由来で毎ビルド変わるため、一時コピー上のdev overlayへ現在のtagを自動注入する。Git管理されたmanifestは変更しない。dev overlayは非production用途の固定PostgreSQL passwordをKubernetes Secretとして提供する
-3. **rollout待機** — PostgreSQL / backend / frontend のrollout完了を待つ
-4. **readiness確認** — application PodがすべてReadyになるまで待つ
-5. 完了後にアクセス URL (`http://<node-ip>/`) を表示する
-
-ブラウザで URL を開くと hello ページが表示され、backend の health check 結果 (`ok`) が出る。Ingress は `/health` と `/api` を backend へ、それ以外を frontend へ route する。
-
-追跡されているdev / e2e overlayの静的なrender結果は次で確認できる。devの実際のNix hash tag注入は`deploy`が一時コピー上で行う:
-
-```sh
-kubectl kustomize deploy/overlays/dev
-kubectl kustomize deploy/overlays/e2e
-```
-
-production deploymentとcredential管理は、要件が設計されるまで未定義である。dev用Secretをproductionへ流用してはならない。
-
-## flake の検査
-
-```sh
-task check
-```
-
-CI や手元での確認に使う。内部では `nix flake check -L` を実行し、go test / vitest も各 derivation の検査として走る。全サポートシステム分を評価する場合は `nix flake check --all-systems`。
-
-GitHub Actions (`.github/workflows/ci.yml`) が PR と main への push で同じ `nix flake check` を実行する。Linux runner では checks にコンテナイメージ (`backend-image` / `frontend-image`) のビルドも含まれる。Nix store は [cache-nix-action](https://github.com/nix-community/cache-nix-action) で GitHub Actions cache にキャッシュされる。
-
-PostgreSQL、実行中の backend、Ingress、frontend を必要とするテストは、ADR 0012 に従いデプロイしたアプリケーションの公開 HTTP interface 経由で実行する。ローカルの `task test` は外部管理の k3s、CI の `deployed-e2e` job は一時 k3d cluster を使うが、どちらもテストの内容は同じ。CI の `codegen-check` job は codegen ドリフト検査を実行する。
+- 通常の開発では`task deploy`を使う。個別のimage build Taskは、ビルドだけを診断したい場合に使う。
+- `task deploy`は既存のPostgreSQL dataを保持する。開発データを破棄するときだけ`task reset`を使う。
+- `task reset`が削除するのは`dsa-dev` namespaceであり、k3s cluster自体や他namespaceは対象にしない。
+- `task test`は`dsa-e2e` namespaceを毎回作り直すため、E2E dataは実行ごとに破棄される。開発用の`dsa-dev` dataには影響しない。
+- ローカルの`task test`とCIのk3dテストは、同じKustomize base、E2E overlay、application/test image、Kubernetes Jobを使う。
+- Ingressは`/health`と`/api`をbackendへ、それ以外をfrontendへrouteする。`task deploy`完了時にアクセスURLが表示される。
+- deployのrolloutまたはreadinessが失敗すると、workload、Pod、Kubernetes events、関連component logsが自動表示される。追加確認には`task status`と`task logs`を使う。
+- application imageはホスト側でビルドし、同じVMのk3s containerdへ搬入するため、deploy時に`sudo`が必要になる。
+- backend依存metadataが自動更新された場合、`nix/backend-vendor-hash.nix`はレビュー可能なworking tree変更として残る。
+- REST APIを変更するときは`docs/spec/openapi.yaml`を先に編集し、`task codegen:generate`で生成物を更新する。
+- dev/E2E overlayの固定credentialをproductionへ流用しない。production deploymentとcredential管理は未定義である。
+- コーディング規約は[docs/agents/coding-standards.md](docs/agents/coding-standards.md)を参照する。
