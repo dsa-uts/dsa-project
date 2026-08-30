@@ -29,19 +29,11 @@ def stage [name: string, message: string] {
 }
 
 def require-cluster [] {
-  let config = $env.KUBECONFIG? | default ''
-  if ($config | str trim | is-empty) {
-    error make { msg: 'KUBECONFIG is required; point it at the externally managed k3s cluster' }
-  }
-  if not ($config | path exists) or (($config | path type) != file) {
-    error make { msg: $"KUBECONFIG does not name a readable file: ($config)" }
-  }
   let connection = do { ^kubectl --request-timeout=5s get --raw=/readyz } | complete
   if $connection.exit_code != 0 {
     print --stderr ($connection.stderr | str trim)
-    error make { msg: 'the Kubernetes cluster supplied through KUBECONFIG is unavailable; cluster lifecycle is managed outside this repository' }
+    error make { msg: 'the current kubectl context is unavailable; select a working externally managed cluster before retrying' }
   }
-  $config
 }
 
 def print-command-result [result: record] {

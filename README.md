@@ -56,10 +56,11 @@ direnv allow
 ## 開発ループ
 
 アプリケーションはホスト上で直接起動せず、PostgreSQL、backend、frontendを
-含む完全な構成を、外部で管理されるk3sへデプロイして確認する。接続先を明示してから実行する:
+含む完全な構成を、外部で管理されるk3sへデプロイして確認する。現在のkubectl contextが意図したクラスタを指すことを確認してから実行する:
 
 ```sh
-export KUBECONFIG=/path/to/kubeconfig
+kubectl config current-context
+kubectl get nodes
 task start
 ```
 
@@ -172,10 +173,10 @@ frontend イメージは [static-web-server](https://static-web-server.net/) が
 
 ## k3s 接続
 
-利用可能な長時間稼働のk3sクラスタを別途用意し、`KUBECONFIG`で指定する。このリポジトリはクラスタをinstall、start、stop、reset、upgrade、backup、recoveryしない ([ADR 0016](docs/adr/0016-externally-managed-k3s.md))。
+利用可能な長時間稼働のk3sクラスタを別途用意し、kubectlのcurrent contextで選択する。このリポジトリはクラスタをinstall、start、stop、reset、upgrade、backup、recoveryしない ([ADR 0016](docs/adr/0016-externally-managed-k3s.md))。
 
 ```sh
-export KUBECONFIG=/path/to/kubeconfig
+kubectl config current-context
 kubectl get nodes
 ```
 

@@ -5,8 +5,8 @@ Status: accepted
 The repository assumes an available, long-running k3s cluster whose lifecycle
 is owned elsewhere. Development currently runs the repository and k3s on the
 same VM, but this repository neither installs nor starts, stops, resets,
-upgrades, backs up, or recovers the cluster. Deployment uses the kubeconfig
-provided through `KUBECONFIG`; it builds images with Nix, imports them into the
+upgrades, backs up, or recovers the cluster. Deployment uses the current
+`kubectl` context; it builds images with Nix, imports them into the
 same VM's k3s containerd, and applies application manifests.
 
 ## Considered Options
