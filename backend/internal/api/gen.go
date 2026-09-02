@@ -92,11 +92,6 @@ type DeleteSessionParams struct {
 	SessionToken *SessionToken `form:"__Host-dsa_session,omitempty" json:"__Host-dsa_session,omitempty"`
 }
 
-// CreateSessionParams defines parameters for CreateSession.
-type CreateSessionParams struct {
-	SessionToken *SessionToken `form:"__Host-dsa_session,omitempty" json:"__Host-dsa_session,omitempty"`
-}
-
 // CreateSessionJSONRequestBody defines body for CreateSession for application/json ContentType.
 type CreateSessionJSONRequestBody = CreateSessionRequest
 
@@ -110,7 +105,7 @@ type ServerInterface interface {
 	DeleteSession(ctx echo.Context, params DeleteSessionParams) error
 	// CreateSession userid と password でログインする
 	// (POST /api/session)
-	CreateSession(ctx echo.Context, params CreateSessionParams) error
+	CreateSession(ctx echo.Context) error
 }
 
 // ServerInterfaceWrapper converts echo contexts to parameters.
@@ -168,22 +163,8 @@ func (w *ServerInterfaceWrapper) DeleteSession(ctx echo.Context) error {
 func (w *ServerInterfaceWrapper) CreateSession(ctx echo.Context) error {
 	var err error
 
-	// Parameter object where we will unmarshal all parameters from the context
-	var params CreateSessionParams
-
-	if cookie, err := ctx.Cookie("__Host-dsa_session"); err == nil {
-
-		var value SessionToken
-		err = runtime.BindStyledParameterWithOptions("simple", "__Host-dsa_session", cookie.Value, &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationCookie, Explode: true, Required: false, Type: "string", Format: ""})
-		if err != nil {
-			return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Invalid format for parameter __Host-dsa_session: %s", err))
-		}
-		params.SessionToken = &value
-
-	}
-
 	// Invoke the callback with all the unmarshaled arguments
-	err = w.Handler.CreateSession(ctx, params)
+	err = w.Handler.CreateSession(ctx)
 	return err
 }
 
@@ -347,8 +328,7 @@ func (response DeleteSession500JSONResponse) VisitDeleteSessionResponse(w http.R
 }
 
 type CreateSessionRequestObject struct {
-	Params CreateSessionParams
-	Body   *CreateSessionJSONRequestBody
+	Body *CreateSessionJSONRequestBody
 }
 
 type CreateSessionResponseObject interface {
@@ -497,10 +477,8 @@ func (sh *strictHandler) DeleteSession(ctx echo.Context, params DeleteSessionPar
 }
 
 // CreateSession operation middleware
-func (sh *strictHandler) CreateSession(ctx echo.Context, params CreateSessionParams) error {
+func (sh *strictHandler) CreateSession(ctx echo.Context) error {
 	var request CreateSessionRequestObject
-
-	request.Params = params
 
 	var body CreateSessionJSONRequestBody
 	var err error
@@ -555,8 +533,8 @@ var swaggerSpec = []string{
 	"S3in4q6HTt327s5xKyH48B6ao+LxaqvgSrMHpyGd+qrIrh57yZe63bk5/ijMBt8/u/vX6OGA8p9bNqJ1",
 	"IQhkKpwczncXT6o9AdupPayZB29VyF+eVF9U7nVJ45ip9RPxtKi4f/D3N5TvuHDHzuH29DcgxAgNzrL0",
 	"jju/NFmzcybpfNW7vhT/pLKcPKBU3B9tbT/f2aX8AeWPXgw3jwfkdyjfo/wu5Y+pKPY37422H70Ybr36",
-	"5pgfAzNQb1OxReVPVPxCxQ9UPKZyk/IdKm5b5hOpG3xS2xVzYcCtm7dluD4/hzTts6z++hiVYvb6XHo4",
-	"9V3Hg5VS3a6vrJZ/ZfKGv3I2dWnp9NTj/2PmIdBqobUoH7QOt3uL8if1GVWyzLLsnwAAAP//",
+	"5pgfAzNQb1OxReVPVPxCxQ9UPKZyk/IdKm5b5hOpG3xS2xVQ+Rm1eVuG6/NTeNM+yuqvh1EpZq/PZYdT",
+	"23VztFKo2+2V2f5XJm34K2ZTl5ZOTz3+P2QeAqsWUovyQetwO7cof1KfUSWrLMv+CQAA//8=",
 }
 
 // decodeSpec returns the embedded OpenAPI spec as raw JSON bytes,

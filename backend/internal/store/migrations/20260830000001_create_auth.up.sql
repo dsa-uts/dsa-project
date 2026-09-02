@@ -20,3 +20,4 @@ CREATE TABLE sessions (
 );
 
 CREATE INDEX sessions_expires_at_idx ON sessions (expires_at);
+CREATE INDEX sessions_user_account_created_idx ON sessions (user_account_id, created_at, id);

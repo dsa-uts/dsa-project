@@ -51,17 +51,14 @@ func (h *Handler) CreateSession(ctx context.Context, req CreateSessionRequestObj
 	if !loginCapable || !passwordOK {
 		return CreateSession401JSONResponse{InvalidCredentialsJSONResponse(NewError("invalid_credentials", "Invalid userid or password."))}, nil
 	}
+	now := time.Now()
 
 	token, err := auth.NewToken()
 	if err != nil {
 		slog.ErrorContext(ctx, "generate session token", "error", err)
 		return CreateSession500JSONResponse{InternalErrorJSONResponse(NewError("internal", "Failed to create session."))}, nil
 	}
-	var previousHash []byte
-	if req.Params.SessionToken != nil {
-		previousHash = auth.HashToken(*req.Params.SessionToken)
-	}
-	if err := h.auth.ReplaceSession(ctx, previousHash, user.ID, auth.HashToken(token), time.Now().Add(auth.SessionLifetime*time.Second)); err != nil {
+	if err := h.auth.CreateSession(ctx, user.ID, auth.HashToken(token), now, now.Add(auth.SessionLifetime*time.Second)); err != nil {
 		slog.ErrorContext(ctx, "persist session", "error", err)
 		return CreateSession500JSONResponse{InternalErrorJSONResponse(NewError("internal", "Failed to create session."))}, nil
 	}

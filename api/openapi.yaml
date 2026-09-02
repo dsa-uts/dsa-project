@@ -8,8 +8,6 @@ paths:
     post:
       operationId: createSession
       summary: userid と password でログインする
-      parameters:
-        - $ref: "#/components/parameters/SessionCookie"
       requestBody:
         required: true
         content:

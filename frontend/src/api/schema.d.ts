@@ -115,9 +115,7 @@ export interface operations {
             query?: never;
             header?: never;
             path?: never;
-            cookie?: {
-                "__Host-dsa_session"?: components["parameters"]["SessionCookie"];
-            };
+            cookie?: never;
         };
         requestBody: {
             content: {

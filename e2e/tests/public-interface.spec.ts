@@ -48,7 +48,9 @@ test('the browser logs in, shows the User Account, logs out, and guards routes',
 })
 
 test('login validates input and makes authentication failures indistinguishable', async ({ request }) => {
-  const missing = await request.post('/api/session', { data: { password: 'admin' } })
+  const activeToken = sessionCookie(await login(request)).token
+  const presentedSession = { Cookie: `__Host-dsa_session=${activeToken}` }
+  const missing = await request.post('/api/session', { data: { password: 'admin' }, headers: presentedSession })
   expect(missing.status()).toBe(422)
   expect(missing.headers()['cache-control']).toBe('no-store')
   await expect(missing.json()).resolves.toMatchObject({ error: { code: 'validation_failed' } })
@@ -61,12 +63,13 @@ test('login validates input and makes authentication failures indistinguishable'
   ]
   const bodies = []
   for (const data of attempts) {
-    const response = await request.post('/api/session', { data })
+    const response = await request.post('/api/session', { data, headers: presentedSession })
     expect(response.status()).toBe(401)
     expect(response.headers()['cache-control']).toBe('no-store')
     bodies.push(await response.json())
   }
   expect(bodies).toEqual(attempts.map(() => ({ error: { code: 'invalid_credentials', message: 'Invalid userid or password.' } })))
+  expect((await request.get('/api/me', { headers: presentedSession })).status()).toBe(200)
 })
 
 test('login sets the seven-day host cookie and /api/me returns the current User Account', async ({ request }) => {
@@ -85,19 +88,46 @@ test('login sets the seven-day host cookie and /api/me returns the current User 
   await expect(me.json()).resolves.toMatchObject({ userid: 'admin', name: 'Development Admin', role: 'admin' })
 })
 
-test('re-login replaces only the presented session and logout is isolated and idempotent', async ({ request }) => {
+test('login ignores a presented session and logout is isolated and idempotent', async ({ request }) => {
   const first = sessionCookie(await login(request)).token
   const independent = sessionCookie(await login(request)).token
-  const replacement = sessionCookie(await login(request, first)).token
-  expect((await request.get('/api/me', { headers: { Cookie: `__Host-dsa_session=${first}` } })).status()).toBe(401)
+  const latest = sessionCookie(await login(request, first)).token
+  expect((await request.get('/api/me', { headers: { Cookie: `__Host-dsa_session=${first}` } })).status()).toBe(200)
   expect((await request.get('/api/me', { headers: { Cookie: `__Host-dsa_session=${independent}` } })).status()).toBe(200)
-  expect((await request.get('/api/me', { headers: { Cookie: `__Host-dsa_session=${replacement}` } })).status()).toBe(200)
+  expect((await request.get('/api/me', { headers: { Cookie: `__Host-dsa_session=${latest}` } })).status()).toBe(200)
 
-  const logout = await request.delete('/api/session', { headers: { Cookie: `__Host-dsa_session=${replacement}` } })
+  const logout = await request.delete('/api/session', { headers: { Cookie: `__Host-dsa_session=${latest}` } })
   expect(logout.status()).toBe(204)
   expect(logout.headers()['set-cookie']).toContain('Max-Age=0')
   expect((await request.delete('/api/session')).status()).toBe(204)
   expect((await request.get('/api/me', { headers: { Cookie: `__Host-dsa_session=${independent}` } })).status()).toBe(200)
+})
+
+test('a User Account retains only its five latest sequential sessions', async ({ request }) => {
+  const tokens = []
+  for (let attempt = 0; attempt < 6; attempt += 1) {
+    tokens.push(sessionCookie(await login(request)).token)
+  }
+
+  const responses = await Promise.all(tokens.map(token =>
+    request.get('/api/me', { headers: { Cookie: `__Host-dsa_session=${token}` } }),
+  ))
+  expect(responses.map(response => response.status())).toEqual([401, 200, 200, 200, 200, 200])
+  expect(responses[0].headers()['set-cookie']).toContain('Max-Age=0')
+  await expect(responses[0].json()).resolves.toEqual({
+    error: { code: 'unauthorized', message: 'Authentication is required.' },
+  })
+})
+
+test('parallel logins for one User Account leave exactly five valid sessions', async ({ request }) => {
+  const tokens = await Promise.all(Array.from({ length: 6 }, async () =>
+    sessionCookie(await login(request)).token,
+  ))
+  const statuses = await Promise.all(tokens.map(async token =>
+    (await request.get('/api/me', { headers: { Cookie: `__Host-dsa_session=${token}` } })).status(),
+  ))
+  expect(statuses.filter(status => status === 200)).toHaveLength(5)
+  expect(statuses.filter(status => status === 401)).toHaveLength(1)
 })
 
 test('an expired browser session is cleared and redirected to login', async ({ context, page }) => {

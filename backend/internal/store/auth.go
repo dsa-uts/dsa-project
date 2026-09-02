@@ -12,6 +12,8 @@ import (
 
 var ErrNotFound = errors.New("not found")
 
+const maxSessionsPerUser = 5
+
 type UserAccount struct {
 	bun.BaseModel `bun:"table:user_accounts"`
 
@@ -52,14 +54,40 @@ func (s *AuthStore) DeleteSession(ctx context.Context, tokenHash []byte) error {
 	return err
 }
 
-func (s *AuthStore) ReplaceSession(ctx context.Context, previousHash []byte, userID uuid.UUID, tokenHash []byte, expiresAt time.Time) error {
+func (s *AuthStore) CreateSession(ctx context.Context, userID uuid.UUID, tokenHash []byte, now, expiresAt time.Time) error {
 	return s.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
-		if len(previousHash) > 0 {
-			if _, err := tx.NewDelete().Model((*Session)(nil)).Where("token_hash = ?", previousHash).Exec(ctx); err != nil {
+		var lockedUserID uuid.UUID
+		if err := tx.NewSelect().Model((*UserAccount)(nil)).Column("id").
+			Where("id = ?", userID).For("UPDATE").Scan(ctx, &lockedUserID); err != nil {
+			return err
+		}
+		if _, err := tx.NewDelete().Model((*Session)(nil)).
+			Where("user_account_id = ?", lockedUserID).Where("expires_at <= ?", now).Exec(ctx); err != nil {
+			return err
+		}
+
+		existing, err := tx.NewSelect().Model((*Session)(nil)).
+			Where("user_account_id = ?", lockedUserID).Count(ctx)
+		if err != nil {
+			return err
+		}
+		if excess := existing - (maxSessionsPerUser - 1); excess > 0 {
+			if _, err := tx.NewDelete().Model((*Session)(nil)).Where(
+				"id IN (?)",
+				tx.NewSelect().Model((*Session)(nil)).Column("id").
+					Where("user_account_id = ?", lockedUserID).
+					OrderExpr("created_at ASC, id ASC").Limit(excess),
+			).Exec(ctx); err != nil {
 				return err
 			}
 		}
-		_, err := tx.NewInsert().Model(&Session{UserAccountID: userID, TokenHash: tokenHash, ExpiresAt: expiresAt}).Exec(ctx)
+
+		_, err = tx.NewInsert().Model(&Session{
+			UserAccountID: lockedUserID,
+			TokenHash:     tokenHash,
+			ExpiresAt:     expiresAt,
+			CreatedAt:     now,
+		}).Exec(ctx)
 		return err
 	})
 }
