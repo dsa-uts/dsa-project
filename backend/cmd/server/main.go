@@ -18,7 +18,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("load configuration: %v", err)
 	}
-	db, err := app.ConnectDatabase(startupCtx, cfg.DatabaseURL)
+	db, err := app.ConnectDatabase(startupCtx, cfg.DatabaseURL, cfg.DevelopmentSeed)
 	if err != nil {
 		log.Fatalf("initialize datastores: %v", err)
 	}

@@ -11,5 +11,5 @@ export const fetchClient = createFetchClient<paths>({
   fetch: (request) => globalThis.fetch(request),
 })
 
-// コンポーネントからは $api.useQuery('get', '/api/hello') のように使う。
+// コンポーネントからは $api.useQuery('get', '/api/me') のように使う。
 export const $api = createClient(fetchClient)

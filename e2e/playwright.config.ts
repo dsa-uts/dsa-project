@@ -1,5 +1,7 @@
 import { defineConfig } from '@playwright/test'
-import { baseURL } from './environment.js'
+import { apiBaseURL } from './environment.js'
+
+const browserHostTarget = process.env.E2E_BROWSER_HOST_TARGET
 
 export default defineConfig({
   testDir: './tests',
@@ -8,6 +10,9 @@ export default defineConfig({
   reporter: 'line',
   outputDir: '/tmp/dsa-e2e-test-results',
   use: {
-    baseURL,
+    baseURL: apiBaseURL,
+    launchOptions: browserHostTarget
+      ? { args: [`--proxy-server=${browserHostTarget}`, '--proxy-bypass-list=<-loopback>'] }
+      : undefined,
   },
 })

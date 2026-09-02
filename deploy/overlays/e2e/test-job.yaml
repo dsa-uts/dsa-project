@@ -21,4 +21,8 @@ spec:
           env:
             - name: E2E_BASE_URL
               value: http://traefik.kube-system.svc.cluster.local
+            - name: E2E_BROWSER_BASE_URL
+              value: http://localhost
+            - name: E2E_BROWSER_HOST_TARGET
+              value: http://traefik.kube-system.svc.cluster.local
           resources: {}

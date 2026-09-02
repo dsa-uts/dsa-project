@@ -16,6 +16,15 @@ images:
 patches:
   - target:
       kind: Deployment
+      name: dsa-backend
+    patch: |-
+      - op: add
+        path: /spec/template/spec/containers/0/env/-
+        value:
+          name: DEVELOPMENT_SEED
+          value: "true"
+  - target:
+      kind: Deployment
       name: dsa-(backend|frontend)
     patch: |-
       - op: replace
@@ -42,3 +51,9 @@ patches:
       - op: add
         path: /spec/rules/0/host
         value: traefik.kube-system.svc.cluster.local
+      - op: copy
+        from: /spec/rules/0
+        path: /spec/rules/-
+      - op: replace
+        path: /spec/rules/1/host
+        value: localhost
