@@ -65,8 +65,8 @@ components:
       additionalProperties: false
       required: [userid, password]
       properties:
-        userid: { type: string, minLength: 1 }
-        password: { type: string, minLength: 1 }
+        userid: { type: string, minLength: 1, maxLength: 30 }
+        password: { type: string, minLength: 1, maxLength: 256 }
     CurrentUser:
       type: object
       additionalProperties: false
