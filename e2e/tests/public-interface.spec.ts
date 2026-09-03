@@ -50,12 +50,21 @@ test('the browser logs in, shows the User Account, logs out, and guards routes',
 test('login validates input and makes authentication failures indistinguishable', async ({ request }) => {
   const activeToken = sessionCookie(await login(request)).token
   const presentedSession = { Cookie: `__Host-dsa_session=${activeToken}` }
-  const missing = await request.post('/api/session', { data: { password: 'admin' }, headers: presentedSession })
-  expect(missing.status()).toBe(422)
-  expect(missing.headers()['cache-control']).toBe('no-store')
-  await expect(missing.json()).resolves.toMatchObject({ error: { code: 'validation_failed' } })
+  const invalidInputs = [
+    { password: 'admin' },
+    { userid: 'u'.repeat(31), password: 'admin' },
+    { userid: 'admin', password: 'p'.repeat(257) },
+  ]
+  for (const data of invalidInputs) {
+    const response = await request.post('/api/session', { data, headers: presentedSession })
+    expect(response.status()).toBe(422)
+    expect(response.headers()['cache-control']).toBe('no-store')
+    await expect(response.json()).resolves.toMatchObject({ error: { code: 'validation_failed' } })
+  }
 
   const attempts = [
+    { userid: 'u'.repeat(30), password: 'admin' },
+    { userid: 'admin', password: 'p'.repeat(256) },
     { userid: 'missing', password: 'admin' },
     { userid: 'admin', password: 'wrong' },
     { userid: 'disabled', password: 'admin' },
