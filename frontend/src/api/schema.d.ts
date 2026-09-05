@@ -105,6 +105,11 @@ export interface components {
             /** @enum {string} */
             role: "student" | "manager" | "admin";
         };
+        /**
+         * @description Roles assignable through user management; the sole Admin is provisioned separately.
+         * @enum {string}
+         */
+        AssignableUserRole: "student" | "manager";
         /** @enum {string} */
         UserRole: "student" | "manager" | "admin";
         /** @description Immutable, case-sensitive, without trimming or normalization */
@@ -124,12 +129,12 @@ export interface components {
         CreateAdminUserRequest: {
             userid: components["schemas"]["Userid"];
             name: components["schemas"]["DisplayName"];
-            role: components["schemas"]["UserRole"];
+            role: components["schemas"]["AssignableUserRole"];
             password: components["schemas"]["NewPassword"];
         };
         UpdateAdminUserRequest: {
             name?: components["schemas"]["DisplayName"];
-            role?: components["schemas"]["UserRole"];
+            role?: components["schemas"]["AssignableUserRole"];
             password?: components["schemas"]["NewPassword"];
             disabled?: boolean;
         };

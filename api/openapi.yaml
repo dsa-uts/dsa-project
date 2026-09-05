@@ -153,6 +153,10 @@ components:
         role:
           type: string
           enum: [student, manager, admin]
+    AssignableUserRole:
+      type: string
+      enum: [student, manager]
+      description: Roles assignable through user management; the sole Admin is provisioned separately.
     UserRole:
       type: string
       enum: [student, manager, admin]
@@ -190,7 +194,7 @@ components:
       properties:
         userid: { $ref: "#/components/schemas/Userid" }
         name: { $ref: "#/components/schemas/DisplayName" }
-        role: { $ref: "#/components/schemas/UserRole" }
+        role: { $ref: "#/components/schemas/AssignableUserRole" }
         password: { $ref: "#/components/schemas/NewPassword" }
     UpdateAdminUserRequest:
       type: object
@@ -198,7 +202,7 @@ components:
       minProperties: 1
       properties:
         name: { $ref: "#/components/schemas/DisplayName" }
-        role: { $ref: "#/components/schemas/UserRole" }
+        role: { $ref: "#/components/schemas/AssignableUserRole" }
         password: { $ref: "#/components/schemas/NewPassword" }
         disabled: { type: boolean }
     Error:

@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button'
 import { Dialog } from '@/components/ui/dialog'
 
 type User = components['schemas']['AdminUser']
-type Role = components['schemas']['UserRole']
+type Role = components['schemas']['AssignableUserRole']
 type Update = components['schemas']['UpdateAdminUserRequest']
 type Fields = { userid: string; name: string; role: Role; password: string; confirmation: string }
 type FieldErrors = Partial<Record<keyof Fields, string>>
@@ -34,7 +34,7 @@ function Field({ name, label, error, children }: { name: string; label: string; 
 }
 
 function UserDialog({ user, onClose, onSaved }: { user: User | null; onClose: () => void; onSaved: (message: string) => Promise<void> }) {
-  const [fields, setFields] = useState<Fields>({ userid: user?.userid ?? '', name: user?.name ?? '', role: user?.role ?? 'student', password: '', confirmation: '' })
+  const [fields, setFields] = useState<Fields>({ userid: user?.userid ?? '', name: user?.name ?? '', role: user?.role === 'manager' ? 'manager' : 'student', password: '', confirmation: '' })
   const [errors, setErrors] = useState<FieldErrors>({})
   const [apiError, setApiError] = useState('')
   const [busy, setBusy] = useState(false)
@@ -46,7 +46,7 @@ function UserDialog({ user, onClose, onSaved }: { user: User | null; onClose: ()
     setBusy(true)
     try {
       const result = user
-        ? await fetchClient.PATCH('/api/admin/users/{user_id}', { params: { path: { user_id: user.id } }, body: { name: fields.name, role: fields.role, ...(fields.password !== '' ? { password: fields.password } : {}) } })
+        ? await fetchClient.PATCH('/api/admin/users/{user_id}', { params: { path: { user_id: user.id } }, body: { name: fields.name, ...(user.role !== 'admin' ? { role: fields.role } : {}), ...(fields.password !== '' ? { password: fields.password } : {}) } })
         : await fetchClient.POST('/api/admin/users', { body: { userid: fields.userid, name: fields.name, role: fields.role, password: fields.password } })
       if (result.error) {
         if (result.error.error.code === 'userid_taken') setErrors({ userid: 'This User ID is already taken.' })
@@ -63,14 +63,14 @@ function UserDialog({ user, onClose, onSaved }: { user: User | null; onClose: ()
       {(['userid', 'name', 'password', 'confirmation'] as const).map((name) => <Field key={name} name={name} label={{ userid: 'User ID', name: 'Display name', password: 'Password', confirmation: 'Confirm password' }[name]} error={errors[name]}>
         <input id={name} className={inputClass} type={name === 'password' || name === 'confirmation' ? 'password' : 'text'} autoComplete={name === 'password' || name === 'confirmation' ? 'new-password' : 'off'} value={fields[name]} disabled={busy || (name === 'userid' && user !== null)} aria-invalid={!!errors[name]} aria-describedby={errors[name] ? `${name}-error` : undefined} onChange={(event) => setFields({ ...fields, [name]: event.target.value })} />
       </Field>)}
-      <Field name="role" label="Role">
+      {user?.role === 'admin' ? <p className="text-sm">Role: Admin</p> : <Field name="role" label="Role">
         <select id="role" className={inputClass} value={fields.role} disabled={busy} onChange={(event) => {
           const role = event.target.value
-          if (role === 'student' || role === 'manager' || role === 'admin') setFields({ ...fields, role })
+          if (role === 'student' || role === 'manager') setFields({ ...fields, role })
         }}>
-          <option value="student">Student</option><option value="manager">Manager</option><option value="admin">Admin</option>
+          <option value="student">Student</option><option value="manager">Manager</option>
         </select>
-      </Field>
+      </Field>}
       {apiError && <p role="alert" className="text-sm text-destructive">{apiError}</p>}
       <div className="flex justify-end gap-2"><Button type="button" variant="outline" disabled={busy} onClick={onClose}>Cancel</Button><Button type="submit" disabled={busy}>{busy ? 'Saving…' : user ? 'Save' : 'Create'}</Button></div>
     </form>

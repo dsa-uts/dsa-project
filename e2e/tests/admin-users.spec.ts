@@ -57,6 +57,29 @@ test('creation appends, excludes the System Account, and validates immutable cas
   await error(await request.patch(`/api/admin/users/${randomUUID()}`, { headers, data: { name: 'Unknown' } }), 404, 'not_found')
 })
 
+test('Admin cannot be created or assigned, and rejected promotion is atomic', async ({ request }) => {
+  const headers = await cookie(request)
+  const rejected = { ...valid(), role: 'admin' }
+  await error(await request.post('/api/admin/users', { headers, data: rejected }), 422, 'validation_failed')
+  for (const role of ['student', 'manager']) {
+    const data = { ...valid(), role }
+    const created = await request.post('/api/admin/users', { headers, data })
+    expect(created.status()).toBe(201)
+    const user = await created.json()
+    await error(await request.patch(`/api/admin/users/${user.id}`, {
+      headers, data: { role: 'admin', name: 'Must not persist', password: 'must-not-persist', disabled: true },
+    }), 422, 'validation_failed')
+    const session = await cookie(request, data.userid, data.password)
+    expect(await (await request.get('/api/me', { headers: session })).json()).toMatchObject({ role, name: data.name })
+    expect(await (await request.patch(`/api/admin/users/${user.id}`, {
+      headers, data: { role: role === 'student' ? 'manager' : 'student' },
+    })).json()).toMatchObject({ role: role === 'student' ? 'manager' : 'student' })
+  }
+  const users = (await (await request.get('/api/admin/users', { headers })).json()).users
+  expect(users.filter((user: { role: string }) => user.role === 'admin')).toHaveLength(1)
+  expect(users.some((user: { userid: string }) => user.userid === rejected.userid)).toBe(false)
+})
+
 test('partial updates preserve order, disable/reset revoke all sessions, and re-enable preserves password', async ({ request }) => {
   const headers = await cookie(request)
   const data = valid()
@@ -83,20 +106,17 @@ test('partial updates preserve order, disable/reset revoke all sessions, and re-
   await cookie(request, data.userid, 'replacement-password')
 })
 
-test('System Account and self-protection conflicts are atomic; own password reset logs out', async ({ request }) => {
+test('System Account and self-protection conflicts are atomic', async ({ request }) => {
   const headers = await cookie(request)
-  const data = { ...valid(), role: 'admin' }
-  const user = await (await request.post('/api/admin/users', { headers, data })).json()
-  const own = await cookie(request, data.userid, data.password)
-  for (const patch of [{ role: 'student', name: 'Must not persist' }, { disabled: true }]) {
+  const own = headers
+  const user = await (await request.get('/api/me', { headers })).json()
+  for (const patch of [{ role: 'student', name: 'Must not persist' }, { role: 'manager' }, { disabled: true }]) {
     await error(await request.patch(`/api/admin/users/${user.id}`, { headers: own, data: patch }), 409, 'cannot_modify_self')
   }
-  expect(await (await request.get('/api/me', { headers: own })).json()).toMatchObject({ name: data.name, role: 'admin' })
-  expect((await request.patch(`/api/admin/users/${user.id}`, { headers: own, data: { role: 'admin', name: data.name } })).status()).toBe(200)
+  expect(await (await request.get('/api/me', { headers: own })).json()).toMatchObject({ name: user.name, role: 'admin' })
+  expect((await request.patch(`/api/admin/users/${user.id}`, { headers: own, data: { name: user.name } })).status()).toBe(200)
   await error(await request.patch(`/api/admin/users/${systemID}`, { headers, data: { name: 'Changed', password: 'replacement-password', disabled: false } }), 409, 'cannot_modify_system_account')
-  expect((await request.patch(`/api/admin/users/${user.id}`, { headers: own, data: { name: 'Own edit', password: 'own-password-reset' } })).status()).toBe(200)
-  expect((await request.get('/api/me', { headers: own })).status()).toBe(401)
-  await cookie(request, data.userid, 'own-password-reset')
+
 })
 
 test('browser Admin creates, filters, edits, confirms disable, and re-enables User Accounts', async ({ page }) => {
@@ -106,8 +126,15 @@ test('browser Admin creates, filters, edits, confirms disable, and re-enables Us
   await page.getByRole('button', { name: 'Log in' }).click()
   await page.getByRole('link', { name: 'Manage users' }).click()
   await expect(page).toHaveURL(/\/admin\/users$/)
+  const adminRow = page.getByRole('row').filter({ has: page.getByRole('cell', { name: 'admin', exact: true }) })
+  await adminRow.getByRole('button', { name: 'Edit' }).click()
+  await expect(page.getByRole('dialog')).toContainText('Role: Admin')
+  await expect(page.getByRole('dialog').getByRole('combobox')).toHaveCount(0)
+  await page.getByRole('dialog').getByRole('button', { name: 'Save' }).click()
+  await expect(page.getByRole('dialog')).not.toBeVisible()
   await page.getByRole('button', { name: 'Create user' }).click()
   const dialog = page.getByRole('dialog')
+  await expect(dialog.getByRole('option')).toHaveText(['Student', 'Manager'])
   const userid = uniqueUserid()
   await dialog.getByLabel('User ID', { exact: true }).fill(userid)
   await dialog.getByLabel('Display name').fill('Browser User')
@@ -125,6 +152,7 @@ test('browser Admin creates, filters, edits, confirms disable, and re-enables Us
   await row.getByRole('button', { name: 'Edit' }).click()
   await expect(dialog.getByLabel('User ID', { exact: true })).toBeDisabled()
   await dialog.getByLabel('Display name').fill('Renamed Browser User')
+  await expect(dialog.getByRole('option')).toHaveText(['Student', 'Manager'])
   await dialog.getByLabel('Role').selectOption('manager')
   await dialog.getByRole('button', { name: 'Save' }).click()
   await expect(row).toContainText('Renamed Browser User')
