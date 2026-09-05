@@ -1,6 +1,6 @@
 # oapi-codegen の設定 (ADR 0010)。strict-server で response 形をコンパイラ強制する。
 # 生成コマンドは generate.go の go:generate を参照。
-package: api
+package: generated
 output: gen.go
 generate:
   models: true

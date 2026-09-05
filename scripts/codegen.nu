@@ -42,7 +42,7 @@ def 'main check' [] {
 
   print '==> git diff check'
   let diff = do {
-    ^git -C $root diff --exit-code -- backend/internal/api/gen.go frontend/src/api/schema.d.ts
+    ^git -C $root diff --exit-code -- backend/internal/api/generated/gen.go frontend/src/api/schema.d.ts
   } | complete
   if $diff.exit_code != 0 {
     print --stderr $diff.stdout

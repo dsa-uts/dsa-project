@@ -11,6 +11,7 @@ import (
 	"github.com/uptrace/bun"
 
 	"github.com/dsa-uts/dsa-project/backend/internal/api"
+	"github.com/dsa-uts/dsa-project/backend/internal/api/httpresponse"
 	"github.com/dsa-uts/dsa-project/backend/internal/handler"
 	"github.com/dsa-uts/dsa-project/backend/internal/store"
 )
@@ -49,7 +50,7 @@ func httpErrorHandler(err error, c echo.Context) {
 	if code == "" {
 		code = "error"
 	}
-	if err := c.JSON(status, api.NewError(code, message)); err != nil {
+	if err := c.JSON(status, httpresponse.NewError(code, message)); err != nil {
 		c.Logger().Error(err)
 	}
 }
