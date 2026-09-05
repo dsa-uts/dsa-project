@@ -10,7 +10,6 @@ import (
 	"github.com/dsa-uts/dsa-project/backend/internal/api/httpresponse"
 	"github.com/dsa-uts/dsa-project/backend/internal/auth"
 	"github.com/dsa-uts/dsa-project/backend/internal/store"
-	"github.com/labstack/echo/v4"
 )
 
 // Handler implements Admin User Account operations.
@@ -18,16 +17,6 @@ type Handler struct{ auth *store.AuthStore }
 
 func NewHandler(authStore *store.AuthStore) *Handler {
 	return &Handler{auth: authStore}
-}
-
-// OperationMiddlewares keeps authorization policy beside the operations.
-func OperationMiddlewares(authStore *store.AuthStore) map[string][]echo.MiddlewareFunc {
-	admin := httpauth.RequireAdmin(authStore)
-	return map[string][]echo.MiddlewareFunc{
-		"listUserAccounts":  {admin},
-		"createUserAccount": {admin},
-		"updateUserAccount": {admin},
-	}
 }
 
 func userAccountResponse(user *store.UserAccount) generated.UserAccount {
@@ -62,7 +51,7 @@ func (h *Handler) CreateUserAccount(ctx context.Context, req generated.CreateUse
 }
 
 func (h *Handler) UpdateUserAccount(ctx context.Context, req generated.UpdateUserAccountRequestObject) (generated.UpdateUserAccountResponseObject, error) {
-	actor := httpauth.AdminActor(ctx)
+	actor := httpauth.Actor(ctx)
 	update := store.UserUpdate{Name: req.Body.Name, Disabled: req.Body.Disabled}
 	if req.Body.Role != nil {
 		role := string(*req.Body.Role)

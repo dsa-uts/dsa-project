@@ -3,10 +3,15 @@ openapi: 3.0.3
 info:
   title: dsa-project API
   version: 0.1.0
+# Every operation must explicitly declare security and x-access-policy:
+# public = security: []; authenticated/admin = sessionAuth with no scopes.
+# Startup rejects missing or unsupported declarations before registering routes.
 paths:
   /api/session:
     post:
       operationId: createSession
+      x-access-policy: public
+      security: []
       summary: userid と password でログインする
       requestBody:
         required: true
@@ -27,6 +32,8 @@ paths:
         "500": { $ref: "#/components/responses/InternalError" }
     delete:
       operationId: deleteSession
+      x-access-policy: public
+      security: []
       summary: 現在のセッションからログアウトする
       parameters:
         - $ref: "#/components/parameters/SessionCookie"
@@ -40,9 +47,9 @@ paths:
   /api/me:
     get:
       operationId: getCurrentUser
+      x-access-policy: authenticated
+      security: [{ sessionAuth: [] }]
       summary: 現在の User Account を返す
-      parameters:
-        - $ref: "#/components/parameters/SessionCookie"
       responses:
         "200":
           description: 現在の User Account
@@ -52,10 +59,10 @@ paths:
         "401": { $ref: "#/components/responses/Unauthorized" }
         "500": { $ref: "#/components/responses/InternalError" }
   /api/admin/users:
-    parameters:
-      - $ref: "#/components/parameters/SessionCookie"
     get:
       operationId: listUserAccounts
+      x-access-policy: admin
+      security: [{ sessionAuth: [] }]
       summary: List all non-System User Accounts, including disabled accounts, in persisted display order
       responses:
         "200":
@@ -74,6 +81,8 @@ paths:
         "500": { $ref: "#/components/responses/InternalError" }
     post:
       operationId: createUserAccount
+      x-access-policy: admin
+      security: [{ sessionAuth: [] }]
       summary: Create a User Account at the end of the global display order
       requestBody:
         required: true
@@ -93,13 +102,14 @@ paths:
         "500": { $ref: "#/components/responses/InternalError" }
   /api/admin/users/{user_id}:
     parameters:
-      - $ref: "#/components/parameters/SessionCookie"
       - name: user_id
         in: path
         required: true
         schema: { type: string, format: uuid }
     patch:
       operationId: updateUserAccount
+      x-access-policy: admin
+      security: [{ sessionAuth: [] }]
       summary: Atomically update supplied fields of a User Account
       description: |
         Userid is immutable. Last-write-wins; supplying existing values succeeds.
@@ -127,6 +137,11 @@ paths:
         "403": { $ref: "#/components/responses/Forbidden" }
         "500": { $ref: "#/components/responses/InternalError" }
 components:
+  securitySchemes:
+    sessionAuth:
+      type: apiKey
+      in: cookie
+      name: __Host-dsa_session
   parameters:
     SessionCookie:
       name: __Host-dsa_session

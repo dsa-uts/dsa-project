@@ -3,45 +3,64 @@ package httpauth
 import (
 	"context"
 	"errors"
+	"log/slog"
 	"net/http"
 	"time"
 
 	"github.com/dsa-uts/dsa-project/backend/internal/api/httpresponse"
 	"github.com/dsa-uts/dsa-project/backend/internal/auth"
 	"github.com/dsa-uts/dsa-project/backend/internal/store"
+	"github.com/getkin/kin-openapi/openapi3filter"
 	"github.com/labstack/echo/v4"
+	echomiddleware "github.com/oapi-codegen/echo-middleware"
 )
 
-type adminContextKey struct{}
+type actorContextKey struct{}
 
-// RequireAdmin runs before contract validation, so even invalid Admin requests
-// receive 401/403 when the caller is not authorized.
-func RequireAdmin(authStore *store.AuthStore) echo.MiddlewareFunc {
-	return func(next echo.HandlerFunc) echo.HandlerFunc {
-		return func(c echo.Context) error {
-			cookie, err := c.Cookie(auth.SessionCookieName)
-			if err != nil {
-				c.Response().Header().Set("Set-Cookie", ClearedSessionCookie())
-				return c.JSON(http.StatusUnauthorized, httpresponse.NewError("unauthorized", "Authentication is required."))
-			}
-			user, err := authStore.CurrentUser(c.Request().Context(), auth.HashToken(cookie.Value), time.Now())
-			if errors.Is(err, store.ErrNotFound) {
-				c.Response().Header().Set("Set-Cookie", ClearedSessionCookie())
-				return c.JSON(http.StatusUnauthorized, httpresponse.NewError("unauthorized", "Authentication is required."))
-			}
-			if err != nil {
-				return err
-			}
-			if user.IsSystem || user.Role != "admin" {
-				return c.JSON(http.StatusForbidden, httpresponse.NewError("forbidden", "Admin Role is required."))
-			}
-			c.SetRequest(c.Request().WithContext(context.WithValue(c.Request().Context(), adminContextKey{}, user)))
-			return next(c)
+// Authenticate runs during security validation, before parameters and bodies.
+// ValidateAccessPolicies must have accepted the spec before registering routes.
+func Authenticate(authStore *store.AuthStore) openapi3filter.AuthenticationFunc {
+	return func(ctx context.Context, input *openapi3filter.AuthenticationInput) error {
+		c := echomiddleware.GetEchoContext(ctx)
+		policy, _ := input.RequestValidationInput.Route.Operation.Extensions[accessPolicyExtension].(string)
+		if c == nil || input.SecuritySchemeName != "sessionAuth" || (policy != "authenticated" && policy != "admin") {
+			return echo.NewHTTPError(http.StatusInternalServerError, "Invalid API access policy.")
 		}
+		unauthorized := func() error {
+			c.Response().Header().Set("Set-Cookie", ClearedSessionCookie())
+			return echo.NewHTTPError(http.StatusUnauthorized, "Authentication is required.")
+		}
+		cookie, err := c.Cookie(auth.SessionCookieName)
+		if err != nil {
+			return unauthorized()
+		}
+		// echo-middleware supplies a background context to this callback. Use the
+		// original request for DB cancellation and install the actor there for strict handlers.
+		requestContext := c.Request().Context()
+		user, err := authStore.CurrentUser(requestContext, auth.HashToken(cookie.Value), time.Now())
+		if errors.Is(err, store.ErrNotFound) {
+			return unauthorized()
+		}
+		if err != nil {
+			slog.ErrorContext(requestContext, "authenticate session", "error", err)
+			// The middleware preserves direct HTTP errors in SecurityRequirementsError.
+			// Wrapping this error would turn a database failure into a 403.
+			if policy == "authenticated" {
+				// Preserve the current-user lookup's existing error envelope.
+				return echo.NewHTTPError(http.StatusInternalServerError,
+					httpresponse.NewError("internal", "Failed to get current user.")).SetInternal(err)
+			}
+			return echo.NewHTTPError(http.StatusInternalServerError, "Internal server error.").SetInternal(err)
+		}
+		if policy == "admin" && (user.IsSystem || user.Role != "admin") {
+			return echo.NewHTTPError(http.StatusForbidden, "Admin Role is required.")
+		}
+		c.SetRequest(c.Request().WithContext(context.WithValue(requestContext, actorContextKey{}, user)))
+		return nil
 	}
 }
 
-// AdminActor reads the actor installed by RequireAdmin before validation.
-func AdminActor(ctx context.Context) *store.UserAccount {
-	return ctx.Value(adminContextKey{}).(*store.UserAccount)
+// Actor returns the User Account installed by successful security validation.
+func Actor(ctx context.Context) *store.UserAccount {
+	return ctx.Value(actorContextKey{}).(*store.UserAccount)
 }
