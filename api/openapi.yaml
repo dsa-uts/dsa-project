@@ -51,6 +51,81 @@ paths:
               schema: { $ref: "#/components/schemas/CurrentUser" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "500": { $ref: "#/components/responses/InternalError" }
+  /api/admin/users:
+    parameters:
+      - $ref: "#/components/parameters/SessionCookie"
+    get:
+      operationId: listAdminUsers
+      summary: List all non-System User Accounts, including disabled accounts, in persisted display order
+      responses:
+        "200":
+          description: All User Accounts, without pagination
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [users]
+                properties:
+                  users:
+                    type: array
+                    items: { $ref: "#/components/schemas/AdminUser" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "500": { $ref: "#/components/responses/InternalError" }
+    post:
+      operationId: createAdminUser
+      summary: Create a User Account at the end of the global display order
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateAdminUserRequest" }
+      responses:
+        "201":
+          description: Created User Account
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminUser" }
+        "409": { $ref: "#/components/responses/UserConflict" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "500": { $ref: "#/components/responses/InternalError" }
+  /api/admin/users/{user_id}:
+    parameters:
+      - $ref: "#/components/parameters/SessionCookie"
+      - name: user_id
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    patch:
+      operationId: updateAdminUser
+      summary: Atomically update supplied fields of a User Account
+      description: |
+        Userid is immutable. Last-write-wins; supplying existing values succeeds.
+        System Accounts cannot be modified (cannot_modify_system_account).
+        An Admin cannot change their own Role or disable themselves (cannot_modify_self).
+        Password replacement and transitions to disabled delete all affected sessions
+        in the same transaction. Other changes retain sessions. Repeated disabling
+        preserves the original disabled timestamp; re-enabling retains the password
+        unless a replacement is supplied. Display order is preserved.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UpdateAdminUserRequest" }
+      responses:
+        "200":
+          description: Updated User Account
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminUser" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/UserConflict" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "500": { $ref: "#/components/responses/InternalError" }
 components:
   parameters:
     SessionCookie:
@@ -78,6 +153,54 @@ components:
         role:
           type: string
           enum: [student, manager, admin]
+    UserRole:
+      type: string
+      enum: [student, manager, admin]
+    Userid:
+      type: string
+      minLength: 1
+      maxLength: 30
+      pattern: '^[A-Za-z0-9][A-Za-z0-9._-]{0,29}$'
+      description: Immutable, case-sensitive, without trimming or normalization
+    DisplayName:
+      type: string
+      minLength: 1
+      maxLength: 64
+      pattern: '^[^\p{Cc}]*[^\p{Cc}\p{Z}\s][^\p{Cc}]*$'
+      description: 1–64 Unicode characters; no control characters or whitespace-only values; no trimming or normalization
+    NewPassword:
+      type: string
+      minLength: 8
+      maxLength: 256
+      description: Unicode characters, without trimming, normalization, or character-class rules; confirmation is frontend-only
+    AdminUser:
+      type: object
+      additionalProperties: false
+      required: [id, userid, name, role, disabled]
+      properties:
+        id: { type: string, format: uuid }
+        userid: { type: string }
+        name: { type: string }
+        role: { $ref: "#/components/schemas/UserRole" }
+        disabled: { type: boolean }
+    CreateAdminUserRequest:
+      type: object
+      additionalProperties: false
+      required: [userid, name, role, password]
+      properties:
+        userid: { $ref: "#/components/schemas/Userid" }
+        name: { $ref: "#/components/schemas/DisplayName" }
+        role: { $ref: "#/components/schemas/UserRole" }
+        password: { $ref: "#/components/schemas/NewPassword" }
+    UpdateAdminUserRequest:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        name: { $ref: "#/components/schemas/DisplayName" }
+        role: { $ref: "#/components/schemas/UserRole" }
+        password: { $ref: "#/components/schemas/NewPassword" }
+        disabled: { type: boolean }
     Error:
       type: object
       required: [error]
@@ -109,6 +232,21 @@ components:
           schema: { $ref: "#/components/schemas/Error" }
     InternalError:
       description: サーバー内部エラー
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    Forbidden:
+      description: Admin Role required
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    NotFound:
+      description: User Account not found
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    UserConflict:
+      description: userid_taken (exact duplicate), cannot_modify_self, or cannot_modify_system_account
       content:
         application/json:
           schema: { $ref: "#/components/schemas/Error" }

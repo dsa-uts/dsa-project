@@ -1,5 +1,6 @@
 import { useState, type ReactNode, type SubmitEventHandler } from 'react'
-import { Navigate, Route, Routes } from 'react-router-dom'
+import { Link, Navigate, Route, Routes } from 'react-router-dom'
+import { AdminUsersPage } from '@/AdminUsers'
 import { $api } from '@/api/client'
 import { AuthLayout, ProtectedLayout, useAuth } from '@/auth'
 import { Button } from '@/components/ui/button'
@@ -82,6 +83,7 @@ function HomePage() {
         <dt className="text-muted-foreground">Role</dt>
         <dd>{user.role}</dd>
       </dl>
+      {user.role === 'admin' && <Link to="/admin/users" className="underline">Manage users</Link>}
       <Button variant="outline" onClick={() => logout.mutate({})} disabled={logout.isPending}>
         Log out
       </Button>
@@ -106,6 +108,7 @@ function App() {
 
         <Route element={<ProtectedLayout />}>
           <Route path="/" element={<HomePage />} />
+          <Route path="/admin/users" element={<AdminUsersPage />} />
           <Route path="*" element={<NotFoundPage />} />
         </Route>
       </Route>

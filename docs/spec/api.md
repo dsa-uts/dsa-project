@@ -475,62 +475,13 @@ Manager/Admin 専用。ユーザーの表示順を永続化する。外部ツー
 ```
 
 - System Account を除く全ユーザー(無効化済みを含む)の ID を過不足なく含むこと。
-- [`GET /api/admin/users`](#get-apiadminusers) と今後のダッシュボード系 API のユーザー列挙は、この順序を既定とする。
+- [`GET /api/admin/users`](../../api/openapi.yaml) と今後のダッシュボード系 API のユーザー列挙は、この順序を既定とする。
 - Response: `204`
 - Errors: `403`(Student)、`422 user_ids_mismatch`(欠落・重複・未知の ID)
 
 ## Admin
 
 Admin 専用。Student / Manager は `403`。
-
-### `GET /api/admin/users`
-
-全ユーザーを表示順で返す。ページネーションなし。System Account は含めない。
-
-```json
-{
-  "users": [
-    {
-      "id": "uuid",
-      "userid": "student001",
-      "name": "山田 太郎",
-      "role": "student",
-      "disabled": false
-    }
-  ]
-}
-```
-
-### `POST /api/admin/users`
-
-ユーザーを作成する。スプレッドシートからの一括作成はフロントエンドが解析して本エンドポイントを連続呼び出しする。一括用エンドポイントは存在しない。
-
-```json
-{
-  "userid": "student001",
-  "name": "山田 太郎",
-  "password": "initial-password",
-  "role": "student"
-}
-```
-
-- 初期パスワードは Admin 側が supply する。自動生成はしない。
-- Response: `201` + 作成された User(`GET /api/admin/users` の要素と同形)
-- Errors: `409 userid_taken`、`422`
-
-### `PATCH /api/admin/users/{user_id}`
-
-`name` / `role` / `password`(リセット)/ `disabled` の部分更新。`disabled: false` で無効化を解除する。
-
-- Response: `200` + 更新後の User
-- Errors: `404`、`422`
-
-### `DELETE /api/admin/users/{user_id}`
-
-soft delete。ログインを無効化し、レコードは保持する(Submission / Request の履歴が参照するため物理削除しない)。無効化済みユーザーは一覧に `disabled: true` で残る。
-
-- Response: `204`
-- Errors: `404`、`409 cannot_delete_system_account`、`409 cannot_delete_self`
 
 ### `POST /api/admin/resource-versions`
 
