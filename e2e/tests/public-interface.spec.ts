@@ -24,6 +24,7 @@ test.beforeAll(waitForDeployment)
 test('the browser logs in, shows the User Account, logs out, and guards routes', async ({ page }) => {
   await page.goto(new URL('/unknown', browserBaseURL).href)
   await expect(page).toHaveURL(/\/login$/)
+  await expect(page.getByRole('banner')).toHaveCount(0)
   await page.getByLabel('User ID').fill('admin')
   await page.getByLabel('Password').fill('admin')
   await page.getByRole('button', { name: 'Log in' }).click()
@@ -33,9 +34,11 @@ test('the browser logs in, shows the User Account, logs out, and guards routes',
 
   await page.goto(new URL('/unknown', browserBaseURL).href)
   await expect(page.getByRole('heading', { name: '404' })).toBeVisible()
+  await page.getByRole('banner').getByRole('link', { name: 'DSA', exact: true }).click()
+  await expect(page).toHaveURL(new URL('/', browserBaseURL).href)
   await page.goto(new URL('/login', browserBaseURL).href)
   await expect(page).toHaveURL(new URL('/', browserBaseURL).href)
-  await page.getByRole('button', { name: 'Log out' }).click()
+  await page.getByRole('banner').getByRole('button', { name: 'Logout' }).click()
   await expect(page).toHaveURL(/\/login$/)
 })
 

@@ -105,7 +105,7 @@ function UsersScreen() {
   }
   const query = search.trim().toLowerCase()
   const visible = users.data?.users.filter((user) => (state === 'all' || user.disabled === (state === 'disabled')) && (user.userid.toLowerCase().includes(query) || user.name.toLowerCase().includes(query))) ?? []
-  return <main className="min-h-svh bg-background p-6 text-foreground">
+  return <main className="flex-1 bg-background p-6 text-foreground">
     <div className="mx-auto flex max-w-5xl flex-col gap-5">
       <Link to="/" className="underline">Home</Link>
       <div className="flex items-center justify-between gap-4"><h1 className="text-2xl font-semibold">User Accounts</h1><Button onClick={() => setEditing({ user: null })}>Create user</Button></div>

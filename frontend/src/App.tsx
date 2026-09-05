@@ -1,13 +1,14 @@
 import { useState, type ReactNode, type SubmitEventHandler } from 'react'
-import { Link, Navigate, Route, Routes } from 'react-router-dom'
+import { Link, Navigate, Outlet, Route, Routes } from 'react-router-dom'
 import { AdminUsersPage } from '@/AdminUsers'
 import { $api } from '@/api/client'
 import { AuthLayout, ProtectedLayout, useAuth } from '@/auth'
+import { TopBar } from '@/components/TopBar'
 import { Button } from '@/components/ui/button'
 
 function Page({ children }: { children: ReactNode }) {
   return (
-    <main className="flex min-h-svh items-center justify-center bg-background px-4 text-foreground">
+    <main className="flex flex-1 items-center justify-center bg-background p-4 text-foreground">
       <section className="flex w-full max-w-sm flex-col gap-5 rounded-lg border bg-card p-6 shadow-sm">
         {children}
       </section>
@@ -65,12 +66,7 @@ function LoginPage() {
 }
 
 function HomePage() {
-  const { user, setUser } = useAuth()
-  const logout = $api.useMutation('delete', '/api/session', {
-    onSuccess: () => {
-      setUser(null)
-    },
-  })
+  const { user } = useAuth()
 
   if (user === null) return <Navigate to="/login" replace />
 
@@ -84,9 +80,6 @@ function HomePage() {
         <dd>{user.role}</dd>
       </dl>
       {user.role === 'admin' && <Link to="/admin/users" className="underline">Manage users</Link>}
-      <Button variant="outline" onClick={() => logout.mutate({})} disabled={logout.isPending}>
-        Log out
-      </Button>
     </Page>
   )
 }
@@ -100,19 +93,33 @@ function NotFoundPage() {
   )
 }
 
+function AuthenticatedLayout() {
+  const auth = useAuth()
+  return (
+    <>
+      <TopBar />
+      <Outlet context={auth} />
+    </>
+  )
+}
+
 function App() {
   return (
-    <Routes>
-      <Route element={<AuthLayout loadingElement={<Page>Loading...</Page>} />}>
-        <Route path="/login" element={<LoginPage />} />
+    <div className="flex min-h-svh flex-col">
+      <Routes>
+        <Route element={<AuthLayout loadingElement={<Page>Loading...</Page>} />}>
+          <Route path="/login" element={<LoginPage />} />
 
-        <Route element={<ProtectedLayout />}>
-          <Route path="/" element={<HomePage />} />
-          <Route path="/admin/users" element={<AdminUsersPage />} />
-          <Route path="*" element={<NotFoundPage />} />
+          <Route element={<ProtectedLayout />}>
+            <Route element={<AuthenticatedLayout />}>
+              <Route path="/" element={<HomePage />} />
+              <Route path="/admin/users" element={<AdminUsersPage />} />
+              <Route path="*" element={<NotFoundPage />} />
+            </Route>
+          </Route>
         </Route>
-      </Route>
-    </Routes>
+      </Routes>
+    </div>
   )
 }
 
