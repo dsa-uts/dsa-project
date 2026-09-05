@@ -1,5 +1,4 @@
-// Package server assembles the Echo instance: routes, spec-driven request
-// validation, and the unified error envelope.
+// Package server assembles the Echo instance, health route, and unified error envelope.
 package server
 
 import (
@@ -9,7 +8,6 @@ import (
 	"strings"
 
 	echo "github.com/labstack/echo/v4"
-	echomiddleware "github.com/oapi-codegen/echo-middleware"
 	"github.com/uptrace/bun"
 
 	"github.com/dsa-uts/dsa-project/backend/internal/api"
@@ -26,44 +24,11 @@ func New(db *bun.DB) *echo.Echo {
 
 	e.GET("/health", handler.Health)
 
-	spec, err := api.GetSpec()
-	if err != nil {
-		// 生成コードに埋め込まれた spec なので、失敗はビルド成果物の破損のみ
-		panic(fmt.Sprintf("load embedded openapi spec: %v", err))
-	}
-	// servers はデプロイ形態の情報で、リクエストの host 検証には使わない
-	spec.Servers = nil
-
-	// openapi.yaml の required / minLength 等をリクエスト受理前に強制する
-	// (ADR 0010: kin-openapi による validation は spec から従属的に得られる)。
-	validator := echomiddleware.OapiRequestValidatorWithOptions(spec, &echomiddleware.Options{
-		ErrorHandler: func(c echo.Context, err *echo.HTTPError) error {
-			// middleware はリクエスト不正を 400 で返すが、docs/spec/api.md では
-			// バリデーション失敗は 422 + 統一エラー封筒。404 / 405 等はそのまま
-			// httpErrorHandler に流して封筒化する。
-			if err.Code == http.StatusBadRequest {
-				return c.JSON(http.StatusUnprocessableEntity, api.NewError("validation_failed", fmt.Sprint(err.Message)))
-			}
-			return err
-		},
-	})
-
 	var authStore *store.AuthStore
 	if db != nil {
 		authStore = store.NewAuthStore(db)
 	}
-	h := api.NewHandler(authStore)
-
-	// validator は spec 由来のルートにだけ掛ける (group 経由で登録)。
-	// no-store は validator の外側に置き、validation error にも適用する。
-	noStore := func(next echo.HandlerFunc) echo.HandlerFunc {
-		return func(c echo.Context) error {
-			c.Response().Header().Set("Cache-Control", "no-store")
-			return next(c)
-		}
-	}
-	g := e.Group("", noStore, h.RequireAdmin, validator)
-	api.RegisterHandlers(g, api.NewStrictHandler(h, nil))
+	api.Register(e, authStore)
 
 	return e
 }
