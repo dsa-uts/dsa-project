@@ -7,9 +7,9 @@ import { useAuth } from '@/auth'
 import { Button } from '@/components/ui/button'
 import { Dialog } from '@/components/ui/dialog'
 
-type User = components['schemas']['AdminUser']
+type User = components['schemas']['UserAccount']
 type Role = components['schemas']['AssignableUserRole']
-type Update = components['schemas']['UpdateAdminUserRequest']
+type Update = components['schemas']['UpdateUserAccountRequest']
 type Fields = { userid: string; name: string; role: Role; password: string; confirmation: string }
 type FieldErrors = Partial<Record<keyof Fields, string>>
 const inputClass = 'h-10 rounded-md border bg-background px-3 outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50'

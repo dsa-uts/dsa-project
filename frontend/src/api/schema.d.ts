@@ -49,10 +49,10 @@ export interface paths {
             };
         };
         /** List all non-System User Accounts, including disabled accounts, in persisted display order */
-        get: operations["listAdminUsers"];
+        get: operations["listUserAccounts"];
         put?: never;
         /** Create a User Account at the end of the global display order */
-        post: operations["createAdminUser"];
+        post: operations["createUserAccount"];
         delete?: never;
         options?: never;
         head?: never;
@@ -86,7 +86,7 @@ export interface paths {
          *     preserves the original disabled timestamp; re-enabling retains the password
          *     unless a replacement is supplied. Display order is preserved.
          */
-        patch: operations["updateAdminUser"];
+        patch: operations["updateUserAccount"];
         trace?: never;
     };
 }
@@ -118,7 +118,7 @@ export interface components {
         DisplayName: string;
         /** @description Unicode characters, without trimming, normalization, or character-class rules; confirmation is frontend-only */
         NewPassword: string;
-        AdminUser: {
+        UserAccount: {
             /** Format: uuid */
             id: string;
             userid: string;
@@ -126,13 +126,13 @@ export interface components {
             role: components["schemas"]["UserRole"];
             disabled: boolean;
         };
-        CreateAdminUserRequest: {
+        CreateUserAccountRequest: {
             userid: components["schemas"]["Userid"];
             name: components["schemas"]["DisplayName"];
             role: components["schemas"]["AssignableUserRole"];
             password: components["schemas"]["NewPassword"];
         };
-        UpdateAdminUserRequest: {
+        UpdateUserAccountRequest: {
             name?: components["schemas"]["DisplayName"];
             role?: components["schemas"]["AssignableUserRole"];
             password?: components["schemas"]["NewPassword"];
@@ -294,7 +294,7 @@ export interface operations {
             500: components["responses"]["InternalError"];
         };
     };
-    listAdminUsers: {
+    listUserAccounts: {
         parameters: {
             query?: never;
             header?: never;
@@ -312,7 +312,7 @@ export interface operations {
                 };
                 content: {
                     "application/json": {
-                        users: components["schemas"]["AdminUser"][];
+                        users: components["schemas"]["UserAccount"][];
                     };
                 };
             };
@@ -321,7 +321,7 @@ export interface operations {
             500: components["responses"]["InternalError"];
         };
     };
-    createAdminUser: {
+    createUserAccount: {
         parameters: {
             query?: never;
             header?: never;
@@ -332,7 +332,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["CreateAdminUserRequest"];
+                "application/json": components["schemas"]["CreateUserAccountRequest"];
             };
         };
         responses: {
@@ -342,7 +342,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["AdminUser"];
+                    "application/json": components["schemas"]["UserAccount"];
                 };
             };
             401: components["responses"]["Unauthorized"];
@@ -352,7 +352,7 @@ export interface operations {
             500: components["responses"]["InternalError"];
         };
     };
-    updateAdminUser: {
+    updateUserAccount: {
         parameters: {
             query?: never;
             header?: never;
@@ -365,7 +365,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["UpdateAdminUserRequest"];
+                "application/json": components["schemas"]["UpdateUserAccountRequest"];
             };
         };
         responses: {
@@ -375,7 +375,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["AdminUser"];
+                    "application/json": components["schemas"]["UserAccount"];
                 };
             };
             401: components["responses"]["Unauthorized"];

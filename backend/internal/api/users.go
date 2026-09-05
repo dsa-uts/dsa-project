@@ -44,38 +44,38 @@ func (h *Handler) RequireAdmin(next echo.HandlerFunc) echo.HandlerFunc {
 	}
 }
 
-func adminUserResponse(user *store.UserAccount) AdminUser {
-	return AdminUser{Id: user.ID, Userid: user.Userid, Name: user.Name, Role: UserRole(user.Role), Disabled: user.DisabledAt != nil}
+func userAccountResponse(user *store.UserAccount) UserAccount {
+	return UserAccount{Id: user.ID, Userid: user.Userid, Name: user.Name, Role: UserRole(user.Role), Disabled: user.DisabledAt != nil}
 }
 
-func (h *Handler) ListAdminUsers(ctx context.Context, req ListAdminUsersRequestObject) (ListAdminUsersResponseObject, error) {
+func (h *Handler) ListUserAccounts(ctx context.Context, req ListUserAccountsRequestObject) (ListUserAccountsResponseObject, error) {
 	users, err := h.auth.ListUsers(ctx)
 	if err != nil {
 		return nil, err
 	}
-	result := make([]AdminUser, 0, len(users))
+	result := make([]UserAccount, 0, len(users))
 	for i := range users {
-		result = append(result, adminUserResponse(&users[i]))
+		result = append(result, userAccountResponse(&users[i]))
 	}
-	return ListAdminUsers200JSONResponse{Users: result}, nil
+	return ListUserAccounts200JSONResponse{Users: result}, nil
 }
 
-func (h *Handler) CreateAdminUser(ctx context.Context, req CreateAdminUserRequestObject) (CreateAdminUserResponseObject, error) {
+func (h *Handler) CreateUserAccount(ctx context.Context, req CreateUserAccountRequestObject) (CreateUserAccountResponseObject, error) {
 	hash, err := auth.HashPassword(req.Body.Password)
 	if err != nil {
 		return nil, err
 	}
 	user := &store.UserAccount{Userid: req.Body.Userid, Name: req.Body.Name, Role: string(req.Body.Role), PasswordHash: &hash}
 	if err := h.auth.CreateUser(ctx, user); errors.Is(err, store.ErrUseridTaken) {
-		return CreateAdminUser409JSONResponse{UserConflictJSONResponse(NewError("userid_taken", "This User ID is already taken."))}, nil
+		return CreateUserAccount409JSONResponse{UserConflictJSONResponse(NewError("userid_taken", "This User ID is already taken."))}, nil
 	} else if err != nil {
 		slog.ErrorContext(ctx, "create User Account", "error", err)
 		return nil, err
 	}
-	return CreateAdminUser201JSONResponse(adminUserResponse(user)), nil
+	return CreateUserAccount201JSONResponse(userAccountResponse(user)), nil
 }
 
-func (h *Handler) UpdateAdminUser(ctx context.Context, req UpdateAdminUserRequestObject) (UpdateAdminUserResponseObject, error) {
+func (h *Handler) UpdateUserAccount(ctx context.Context, req UpdateUserAccountRequestObject) (UpdateUserAccountResponseObject, error) {
 	actor := ctx.Value(adminContextKey{}).(*store.UserAccount)
 	update := store.UserUpdate{Name: req.Body.Name, Disabled: req.Body.Disabled}
 	if req.Body.Role != nil {
@@ -92,12 +92,12 @@ func (h *Handler) UpdateAdminUser(ctx context.Context, req UpdateAdminUserReques
 	user, err := h.auth.UpdateUser(ctx, actor.ID, req.UserId, update)
 	switch {
 	case errors.Is(err, store.ErrNotFound):
-		return UpdateAdminUser404JSONResponse{NotFoundJSONResponse(NewError("not_found", "User Account not found."))}, nil
+		return UpdateUserAccount404JSONResponse{NotFoundJSONResponse(NewError("not_found", "User Account not found."))}, nil
 	case errors.Is(err, store.ErrCannotModifySelf), errors.Is(err, store.ErrCannotModifySystemAccount):
-		return UpdateAdminUser409JSONResponse{UserConflictJSONResponse(NewError(err.Error(), "This User Account cannot be modified in that way."))}, nil
+		return UpdateUserAccount409JSONResponse{UserConflictJSONResponse(NewError(err.Error(), "This User Account cannot be modified in that way."))}, nil
 	case err != nil:
 		slog.ErrorContext(ctx, "update User Account", "error", err)
 		return nil, err
 	}
-	return UpdateAdminUser200JSONResponse(adminUserResponse(user)), nil
+	return UpdateUserAccount200JSONResponse(userAccountResponse(user)), nil
 }

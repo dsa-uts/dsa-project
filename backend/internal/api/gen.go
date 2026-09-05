@@ -81,20 +81,17 @@ func (e UserRole) Valid() bool {
 	}
 }
 
-// AdminUser defines model for AdminUser.
-type AdminUser struct {
-	Disabled bool               `json:"disabled"`
-	Id       openapi_types.UUID `json:"id"`
-	Name     string             `json:"name"`
-	Role     UserRole           `json:"role"`
-	Userid   string             `json:"userid"`
-}
-
 // AssignableUserRole Roles assignable through user management; the sole Admin is provisioned separately.
 type AssignableUserRole string
 
-// CreateAdminUserRequest defines model for CreateAdminUserRequest.
-type CreateAdminUserRequest struct {
+// CreateSessionRequest defines model for CreateSessionRequest.
+type CreateSessionRequest struct {
+	Password string `json:"password"`
+	Userid   string `json:"userid"`
+}
+
+// CreateUserAccountRequest defines model for CreateUserAccountRequest.
+type CreateUserAccountRequest struct {
 	// Name 1–64 Unicode characters; no control characters or whitespace-only values; no trimming or normalization
 	Name DisplayName `json:"name"`
 
@@ -106,12 +103,6 @@ type CreateAdminUserRequest struct {
 
 	// Userid Immutable, case-sensitive, without trimming or normalization
 	Userid Userid `json:"userid"`
-}
-
-// CreateSessionRequest defines model for CreateSessionRequest.
-type CreateSessionRequest struct {
-	Password string `json:"password"`
-	Userid   string `json:"userid"`
 }
 
 // CurrentUser defines model for CurrentUser.
@@ -139,8 +130,8 @@ type Error struct {
 // NewPassword Unicode characters, without trimming, normalization, or character-class rules; confirmation is frontend-only
 type NewPassword = string
 
-// UpdateAdminUserRequest defines model for UpdateAdminUserRequest.
-type UpdateAdminUserRequest struct {
+// UpdateUserAccountRequest defines model for UpdateUserAccountRequest.
+type UpdateUserAccountRequest struct {
 	Disabled *bool `json:"disabled,omitempty"`
 
 	// Name 1–64 Unicode characters; no control characters or whitespace-only values; no trimming or normalization
@@ -151,6 +142,15 @@ type UpdateAdminUserRequest struct {
 
 	// Role Roles assignable through user management; the sole Admin is provisioned separately.
 	Role *AssignableUserRole `json:"role,omitempty"`
+}
+
+// UserAccount defines model for UserAccount.
+type UserAccount struct {
+	Disabled bool               `json:"disabled"`
+	Id       openapi_types.UUID `json:"id"`
+	Name     string             `json:"name"`
+	Role     UserRole           `json:"role"`
+	Userid   string             `json:"userid"`
 }
 
 // UserRole defines model for UserRole.
@@ -183,18 +183,18 @@ type UserConflict = Error
 // ValidationError defines model for ValidationError.
 type ValidationError = Error
 
-// ListAdminUsersParams defines parameters for ListAdminUsers.
-type ListAdminUsersParams struct {
+// ListUserAccountsParams defines parameters for ListUserAccounts.
+type ListUserAccountsParams struct {
 	SessionToken *SessionToken `form:"__Host-dsa_session,omitempty" json:"__Host-dsa_session,omitempty"`
 }
 
-// CreateAdminUserParams defines parameters for CreateAdminUser.
-type CreateAdminUserParams struct {
+// CreateUserAccountParams defines parameters for CreateUserAccount.
+type CreateUserAccountParams struct {
 	SessionToken *SessionToken `form:"__Host-dsa_session,omitempty" json:"__Host-dsa_session,omitempty"`
 }
 
-// UpdateAdminUserParams defines parameters for UpdateAdminUser.
-type UpdateAdminUserParams struct {
+// UpdateUserAccountParams defines parameters for UpdateUserAccount.
+type UpdateUserAccountParams struct {
 	SessionToken *SessionToken `form:"__Host-dsa_session,omitempty" json:"__Host-dsa_session,omitempty"`
 }
 
@@ -208,26 +208,26 @@ type DeleteSessionParams struct {
 	SessionToken *SessionToken `form:"__Host-dsa_session,omitempty" json:"__Host-dsa_session,omitempty"`
 }
 
-// CreateAdminUserJSONRequestBody defines body for CreateAdminUser for application/json ContentType.
-type CreateAdminUserJSONRequestBody = CreateAdminUserRequest
+// CreateUserAccountJSONRequestBody defines body for CreateUserAccount for application/json ContentType.
+type CreateUserAccountJSONRequestBody = CreateUserAccountRequest
 
-// UpdateAdminUserJSONRequestBody defines body for UpdateAdminUser for application/json ContentType.
-type UpdateAdminUserJSONRequestBody = UpdateAdminUserRequest
+// UpdateUserAccountJSONRequestBody defines body for UpdateUserAccount for application/json ContentType.
+type UpdateUserAccountJSONRequestBody = UpdateUserAccountRequest
 
 // CreateSessionJSONRequestBody defines body for CreateSession for application/json ContentType.
 type CreateSessionJSONRequestBody = CreateSessionRequest
 
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
-	// ListAdminUsers List all non-System User Accounts, including disabled accounts, in persisted display order
+	// ListUserAccounts List all non-System User Accounts, including disabled accounts, in persisted display order
 	// (GET /api/admin/users)
-	ListAdminUsers(ctx echo.Context, params ListAdminUsersParams) error
-	// CreateAdminUser Create a User Account at the end of the global display order
+	ListUserAccounts(ctx echo.Context, params ListUserAccountsParams) error
+	// CreateUserAccount Create a User Account at the end of the global display order
 	// (POST /api/admin/users)
-	CreateAdminUser(ctx echo.Context, params CreateAdminUserParams) error
-	// UpdateAdminUser Atomically update supplied fields of a User Account
+	CreateUserAccount(ctx echo.Context, params CreateUserAccountParams) error
+	// UpdateUserAccount Atomically update supplied fields of a User Account
 	// (PATCH /api/admin/users/{user_id})
-	UpdateAdminUser(ctx echo.Context, userId openapi_types.UUID, params UpdateAdminUserParams) error
+	UpdateUserAccount(ctx echo.Context, userId openapi_types.UUID, params UpdateUserAccountParams) error
 	// GetCurrentUser 現在の User Account を返す
 	// (GET /api/me)
 	GetCurrentUser(ctx echo.Context, params GetCurrentUserParams) error
@@ -244,12 +244,12 @@ type ServerInterfaceWrapper struct {
 	Handler ServerInterface
 }
 
-// ListAdminUsers converts echo context to params.
-func (w *ServerInterfaceWrapper) ListAdminUsers(ctx echo.Context) error {
+// ListUserAccounts converts echo context to params.
+func (w *ServerInterfaceWrapper) ListUserAccounts(ctx echo.Context) error {
 	var err error
 
 	// Parameter object where we will unmarshal all parameters from the context
-	var params ListAdminUsersParams
+	var params ListUserAccountsParams
 
 	if cookie, err := ctx.Cookie("__Host-dsa_session"); err == nil {
 
@@ -263,16 +263,16 @@ func (w *ServerInterfaceWrapper) ListAdminUsers(ctx echo.Context) error {
 	}
 
 	// Invoke the callback with all the unmarshaled arguments
-	err = w.Handler.ListAdminUsers(ctx, params)
+	err = w.Handler.ListUserAccounts(ctx, params)
 	return err
 }
 
-// CreateAdminUser converts echo context to params.
-func (w *ServerInterfaceWrapper) CreateAdminUser(ctx echo.Context) error {
+// CreateUserAccount converts echo context to params.
+func (w *ServerInterfaceWrapper) CreateUserAccount(ctx echo.Context) error {
 	var err error
 
 	// Parameter object where we will unmarshal all parameters from the context
-	var params CreateAdminUserParams
+	var params CreateUserAccountParams
 
 	if cookie, err := ctx.Cookie("__Host-dsa_session"); err == nil {
 
@@ -286,12 +286,12 @@ func (w *ServerInterfaceWrapper) CreateAdminUser(ctx echo.Context) error {
 	}
 
 	// Invoke the callback with all the unmarshaled arguments
-	err = w.Handler.CreateAdminUser(ctx, params)
+	err = w.Handler.CreateUserAccount(ctx, params)
 	return err
 }
 
-// UpdateAdminUser converts echo context to params.
-func (w *ServerInterfaceWrapper) UpdateAdminUser(ctx echo.Context) error {
+// UpdateUserAccount converts echo context to params.
+func (w *ServerInterfaceWrapper) UpdateUserAccount(ctx echo.Context) error {
 	var err error
 	// ------------- Path parameter "user_id" -------------
 	var userId openapi_types.UUID
@@ -302,7 +302,7 @@ func (w *ServerInterfaceWrapper) UpdateAdminUser(ctx echo.Context) error {
 	}
 
 	// Parameter object where we will unmarshal all parameters from the context
-	var params UpdateAdminUserParams
+	var params UpdateUserAccountParams
 
 	if cookie, err := ctx.Cookie("__Host-dsa_session"); err == nil {
 
@@ -316,7 +316,7 @@ func (w *ServerInterfaceWrapper) UpdateAdminUser(ctx echo.Context) error {
 	}
 
 	// Invoke the callback with all the unmarshaled arguments
-	err = w.Handler.UpdateAdminUser(ctx, userId, params)
+	err = w.Handler.UpdateUserAccount(ctx, userId, params)
 	return err
 }
 
@@ -425,9 +425,9 @@ func RegisterHandlersWithOptions(router EchoRouter, si ServerInterface, options 
 	router.DELETE(options.BaseURL+"/api/session", wrapper.DeleteSession, options.OperationMiddlewares["deleteSession"]...)
 	router.POST(options.BaseURL+"/api/session", wrapper.CreateSession, options.OperationMiddlewares["createSession"]...)
 	router.GET(options.BaseURL+"/api/me", wrapper.GetCurrentUser, options.OperationMiddlewares["getCurrentUser"]...)
-	router.GET(options.BaseURL+"/api/admin/users", wrapper.ListAdminUsers, options.OperationMiddlewares["listAdminUsers"]...)
-	router.POST(options.BaseURL+"/api/admin/users", wrapper.CreateAdminUser, options.OperationMiddlewares["createAdminUser"]...)
-	router.PATCH(options.BaseURL+"/api/admin/users/:user_id", wrapper.UpdateAdminUser, options.OperationMiddlewares["updateAdminUser"]...)
+	router.GET(options.BaseURL+"/api/admin/users", wrapper.ListUserAccounts, options.OperationMiddlewares["listUserAccounts"]...)
+	router.POST(options.BaseURL+"/api/admin/users", wrapper.CreateUserAccount, options.OperationMiddlewares["createUserAccount"]...)
+	router.PATCH(options.BaseURL+"/api/admin/users/:user_id", wrapper.UpdateUserAccount, options.OperationMiddlewares["updateUserAccount"]...)
 
 }
 
@@ -452,19 +452,19 @@ type UserConflictJSONResponse Error
 
 type ValidationErrorJSONResponse Error
 
-type ListAdminUsersRequestObject struct {
-	Params ListAdminUsersParams
+type ListUserAccountsRequestObject struct {
+	Params ListUserAccountsParams
 }
 
-type ListAdminUsersResponseObject interface {
-	VisitListAdminUsersResponse(w http.ResponseWriter) error
+type ListUserAccountsResponseObject interface {
+	VisitListUserAccountsResponse(w http.ResponseWriter) error
 }
 
-type ListAdminUsers200JSONResponse struct {
-	Users []AdminUser `json:"users"`
+type ListUserAccounts200JSONResponse struct {
+	Users []UserAccount `json:"users"`
 }
 
-func (response ListAdminUsers200JSONResponse) VisitListAdminUsersResponse(w http.ResponseWriter) error {
+func (response ListUserAccounts200JSONResponse) VisitListUserAccountsResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response); err != nil {
@@ -476,9 +476,9 @@ func (response ListAdminUsers200JSONResponse) VisitListAdminUsersResponse(w http
 	return err
 }
 
-type ListAdminUsers401JSONResponse struct{ UnauthorizedJSONResponse }
+type ListUserAccounts401JSONResponse struct{ UnauthorizedJSONResponse }
 
-func (response ListAdminUsers401JSONResponse) VisitListAdminUsersResponse(w http.ResponseWriter) error {
+func (response ListUserAccounts401JSONResponse) VisitListUserAccountsResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
@@ -493,9 +493,9 @@ func (response ListAdminUsers401JSONResponse) VisitListAdminUsersResponse(w http
 	return err
 }
 
-type ListAdminUsers403JSONResponse struct{ ForbiddenJSONResponse }
+type ListUserAccounts403JSONResponse struct{ ForbiddenJSONResponse }
 
-func (response ListAdminUsers403JSONResponse) VisitListAdminUsersResponse(w http.ResponseWriter) error {
+func (response ListUserAccounts403JSONResponse) VisitListUserAccountsResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response); err != nil {
@@ -507,9 +507,9 @@ func (response ListAdminUsers403JSONResponse) VisitListAdminUsersResponse(w http
 	return err
 }
 
-type ListAdminUsers500JSONResponse struct{ InternalErrorJSONResponse }
+type ListUserAccounts500JSONResponse struct{ InternalErrorJSONResponse }
 
-func (response ListAdminUsers500JSONResponse) VisitListAdminUsersResponse(w http.ResponseWriter) error {
+func (response ListUserAccounts500JSONResponse) VisitListUserAccountsResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response); err != nil {
@@ -521,18 +521,18 @@ func (response ListAdminUsers500JSONResponse) VisitListAdminUsersResponse(w http
 	return err
 }
 
-type CreateAdminUserRequestObject struct {
-	Params CreateAdminUserParams
-	Body   *CreateAdminUserJSONRequestBody
+type CreateUserAccountRequestObject struct {
+	Params CreateUserAccountParams
+	Body   *CreateUserAccountJSONRequestBody
 }
 
-type CreateAdminUserResponseObject interface {
-	VisitCreateAdminUserResponse(w http.ResponseWriter) error
+type CreateUserAccountResponseObject interface {
+	VisitCreateUserAccountResponse(w http.ResponseWriter) error
 }
 
-type CreateAdminUser201JSONResponse AdminUser
+type CreateUserAccount201JSONResponse UserAccount
 
-func (response CreateAdminUser201JSONResponse) VisitCreateAdminUserResponse(w http.ResponseWriter) error {
+func (response CreateUserAccount201JSONResponse) VisitCreateUserAccountResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response); err != nil {
@@ -544,9 +544,9 @@ func (response CreateAdminUser201JSONResponse) VisitCreateAdminUserResponse(w ht
 	return err
 }
 
-type CreateAdminUser401JSONResponse struct{ UnauthorizedJSONResponse }
+type CreateUserAccount401JSONResponse struct{ UnauthorizedJSONResponse }
 
-func (response CreateAdminUser401JSONResponse) VisitCreateAdminUserResponse(w http.ResponseWriter) error {
+func (response CreateUserAccount401JSONResponse) VisitCreateUserAccountResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
@@ -561,9 +561,9 @@ func (response CreateAdminUser401JSONResponse) VisitCreateAdminUserResponse(w ht
 	return err
 }
 
-type CreateAdminUser403JSONResponse struct{ ForbiddenJSONResponse }
+type CreateUserAccount403JSONResponse struct{ ForbiddenJSONResponse }
 
-func (response CreateAdminUser403JSONResponse) VisitCreateAdminUserResponse(w http.ResponseWriter) error {
+func (response CreateUserAccount403JSONResponse) VisitCreateUserAccountResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response); err != nil {
@@ -575,9 +575,9 @@ func (response CreateAdminUser403JSONResponse) VisitCreateAdminUserResponse(w ht
 	return err
 }
 
-type CreateAdminUser409JSONResponse struct{ UserConflictJSONResponse }
+type CreateUserAccount409JSONResponse struct{ UserConflictJSONResponse }
 
-func (response CreateAdminUser409JSONResponse) VisitCreateAdminUserResponse(w http.ResponseWriter) error {
+func (response CreateUserAccount409JSONResponse) VisitCreateUserAccountResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response); err != nil {
@@ -589,9 +589,9 @@ func (response CreateAdminUser409JSONResponse) VisitCreateAdminUserResponse(w ht
 	return err
 }
 
-type CreateAdminUser422JSONResponse struct{ ValidationErrorJSONResponse }
+type CreateUserAccount422JSONResponse struct{ ValidationErrorJSONResponse }
 
-func (response CreateAdminUser422JSONResponse) VisitCreateAdminUserResponse(w http.ResponseWriter) error {
+func (response CreateUserAccount422JSONResponse) VisitCreateUserAccountResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response); err != nil {
@@ -603,9 +603,9 @@ func (response CreateAdminUser422JSONResponse) VisitCreateAdminUserResponse(w ht
 	return err
 }
 
-type CreateAdminUser500JSONResponse struct{ InternalErrorJSONResponse }
+type CreateUserAccount500JSONResponse struct{ InternalErrorJSONResponse }
 
-func (response CreateAdminUser500JSONResponse) VisitCreateAdminUserResponse(w http.ResponseWriter) error {
+func (response CreateUserAccount500JSONResponse) VisitCreateUserAccountResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response); err != nil {
@@ -617,19 +617,19 @@ func (response CreateAdminUser500JSONResponse) VisitCreateAdminUserResponse(w ht
 	return err
 }
 
-type UpdateAdminUserRequestObject struct {
+type UpdateUserAccountRequestObject struct {
 	UserId openapi_types.UUID `json:"user_id"`
-	Params UpdateAdminUserParams
-	Body   *UpdateAdminUserJSONRequestBody
+	Params UpdateUserAccountParams
+	Body   *UpdateUserAccountJSONRequestBody
 }
 
-type UpdateAdminUserResponseObject interface {
-	VisitUpdateAdminUserResponse(w http.ResponseWriter) error
+type UpdateUserAccountResponseObject interface {
+	VisitUpdateUserAccountResponse(w http.ResponseWriter) error
 }
 
-type UpdateAdminUser200JSONResponse AdminUser
+type UpdateUserAccount200JSONResponse UserAccount
 
-func (response UpdateAdminUser200JSONResponse) VisitUpdateAdminUserResponse(w http.ResponseWriter) error {
+func (response UpdateUserAccount200JSONResponse) VisitUpdateUserAccountResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response); err != nil {
@@ -641,9 +641,9 @@ func (response UpdateAdminUser200JSONResponse) VisitUpdateAdminUserResponse(w ht
 	return err
 }
 
-type UpdateAdminUser401JSONResponse struct{ UnauthorizedJSONResponse }
+type UpdateUserAccount401JSONResponse struct{ UnauthorizedJSONResponse }
 
-func (response UpdateAdminUser401JSONResponse) VisitUpdateAdminUserResponse(w http.ResponseWriter) error {
+func (response UpdateUserAccount401JSONResponse) VisitUpdateUserAccountResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
@@ -658,9 +658,9 @@ func (response UpdateAdminUser401JSONResponse) VisitUpdateAdminUserResponse(w ht
 	return err
 }
 
-type UpdateAdminUser403JSONResponse struct{ ForbiddenJSONResponse }
+type UpdateUserAccount403JSONResponse struct{ ForbiddenJSONResponse }
 
-func (response UpdateAdminUser403JSONResponse) VisitUpdateAdminUserResponse(w http.ResponseWriter) error {
+func (response UpdateUserAccount403JSONResponse) VisitUpdateUserAccountResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response); err != nil {
@@ -672,9 +672,9 @@ func (response UpdateAdminUser403JSONResponse) VisitUpdateAdminUserResponse(w ht
 	return err
 }
 
-type UpdateAdminUser404JSONResponse struct{ NotFoundJSONResponse }
+type UpdateUserAccount404JSONResponse struct{ NotFoundJSONResponse }
 
-func (response UpdateAdminUser404JSONResponse) VisitUpdateAdminUserResponse(w http.ResponseWriter) error {
+func (response UpdateUserAccount404JSONResponse) VisitUpdateUserAccountResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response); err != nil {
@@ -686,9 +686,9 @@ func (response UpdateAdminUser404JSONResponse) VisitUpdateAdminUserResponse(w ht
 	return err
 }
 
-type UpdateAdminUser409JSONResponse struct{ UserConflictJSONResponse }
+type UpdateUserAccount409JSONResponse struct{ UserConflictJSONResponse }
 
-func (response UpdateAdminUser409JSONResponse) VisitUpdateAdminUserResponse(w http.ResponseWriter) error {
+func (response UpdateUserAccount409JSONResponse) VisitUpdateUserAccountResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response); err != nil {
@@ -700,9 +700,9 @@ func (response UpdateAdminUser409JSONResponse) VisitUpdateAdminUserResponse(w ht
 	return err
 }
 
-type UpdateAdminUser422JSONResponse struct{ ValidationErrorJSONResponse }
+type UpdateUserAccount422JSONResponse struct{ ValidationErrorJSONResponse }
 
-func (response UpdateAdminUser422JSONResponse) VisitUpdateAdminUserResponse(w http.ResponseWriter) error {
+func (response UpdateUserAccount422JSONResponse) VisitUpdateUserAccountResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response); err != nil {
@@ -714,9 +714,9 @@ func (response UpdateAdminUser422JSONResponse) VisitUpdateAdminUserResponse(w ht
 	return err
 }
 
-type UpdateAdminUser500JSONResponse struct{ InternalErrorJSONResponse }
+type UpdateUserAccount500JSONResponse struct{ InternalErrorJSONResponse }
 
-func (response UpdateAdminUser500JSONResponse) VisitUpdateAdminUserResponse(w http.ResponseWriter) error {
+func (response UpdateUserAccount500JSONResponse) VisitUpdateUserAccountResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response); err != nil {
@@ -895,15 +895,15 @@ func (response CreateSession500JSONResponse) VisitCreateSessionResponse(w http.R
 
 // StrictServerInterface represents all server handlers.
 type StrictServerInterface interface {
-	// ListAdminUsers List all non-System User Accounts, including disabled accounts, in persisted display order
+	// ListUserAccounts List all non-System User Accounts, including disabled accounts, in persisted display order
 	// (GET /api/admin/users)
-	ListAdminUsers(ctx context.Context, request ListAdminUsersRequestObject) (ListAdminUsersResponseObject, error)
-	// CreateAdminUser Create a User Account at the end of the global display order
+	ListUserAccounts(ctx context.Context, request ListUserAccountsRequestObject) (ListUserAccountsResponseObject, error)
+	// CreateUserAccount Create a User Account at the end of the global display order
 	// (POST /api/admin/users)
-	CreateAdminUser(ctx context.Context, request CreateAdminUserRequestObject) (CreateAdminUserResponseObject, error)
-	// UpdateAdminUser Atomically update supplied fields of a User Account
+	CreateUserAccount(ctx context.Context, request CreateUserAccountRequestObject) (CreateUserAccountResponseObject, error)
+	// UpdateUserAccount Atomically update supplied fields of a User Account
 	// (PATCH /api/admin/users/{user_id})
-	UpdateAdminUser(ctx context.Context, request UpdateAdminUserRequestObject) (UpdateAdminUserResponseObject, error)
+	UpdateUserAccount(ctx context.Context, request UpdateUserAccountRequestObject) (UpdateUserAccountResponseObject, error)
 	// GetCurrentUser 現在の User Account を返す
 	// (GET /api/me)
 	GetCurrentUser(ctx context.Context, request GetCurrentUserRequestObject) (GetCurrentUserResponseObject, error)
@@ -927,38 +927,38 @@ type strictHandler struct {
 	middlewares []StrictMiddlewareFunc
 }
 
-// ListAdminUsers operation middleware
-func (sh *strictHandler) ListAdminUsers(ctx echo.Context, params ListAdminUsersParams) error {
-	var request ListAdminUsersRequestObject
+// ListUserAccounts operation middleware
+func (sh *strictHandler) ListUserAccounts(ctx echo.Context, params ListUserAccountsParams) error {
+	var request ListUserAccountsRequestObject
 
 	request.Params = params
 
 	handler := func(ctx echo.Context, request interface{}) (interface{}, error) {
-		return sh.ssi.ListAdminUsers(ctx.Request().Context(), request.(ListAdminUsersRequestObject))
+		return sh.ssi.ListUserAccounts(ctx.Request().Context(), request.(ListUserAccountsRequestObject))
 	}
 	for _, middleware := range sh.middlewares {
-		handler = middleware(handler, "ListAdminUsers")
+		handler = middleware(handler, "ListUserAccounts")
 	}
 
 	response, err := handler(ctx, request)
 
 	if err != nil {
 		return err
-	} else if validResponse, ok := response.(ListAdminUsersResponseObject); ok {
-		return validResponse.VisitListAdminUsersResponse(ctx.Response())
+	} else if validResponse, ok := response.(ListUserAccountsResponseObject); ok {
+		return validResponse.VisitListUserAccountsResponse(ctx.Response())
 	} else if response != nil {
 		return fmt.Errorf("unexpected response type: %T", response)
 	}
 	return nil
 }
 
-// CreateAdminUser operation middleware
-func (sh *strictHandler) CreateAdminUser(ctx echo.Context, params CreateAdminUserParams) error {
-	var request CreateAdminUserRequestObject
+// CreateUserAccount operation middleware
+func (sh *strictHandler) CreateUserAccount(ctx echo.Context, params CreateUserAccountParams) error {
+	var request CreateUserAccountRequestObject
 
 	request.Params = params
 
-	var body CreateAdminUserJSONRequestBody
+	var body CreateUserAccountJSONRequestBody
 	var err error
 	if binder, ok := ctx.Echo().Binder.(*echo.DefaultBinder); ok {
 		// Bind only the request body, so that path and query parameters
@@ -975,32 +975,32 @@ func (sh *strictHandler) CreateAdminUser(ctx echo.Context, params CreateAdminUse
 	request.Body = &body
 
 	handler := func(ctx echo.Context, request interface{}) (interface{}, error) {
-		return sh.ssi.CreateAdminUser(ctx.Request().Context(), request.(CreateAdminUserRequestObject))
+		return sh.ssi.CreateUserAccount(ctx.Request().Context(), request.(CreateUserAccountRequestObject))
 	}
 	for _, middleware := range sh.middlewares {
-		handler = middleware(handler, "CreateAdminUser")
+		handler = middleware(handler, "CreateUserAccount")
 	}
 
 	response, err := handler(ctx, request)
 
 	if err != nil {
 		return err
-	} else if validResponse, ok := response.(CreateAdminUserResponseObject); ok {
-		return validResponse.VisitCreateAdminUserResponse(ctx.Response())
+	} else if validResponse, ok := response.(CreateUserAccountResponseObject); ok {
+		return validResponse.VisitCreateUserAccountResponse(ctx.Response())
 	} else if response != nil {
 		return fmt.Errorf("unexpected response type: %T", response)
 	}
 	return nil
 }
 
-// UpdateAdminUser operation middleware
-func (sh *strictHandler) UpdateAdminUser(ctx echo.Context, userId openapi_types.UUID, params UpdateAdminUserParams) error {
-	var request UpdateAdminUserRequestObject
+// UpdateUserAccount operation middleware
+func (sh *strictHandler) UpdateUserAccount(ctx echo.Context, userId openapi_types.UUID, params UpdateUserAccountParams) error {
+	var request UpdateUserAccountRequestObject
 
 	request.UserId = userId
 	request.Params = params
 
-	var body UpdateAdminUserJSONRequestBody
+	var body UpdateUserAccountJSONRequestBody
 	var err error
 	if binder, ok := ctx.Echo().Binder.(*echo.DefaultBinder); ok {
 		// Bind only the request body, so that path and query parameters
@@ -1017,18 +1017,18 @@ func (sh *strictHandler) UpdateAdminUser(ctx echo.Context, userId openapi_types.
 	request.Body = &body
 
 	handler := func(ctx echo.Context, request interface{}) (interface{}, error) {
-		return sh.ssi.UpdateAdminUser(ctx.Request().Context(), request.(UpdateAdminUserRequestObject))
+		return sh.ssi.UpdateUserAccount(ctx.Request().Context(), request.(UpdateUserAccountRequestObject))
 	}
 	for _, middleware := range sh.middlewares {
-		handler = middleware(handler, "UpdateAdminUser")
+		handler = middleware(handler, "UpdateUserAccount")
 	}
 
 	response, err := handler(ctx, request)
 
 	if err != nil {
 		return err
-	} else if validResponse, ok := response.(UpdateAdminUserResponseObject); ok {
-		return validResponse.VisitUpdateAdminUserResponse(ctx.Response())
+	} else if validResponse, ok := response.(UpdateUserAccountResponseObject); ok {
+		return validResponse.VisitUpdateUserAccountResponse(ctx.Response())
 	} else if response != nil {
 		return fmt.Errorf("unexpected response type: %T", response)
 	}
@@ -1129,39 +1129,39 @@ func (sh *strictHandler) CreateSession(ctx echo.Context) error {
 // const string: with thousands of chunks the chained `+` fold is several
 // times slower for the Go compiler than parsing a slice literal.
 var swaggerSpec = []string{
-	"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",
+	"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",
 }
 
 // decodeSpec returns the embedded OpenAPI spec as raw JSON bytes,

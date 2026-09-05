@@ -55,7 +55,7 @@ paths:
     parameters:
       - $ref: "#/components/parameters/SessionCookie"
     get:
-      operationId: listAdminUsers
+      operationId: listUserAccounts
       summary: List all non-System User Accounts, including disabled accounts, in persisted display order
       responses:
         "200":
@@ -68,24 +68,24 @@ paths:
                 properties:
                   users:
                     type: array
-                    items: { $ref: "#/components/schemas/AdminUser" }
+                    items: { $ref: "#/components/schemas/UserAccount" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "500": { $ref: "#/components/responses/InternalError" }
     post:
-      operationId: createAdminUser
+      operationId: createUserAccount
       summary: Create a User Account at the end of the global display order
       requestBody:
         required: true
         content:
           application/json:
-            schema: { $ref: "#/components/schemas/CreateAdminUserRequest" }
+            schema: { $ref: "#/components/schemas/CreateUserAccountRequest" }
       responses:
         "201":
           description: Created User Account
           content:
             application/json:
-              schema: { $ref: "#/components/schemas/AdminUser" }
+              schema: { $ref: "#/components/schemas/UserAccount" }
         "409": { $ref: "#/components/responses/UserConflict" }
         "422": { $ref: "#/components/responses/ValidationError" }
         "401": { $ref: "#/components/responses/Unauthorized" }
@@ -99,7 +99,7 @@ paths:
         required: true
         schema: { type: string, format: uuid }
     patch:
-      operationId: updateAdminUser
+      operationId: updateUserAccount
       summary: Atomically update supplied fields of a User Account
       description: |
         Userid is immutable. Last-write-wins; supplying existing values succeeds.
@@ -113,13 +113,13 @@ paths:
         required: true
         content:
           application/json:
-            schema: { $ref: "#/components/schemas/UpdateAdminUserRequest" }
+            schema: { $ref: "#/components/schemas/UpdateUserAccountRequest" }
       responses:
         "200":
           description: Updated User Account
           content:
             application/json:
-              schema: { $ref: "#/components/schemas/AdminUser" }
+              schema: { $ref: "#/components/schemas/UserAccount" }
         "404": { $ref: "#/components/responses/NotFound" }
         "409": { $ref: "#/components/responses/UserConflict" }
         "422": { $ref: "#/components/responses/ValidationError" }
@@ -177,7 +177,7 @@ components:
       minLength: 8
       maxLength: 256
       description: Unicode characters, without trimming, normalization, or character-class rules; confirmation is frontend-only
-    AdminUser:
+    UserAccount:
       type: object
       additionalProperties: false
       required: [id, userid, name, role, disabled]
@@ -187,7 +187,7 @@ components:
         name: { type: string }
         role: { $ref: "#/components/schemas/UserRole" }
         disabled: { type: boolean }
-    CreateAdminUserRequest:
+    CreateUserAccountRequest:
       type: object
       additionalProperties: false
       required: [userid, name, role, password]
@@ -196,7 +196,7 @@ components:
         name: { $ref: "#/components/schemas/DisplayName" }
         role: { $ref: "#/components/schemas/AssignableUserRole" }
         password: { $ref: "#/components/schemas/NewPassword" }
-    UpdateAdminUserRequest:
+    UpdateUserAccountRequest:
       type: object
       additionalProperties: false
       minProperties: 1
