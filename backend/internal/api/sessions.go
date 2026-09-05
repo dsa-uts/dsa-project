@@ -11,20 +11,7 @@ import (
 	"github.com/dsa-uts/dsa-project/backend/internal/store"
 )
 
-// Handler implements the generated StrictServerInterface.
-type Handler struct{ auth *store.AuthStore }
-
-var _ StrictServerInterface = (*Handler)(nil)
-
-func NewHandler(authStore *store.AuthStore) *Handler { return &Handler{auth: authStore} }
-
-// NewError builds the api.md unified error envelope.
-func NewError(code, message string) Error {
-	var e Error
-	e.Error.Code = code
-	e.Error.Message = message
-	return e
-}
+type sessionHandler struct{ auth *store.AuthStore }
 
 var dummyPasswordHash = func() string {
 	hash, err := auth.HashPassword("not-a-real-password")
@@ -34,7 +21,7 @@ var dummyPasswordHash = func() string {
 	return hash
 }()
 
-func (h *Handler) CreateSession(ctx context.Context, req CreateSessionRequestObject) (CreateSessionResponseObject, error) {
+func (h *sessionHandler) CreateSession(ctx context.Context, req CreateSessionRequestObject) (CreateSessionResponseObject, error) {
 	user, err := h.auth.FindUserForLogin(ctx, req.Body.Userid)
 	if err != nil && !errors.Is(err, store.ErrNotFound) {
 		slog.ErrorContext(ctx, "find user for login", "error", err)
@@ -70,7 +57,7 @@ func (h *Handler) CreateSession(ctx context.Context, req CreateSessionRequestObj
 	}, nil
 }
 
-func (h *Handler) DeleteSession(ctx context.Context, req DeleteSessionRequestObject) (DeleteSessionResponseObject, error) {
+func (h *sessionHandler) DeleteSession(ctx context.Context, req DeleteSessionRequestObject) (DeleteSessionResponseObject, error) {
 	if req.Params.SessionToken != nil {
 		if err := h.auth.DeleteSession(ctx, auth.HashToken(*req.Params.SessionToken)); err != nil {
 			slog.ErrorContext(ctx, "delete session", "error", err)
@@ -81,7 +68,7 @@ func (h *Handler) DeleteSession(ctx context.Context, req DeleteSessionRequestObj
 	return DeleteSession204Response{Headers: DeleteSession204ResponseHeaders{SetCookie: &cookie}}, nil
 }
 
-func (h *Handler) GetCurrentUser(ctx context.Context, req GetCurrentUserRequestObject) (GetCurrentUserResponseObject, error) {
+func (h *sessionHandler) GetCurrentUser(ctx context.Context, req GetCurrentUserRequestObject) (GetCurrentUserResponseObject, error) {
 	if req.Params.SessionToken == nil {
 		return unauthorizedCurrentUser(), nil
 	}

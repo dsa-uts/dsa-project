@@ -4,43 +4,21 @@ import (
 	"context"
 	"errors"
 	"log/slog"
-	"net/http"
-	"time"
 
 	"github.com/dsa-uts/dsa-project/backend/internal/auth"
 	"github.com/dsa-uts/dsa-project/backend/internal/store"
 	"github.com/labstack/echo/v4"
 )
 
-type adminContextKey struct{}
+type userHandler struct{ auth *store.AuthStore }
 
-// RequireAdmin runs before contract validation, so even invalid Admin requests
-// receive 401/403 when the caller is not authorized.
-func (h *Handler) RequireAdmin(next echo.HandlerFunc) echo.HandlerFunc {
-	return func(c echo.Context) error {
-		switch c.Path() {
-		case "/api/admin/users", "/api/admin/users/:user_id":
-		default:
-			return next(c)
-		}
-		cookie, err := c.Cookie(auth.SessionCookieName)
-		if err != nil {
-			c.Response().Header().Set("Set-Cookie", clearedSessionCookie())
-			return c.JSON(http.StatusUnauthorized, NewError("unauthorized", "Authentication is required."))
-		}
-		user, err := h.auth.CurrentUser(c.Request().Context(), auth.HashToken(cookie.Value), time.Now())
-		if errors.Is(err, store.ErrNotFound) {
-			c.Response().Header().Set("Set-Cookie", clearedSessionCookie())
-			return c.JSON(http.StatusUnauthorized, NewError("unauthorized", "Authentication is required."))
-		}
-		if err != nil {
-			return err
-		}
-		if user.IsSystem || user.Role != "admin" {
-			return c.JSON(http.StatusForbidden, NewError("forbidden", "Admin Role is required."))
-		}
-		c.SetRequest(c.Request().WithContext(context.WithValue(c.Request().Context(), adminContextKey{}, user)))
-		return next(c)
+// userOperationMiddlewares keeps authorization policy beside the operations.
+func userOperationMiddlewares(authStore *store.AuthStore) map[string][]echo.MiddlewareFunc {
+	admin := requireAdmin(authStore)
+	return map[string][]echo.MiddlewareFunc{
+		"listUserAccounts":  {admin},
+		"createUserAccount": {admin},
+		"updateUserAccount": {admin},
 	}
 }
 
@@ -48,7 +26,7 @@ func userAccountResponse(user *store.UserAccount) UserAccount {
 	return UserAccount{Id: user.ID, Userid: user.Userid, Name: user.Name, Role: UserRole(user.Role), Disabled: user.DisabledAt != nil}
 }
 
-func (h *Handler) ListUserAccounts(ctx context.Context, req ListUserAccountsRequestObject) (ListUserAccountsResponseObject, error) {
+func (h *userHandler) ListUserAccounts(ctx context.Context, req ListUserAccountsRequestObject) (ListUserAccountsResponseObject, error) {
 	users, err := h.auth.ListUsers(ctx)
 	if err != nil {
 		return nil, err
@@ -60,7 +38,7 @@ func (h *Handler) ListUserAccounts(ctx context.Context, req ListUserAccountsRequ
 	return ListUserAccounts200JSONResponse{Users: result}, nil
 }
 
-func (h *Handler) CreateUserAccount(ctx context.Context, req CreateUserAccountRequestObject) (CreateUserAccountResponseObject, error) {
+func (h *userHandler) CreateUserAccount(ctx context.Context, req CreateUserAccountRequestObject) (CreateUserAccountResponseObject, error) {
 	hash, err := auth.HashPassword(req.Body.Password)
 	if err != nil {
 		return nil, err
@@ -75,8 +53,8 @@ func (h *Handler) CreateUserAccount(ctx context.Context, req CreateUserAccountRe
 	return CreateUserAccount201JSONResponse(userAccountResponse(user)), nil
 }
 
-func (h *Handler) UpdateUserAccount(ctx context.Context, req UpdateUserAccountRequestObject) (UpdateUserAccountResponseObject, error) {
-	actor := ctx.Value(adminContextKey{}).(*store.UserAccount)
+func (h *userHandler) UpdateUserAccount(ctx context.Context, req UpdateUserAccountRequestObject) (UpdateUserAccountResponseObject, error) {
+	actor := adminActor(ctx)
 	update := store.UserUpdate{Name: req.Body.Name, Disabled: req.Body.Disabled}
 	if req.Body.Role != nil {
 		role := string(*req.Body.Role)
