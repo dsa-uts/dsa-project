@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/uptrace/bun"
-	"golang.org/x/crypto/bcrypt"
 
 	"github.com/dsa-uts/dsa-project/backend/internal/auth"
 )
@@ -15,7 +14,7 @@ const ExpiredDevelopmentSessionToken = "expired-development-session"
 
 // SeedDevelopment creates only non-production fixture data and is idempotent.
 func SeedDevelopment(ctx context.Context, db *bun.DB) error {
-	passwordHash, err := bcrypt.GenerateFromPassword([]byte("admin"), 12)
+	passwordHash, err := auth.HashPassword("admin")
 	if err != nil {
 		return fmt.Errorf("hash development password: %w", err)
 	}
@@ -36,11 +35,20 @@ func SeedDevelopment(ctx context.Context, db *bun.DB) error {
 		return err
 	}
 	if _, err := db.NewRaw(`
-		INSERT INTO user_accounts (userid, name, role, password_hash, is_system)
-		VALUES ('system', 'Development System Account', 'admin', NULL, true)
+		INSERT INTO user_accounts (id, userid, name, role, password_hash, is_system)
+		VALUES ('00000000-0000-0000-0000-000000000097', 'system', 'Development System Account', 'admin', NULL, true)
 		ON CONFLICT (userid) DO UPDATE SET password_hash = NULL, disabled_at = NULL, is_system = true
 	`).Exec(ctx); err != nil {
 		return err
+	}
+	// Login-capable development-only fixtures for authorization coverage.
+	for _, role := range []string{"student", "manager"} {
+		if _, err := db.NewRaw(`INSERT INTO user_accounts (userid, name, role, password_hash)
+   VALUES (?, ?, ?, ?) ON CONFLICT (userid) DO UPDATE
+   SET role = EXCLUDED.role, password_hash = EXCLUDED.password_hash, disabled_at = NULL`,
+			role, "Development "+role, role, passwordHash).Exec(ctx); err != nil {
+			return err
+		}
 	}
 	_, err = db.NewRaw(`
 		INSERT INTO sessions (user_account_id, token_hash, expires_at)

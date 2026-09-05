@@ -7,8 +7,6 @@ import (
 	"log/slog"
 	"time"
 
-	"golang.org/x/crypto/bcrypt"
-
 	"github.com/dsa-uts/dsa-project/backend/internal/auth"
 	"github.com/dsa-uts/dsa-project/backend/internal/store"
 )
@@ -28,8 +26,8 @@ func NewError(code, message string) Error {
 	return e
 }
 
-var dummyPasswordHash = func() []byte {
-	hash, err := bcrypt.GenerateFromPassword([]byte("not-a-real-password"), 12)
+var dummyPasswordHash = func() string {
+	hash, err := auth.HashPassword("not-a-real-password")
 	if err != nil {
 		panic(err)
 	}
@@ -45,9 +43,9 @@ func (h *Handler) CreateSession(ctx context.Context, req CreateSessionRequestObj
 	loginCapable := err == nil && user.DisabledAt == nil && !user.IsSystem && user.PasswordHash != nil
 	hash := dummyPasswordHash
 	if loginCapable {
-		hash = []byte(*user.PasswordHash)
+		hash = *user.PasswordHash
 	}
-	passwordOK := bcrypt.CompareHashAndPassword(hash, []byte(req.Body.Password)) == nil
+	passwordOK := auth.VerifyPassword(hash, req.Body.Password)
 	if !loginCapable || !passwordOK {
 		return CreateSession401JSONResponse{InvalidCredentialsJSONResponse(NewError("invalid_credentials", "Invalid userid or password."))}, nil
 	}
@@ -58,7 +56,10 @@ func (h *Handler) CreateSession(ctx context.Context, req CreateSessionRequestObj
 		slog.ErrorContext(ctx, "generate session token", "error", err)
 		return CreateSession500JSONResponse{InternalErrorJSONResponse(NewError("internal", "Failed to create session."))}, nil
 	}
-	if err := h.auth.CreateSession(ctx, user.ID, auth.HashToken(token), now, now.Add(auth.SessionLifetime*time.Second)); err != nil {
+	if err := h.auth.CreateSession(ctx, user, auth.HashToken(token), now, now.Add(auth.SessionLifetime*time.Second)); err != nil {
+		if errors.Is(err, store.ErrNotFound) {
+			return CreateSession401JSONResponse{InvalidCredentialsJSONResponse(NewError("invalid_credentials", "Invalid userid or password."))}, nil
+		}
 		slog.ErrorContext(ctx, "persist session", "error", err)
 		return CreateSession500JSONResponse{InternalErrorJSONResponse(NewError("internal", "Failed to create session."))}, nil
 	}

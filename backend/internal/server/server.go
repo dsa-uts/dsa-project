@@ -62,7 +62,7 @@ func New(db *bun.DB) *echo.Echo {
 			return next(c)
 		}
 	}
-	g := e.Group("", noStore, validator)
+	g := e.Group("", noStore, h.RequireAdmin, validator)
 	api.RegisterHandlers(g, api.NewStrictHandler(h, nil))
 
 	return e

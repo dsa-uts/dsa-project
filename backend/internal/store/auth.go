@@ -23,6 +23,7 @@ type UserAccount struct {
 	Role         string     `bun:"role,notnull"`
 	PasswordHash *string    `bun:"password_hash"`
 	DisabledAt   *time.Time `bun:"disabled_at"`
+	DisplayOrder int64      `bun:"display_order,autoincrement"`
 	IsSystem     bool       `bun:"is_system,notnull"`
 }
 
@@ -54,13 +55,17 @@ func (s *AuthStore) DeleteSession(ctx context.Context, tokenHash []byte) error {
 	return err
 }
 
-func (s *AuthStore) CreateSession(ctx context.Context, userID uuid.UUID, tokenHash []byte, now, expiresAt time.Time) error {
+func (s *AuthStore) CreateSession(ctx context.Context, verifiedUser *UserAccount, tokenHash []byte, now, expiresAt time.Time) error {
 	return s.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
-		var lockedUserID uuid.UUID
-		if err := tx.NewSelect().Model((*UserAccount)(nil)).Column("id").
-			Where("id = ?", userID).For("UPDATE").Scan(ctx, &lockedUserID); err != nil {
+		lockedUser := new(UserAccount)
+		if err := tx.NewSelect().Model(lockedUser).
+			Where("id = ?", verifiedUser.ID).For("UPDATE").Scan(ctx); err != nil {
 			return err
 		}
+		if lockedUser.IsSystem || lockedUser.DisabledAt != nil || lockedUser.PasswordHash == nil || verifiedUser.PasswordHash == nil || *lockedUser.PasswordHash != *verifiedUser.PasswordHash {
+			return ErrNotFound
+		}
+		lockedUserID := lockedUser.ID
 		if _, err := tx.NewDelete().Model((*Session)(nil)).
 			Where("user_account_id = ?", lockedUserID).Where("expires_at <= ?", now).Exec(ctx); err != nil {
 			return err

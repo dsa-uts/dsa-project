@@ -1,5 +1,6 @@
+import { waitForDeployment } from './readiness.js'
 import { expect, test, type APIRequestContext, type APIResponse } from '@playwright/test'
-import { apiBaseURL, browserBaseURL } from '../environment.js'
+import { browserBaseURL } from '../environment.js'
 
 test.setTimeout(270_000)
 const expiredToken = 'expired-development-session'
@@ -18,16 +19,7 @@ async function login(request: APIRequestContext, cookie?: string) {
   })
 }
 
-test.beforeAll(async () => {
-  await expect(async () => {
-    const [frontendResponse, healthResponse] = await Promise.all([
-      fetch(new URL('/', apiBaseURL)),
-      fetch(new URL('/health', apiBaseURL)),
-    ])
-    expect(frontendResponse.status).toBe(200)
-    expect(healthResponse.status).toBe(200)
-  }).toPass({ timeout: 240_000 })
-})
+test.beforeAll(waitForDeployment)
 
 test('the browser logs in, shows the User Account, logs out, and guards routes', async ({ page }) => {
   await page.goto(new URL('/unknown', browserBaseURL).href)

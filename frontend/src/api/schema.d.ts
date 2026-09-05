@@ -39,6 +39,56 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/admin/users": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                "__Host-dsa_session"?: components["parameters"]["SessionCookie"];
+            };
+        };
+        /** List all non-System User Accounts, including disabled accounts, in persisted display order */
+        get: operations["listUserAccounts"];
+        put?: never;
+        /** Create a User Account at the end of the global display order */
+        post: operations["createUserAccount"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/users/{user_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                user_id: string;
+            };
+            cookie?: {
+                "__Host-dsa_session"?: components["parameters"]["SessionCookie"];
+            };
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Atomically update supplied fields of a User Account
+         * @description Userid is immutable. Last-write-wins; supplying existing values succeeds.
+         *     System Accounts cannot be modified (cannot_modify_system_account).
+         *     An Admin cannot change their own Role or disable themselves (cannot_modify_self).
+         *     Password replacement and transitions to disabled delete all affected sessions
+         *     in the same transaction. Other changes retain sessions. Repeated disabling
+         *     preserves the original disabled timestamp; re-enabling retains the password
+         *     unless a replacement is supplied. Display order is preserved.
+         */
+        patch: operations["updateUserAccount"];
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -54,6 +104,39 @@ export interface components {
             name: string;
             /** @enum {string} */
             role: "student" | "manager" | "admin";
+        };
+        /**
+         * @description Roles assignable through user management; the sole Admin is provisioned separately.
+         * @enum {string}
+         */
+        AssignableUserRole: "student" | "manager";
+        /** @enum {string} */
+        UserRole: "student" | "manager" | "admin";
+        /** @description Immutable, case-sensitive, without trimming or normalization */
+        Userid: string;
+        /** @description 1–64 Unicode characters; no control characters or whitespace-only values; no trimming or normalization */
+        DisplayName: string;
+        /** @description Unicode characters, without trimming, normalization, or character-class rules; confirmation is frontend-only */
+        NewPassword: string;
+        UserAccount: {
+            /** Format: uuid */
+            id: string;
+            userid: string;
+            name: string;
+            role: components["schemas"]["UserRole"];
+            disabled: boolean;
+        };
+        CreateUserAccountRequest: {
+            userid: components["schemas"]["Userid"];
+            name: components["schemas"]["DisplayName"];
+            role: components["schemas"]["AssignableUserRole"];
+            password: components["schemas"]["NewPassword"];
+        };
+        UpdateUserAccountRequest: {
+            name?: components["schemas"]["DisplayName"];
+            role?: components["schemas"]["AssignableUserRole"];
+            password?: components["schemas"]["NewPassword"];
+            disabled?: boolean;
         };
         Error: {
             error: {
@@ -93,6 +176,33 @@ export interface components {
         };
         /** @description サーバー内部エラー */
         InternalError: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["Error"];
+            };
+        };
+        /** @description Admin Role required */
+        Forbidden: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["Error"];
+            };
+        };
+        /** @description User Account not found */
+        NotFound: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["Error"];
+            };
+        };
+        /** @description userid_taken (exact duplicate), cannot_modify_self, or cannot_modify_system_account */
+        UserConflict: {
             headers: {
                 [name: string]: unknown;
             };
@@ -181,6 +291,98 @@ export interface operations {
                 };
             };
             401: components["responses"]["Unauthorized"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    listUserAccounts: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                "__Host-dsa_session"?: components["parameters"]["SessionCookie"];
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description All User Accounts, without pagination */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        users: components["schemas"]["UserAccount"][];
+                    };
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    createUserAccount: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                "__Host-dsa_session"?: components["parameters"]["SessionCookie"];
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateUserAccountRequest"];
+            };
+        };
+        responses: {
+            /** @description Created User Account */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UserAccount"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            409: components["responses"]["UserConflict"];
+            422: components["responses"]["ValidationError"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    updateUserAccount: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                user_id: string;
+            };
+            cookie?: {
+                "__Host-dsa_session"?: components["parameters"]["SessionCookie"];
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateUserAccountRequest"];
+            };
+        };
+        responses: {
+            /** @description Updated User Account */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UserAccount"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["UserConflict"];
+            422: components["responses"]["ValidationError"];
             500: components["responses"]["InternalError"];
         };
     };
