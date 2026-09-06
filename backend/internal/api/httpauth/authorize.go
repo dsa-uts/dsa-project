@@ -3,6 +3,7 @@ package httpauth
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"time"
@@ -22,8 +23,7 @@ type actorContextKey struct{}
 func Authenticate(authStore *store.AuthStore) openapi3filter.AuthenticationFunc {
 	return func(ctx context.Context, input *openapi3filter.AuthenticationInput) error {
 		c := echomiddleware.GetEchoContext(ctx)
-		policy, _ := input.RequestValidationInput.Route.Operation.Extensions[accessPolicyExtension].(string)
-		if c == nil || input.SecuritySchemeName != "sessionAuth" || (policy != "authenticated" && policy != "admin") {
+		if c == nil || input.SecuritySchemeName != "sessionAuth" {
 			return echo.NewHTTPError(http.StatusInternalServerError, "Invalid API access policy.")
 		}
 		unauthorized := func() error {
@@ -45,15 +45,23 @@ func Authenticate(authStore *store.AuthStore) openapi3filter.AuthenticationFunc 
 			slog.ErrorContext(requestContext, "authenticate session", "error", err)
 			// The middleware preserves direct HTTP errors in SecurityRequirementsError.
 			// Wrapping this error would turn a database failure into a 403.
-			if policy == "authenticated" {
+			if len(input.Scopes) == 0 {
 				// Preserve the current-user lookup's existing error envelope.
 				return echo.NewHTTPError(http.StatusInternalServerError,
 					httpresponse.NewError("internal", "Failed to get current user.")).SetInternal(err)
 			}
 			return echo.NewHTTPError(http.StatusInternalServerError, "Internal server error.").SetInternal(err)
 		}
-		if policy == "admin" && (user.IsSystem || user.Role != "admin") {
-			return echo.NewHTTPError(http.StatusForbidden, "Admin Role is required.")
+		// kin-openapi passes the required Roles through its Scopes field.
+		// Every Role in this requirement must match; the validator handles OR.
+		for _, role := range input.Scopes {
+			if user.IsSystem || user.Role != role {
+				label := role
+				if role == "admin" {
+					label = "Admin"
+				}
+				return echo.NewHTTPError(http.StatusForbidden, fmt.Sprintf("%s Role is required.", label))
+			}
 		}
 		c.SetRequest(c.Request().WithContext(context.WithValue(requestContext, actorContextKey{}, user)))
 		return nil

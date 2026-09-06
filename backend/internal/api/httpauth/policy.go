@@ -7,11 +7,9 @@ import (
 	"github.com/getkin/kin-openapi/openapi3"
 )
 
-const accessPolicyExtension = "x-access-policy"
-
 // ValidateAccessPolicies checks every operation before any API route is registered.
-// Only explicit public access or a single cookie requirement is supported; neither
-// inherited security nor alternative requirements may silently grant access.
+// Each operation declares public access or sessionAuth requirements explicitly.
+// Roles within a requirement are AND; alternative requirements are OR.
 func ValidateAccessPolicies(spec *openapi3.T) error {
 	for path, item := range spec.Paths.Map() {
 		for method, operation := range item.Operations() {
@@ -31,26 +29,39 @@ func ValidateAccessPolicies(spec *openapi3.T) error {
 }
 
 func validateAccessPolicy(operation *openapi3.Operation) error {
-	policy, ok := operation.Extensions[accessPolicyExtension].(string)
-	if !ok {
-		return fmt.Errorf("%s must be a string", accessPolicyExtension)
+	if operation.Security == nil {
+		return fmt.Errorf("explicit security is required")
 	}
-	switch policy {
-	case "public":
-		if operation.Security == nil || len(*operation.Security) != 0 {
-			return fmt.Errorf("public requires explicit security: []")
+	requiredResponses := []string{}
+	if len(*operation.Security) > 0 {
+		requiredResponses = append(requiredResponses, "401", "500")
+	}
+	requiresRole := false
+	for _, requirement := range *operation.Security {
+		roles, ok := requirement["sessionAuth"]
+		if !ok || len(requirement) != 1 {
+			return fmt.Errorf("each security requirement must contain only sessionAuth")
 		}
-	case "authenticated", "admin":
-		if operation.Security == nil || len(*operation.Security) != 1 {
-			return fmt.Errorf("%s requires exactly one sessionAuth requirement", policy)
+		requiresRole = requiresRole || len(roles) > 0
+		for _, role := range roles {
+			switch role {
+			case "student", "manager", "admin":
+			default:
+				return fmt.Errorf("unknown sessionAuth Role %q", role)
+			}
 		}
-		requirement := (*operation.Security)[0]
-		scopes, ok := requirement["sessionAuth"]
-		if !ok || len(requirement) != 1 || len(scopes) != 0 {
-			return fmt.Errorf("%s requires only sessionAuth with no scopes", policy)
+	}
+	if requiresRole {
+		requiredResponses = append(requiredResponses, "403")
+	}
+	for _, status := range requiredResponses {
+		if operation.Responses == nil {
+			return fmt.Errorf("security requires a %s response", status)
 		}
-	default:
-		return fmt.Errorf("unknown %s %q", accessPolicyExtension, policy)
+		response := operation.Responses.Value(status)
+		if response == nil || response.Value == nil {
+			return fmt.Errorf("security requires a %s response", status)
+		}
 	}
 	return nil
 }
