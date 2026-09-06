@@ -1,7 +1,7 @@
-import { useNavigationGuard } from '@/navigation-guard'
+import { useNavigationGuard } from '@/components/navigation-guard'
 import { Link } from 'react-router-dom'
 import { $api } from '@/api/client'
-import { useAuth } from '@/auth'
+import { useAuth } from '@/lib/auth'
 import { Button } from '@/components/ui/button'
 
 export function TopBar() {

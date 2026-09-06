@@ -2,10 +2,10 @@ import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useQueryClient } from '@tanstack/react-query'
 import { $api, fetchClient } from '@/api/client'
-import { useAuth } from '@/auth'
+import { useAuth } from '@/lib/auth'
 import { Button } from '@/components/ui/button'
-import { useNavigationGuard } from '@/navigation-guard'
-import { parsePastedUsers, readUserFile, userColumns, usersCSV, validateUsers, type BulkUser } from '@/lib/bulk-users'
+import { useNavigationGuard } from '@/components/navigation-guard'
+import { parsePastedUsers, readUserFile, userColumns, usersCSV, validateUsers, type BulkUser } from './bulk-users'
 
 function downloadCSV(rows: BulkUser[]) {
   const url = URL.createObjectURL(new Blob(['\uFEFF', usersCSV(rows)], { type: 'text/csv;charset=utf-8' }))

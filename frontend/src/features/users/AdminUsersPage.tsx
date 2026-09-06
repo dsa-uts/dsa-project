@@ -1,10 +1,10 @@
-import { UserOrderEditor } from '@/UserOrderEditor'
+import { UserOrderEditor } from './UserOrderEditor'
 import { useState, type ReactNode, type SubmitEventHandler } from 'react'
 import { Link } from 'react-router-dom'
 import { useQueryClient } from '@tanstack/react-query'
 import { $api, fetchClient } from '@/api/client'
 import type { components } from '@/api/schema'
-import { useAuth } from '@/auth'
+import { useAuth } from '@/lib/auth'
 import { Button } from '@/components/ui/button'
 import { Dialog } from '@/components/ui/dialog'
 
