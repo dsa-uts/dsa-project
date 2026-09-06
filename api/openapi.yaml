@@ -4,9 +4,10 @@ info:
   title: dsa-project API
   version: 0.1.0
 # Every operation must explicitly declare security:
-# public = []; authenticated = [{ sessionAuth: [] }]; Admin = [{ sessionAuth: [admin] }].
-# sessionAuth values are required Roles (all must match), not OAuth scopes.
-# Alternative requirements use separate security entries (OR).
+# public = []; authenticated = [{ sessionAuth: [] }].
+# sessionAuth accepts one minimum Role: [student], [manager], or [admin].
+# Admin inherits Manager and Student permissions; Manager inherits Student permissions.
+# At most one security requirement and one Role are supported; no OR/AND declarations.
 # Startup rejects missing or unsupported declarations before registering routes.
 paths:
   /api/session:

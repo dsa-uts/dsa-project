@@ -47,9 +47,9 @@ func Authenticate(authStore *store.AuthStore) openapi3filter.AuthenticationFunc 
 			return echo.NewHTTPError(http.StatusInternalServerError, "Internal server error.").SetInternal(err)
 		}
 		// kin-openapi passes the required Roles through its Scopes field.
-		// Every Role in this requirement must match; the validator handles OR.
+		// Startup validation permits at most one minimum Role.
 		for _, role := range input.Scopes {
-			if user.IsSystem || user.Role != role {
+			if user.IsSystem || !auth.AllowsRole(user.Role, role) {
 				label := role
 				if role == "admin" {
 					label = "Admin"

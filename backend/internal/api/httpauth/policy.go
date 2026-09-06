@@ -9,7 +9,7 @@ import (
 
 // ValidateAccessPolicies checks every operation before any API route is registered.
 // Each operation declares public access or sessionAuth requirements explicitly.
-// Roles within a requirement are AND; alternative requirements are OR.
+// A sessionAuth requirement declares at most one minimum Role.
 func ValidateAccessPolicies(spec *openapi3.T) error {
 	for path, item := range spec.Paths.Map() {
 		for method, operation := range item.Operations() {
@@ -32,35 +32,21 @@ func validateAccessPolicy(operation *openapi3.Operation) error {
 	if operation.Security == nil {
 		return fmt.Errorf("explicit security is required")
 	}
-	requiredResponses := []string{}
-	if len(*operation.Security) > 0 {
-		requiredResponses = append(requiredResponses, "401", "500")
+	if len(*operation.Security) > 1 {
+		return fmt.Errorf("at most one security requirement is supported")
 	}
-	requiresRole := false
 	for _, requirement := range *operation.Security {
 		roles, ok := requirement["sessionAuth"]
 		if !ok || len(requirement) != 1 {
 			return fmt.Errorf("each security requirement must contain only sessionAuth")
 		}
-		requiresRole = requiresRole || len(roles) > 0
+		if len(roles) > 1 {
+			return fmt.Errorf("sessionAuth accepts at most one minimum Role")
+		}
 		for _, role := range roles {
-			switch role {
-			case "student", "manager", "admin":
-			default:
+			if !auth.AllowsRole(role, role) {
 				return fmt.Errorf("unknown sessionAuth Role %q", role)
 			}
-		}
-	}
-	if requiresRole {
-		requiredResponses = append(requiredResponses, "403")
-	}
-	for _, status := range requiredResponses {
-		if operation.Responses == nil {
-			return fmt.Errorf("security requires a %s response", status)
-		}
-		response := operation.Responses.Value(status)
-		if response == nil || response.Value == nil {
-			return fmt.Errorf("security requires a %s response", status)
 		}
 	}
 	return nil

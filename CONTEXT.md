@@ -33,7 +33,7 @@ Request を提出・管理できる人の認証済みアカウント。
 _Avoid_: Admin account, Manager account
 
 **Role**:
-User Account に割り当てる権限レベル。Admin、Manager、Student など。
+User Account に一つ割り当てる権限レベルで、Admin > Manager > Student の順に下位 Role の権限をすべて継承する。操作に必要な最低 Role を満たしていても、所有者・公開状態による認可や自己無効化禁止などの業務制約は別に適用される。
 _Avoid_: Account type, user type
 
 **System Account**:
