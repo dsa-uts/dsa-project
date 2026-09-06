@@ -8,7 +8,6 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/dsa-uts/dsa-project/backend/internal/api/httpresponse"
 	"github.com/dsa-uts/dsa-project/backend/internal/auth"
 	"github.com/dsa-uts/dsa-project/backend/internal/store"
 	"github.com/getkin/kin-openapi/openapi3filter"
@@ -45,11 +44,6 @@ func Authenticate(authStore *store.AuthStore) openapi3filter.AuthenticationFunc 
 			slog.ErrorContext(requestContext, "authenticate session", "error", err)
 			// The middleware preserves direct HTTP errors in SecurityRequirementsError.
 			// Wrapping this error would turn a database failure into a 403.
-			if len(input.Scopes) == 0 {
-				// Preserve the current-user lookup's existing error envelope.
-				return echo.NewHTTPError(http.StatusInternalServerError,
-					httpresponse.NewError("internal", "Failed to get current user.")).SetInternal(err)
-			}
 			return echo.NewHTTPError(http.StatusInternalServerError, "Internal server error.").SetInternal(err)
 		}
 		// kin-openapi passes the required Roles through its Scopes field.
