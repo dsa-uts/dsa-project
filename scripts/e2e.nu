@@ -83,24 +83,10 @@ def test-auth-outage [] {
     kubectl --namespace $e2e_namespace wait --for=delete pod/dsa-postgresql-0 --timeout=90s
   ] | ignore
 
-  let original = run-checked 'failed to read E2E Job template' [
-    kubectl --namespace $e2e_namespace get job/dsa-e2e -o json
-  ] | from json
-  let template = $original.spec.template
-    | update metadata { labels: { 'app.kubernetes.io/name': dsa, 'app.kubernetes.io/component': e2e } }
-    | update spec.containers.0.env { append { name: E2E_AUTH_OUTAGE, value: '1' } }
-    | upsert spec.containers.0.args [/bin/dsa-e2e --grep 'authentication backend outage']
-  let job = {
-    apiVersion: batch/v1
-    kind: Job
-    metadata: { name: dsa-e2e-auth-outage, namespace: $e2e_namespace }
-    spec: { backoffLimit: 0, activeDeadlineSeconds: 240, template: $template }
-  }
-  let apply = $job | to json | ^kubectl apply -f - | complete
-  if $apply.exit_code != 0 {
-    print-command-result $apply
-    error make { msg: 'failed to create authentication outage Job' }
-  }
+  run-checked 'failed to start authentication outage Job' [
+    kubectl --namespace $e2e_namespace patch job/dsa-e2e-auth-outage
+    --type=merge --patch '{"spec":{"suspend":false}}'
+  ] | ignore
   let result = do {
     ^kubectl --namespace $e2e_namespace wait --for=condition=complete job/dsa-e2e-auth-outage --timeout=250s
   } | complete
