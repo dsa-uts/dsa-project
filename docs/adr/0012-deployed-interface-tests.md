@@ -1,6 +1,6 @@
 # Deployed Public Interface Tests
 
-ADR 0013 replaces the Helm release and Helm Test mechanism described below with an isolated namespace and an ordinary Kubernetes test Job. The deployed public-interface test seam remains accepted.
+ADR 0013 replaces the Helm release and Helm Test mechanism described below with an isolated namespace and an ordinary Kubernetes test Job. ADR 0018 supersedes that Job runner with host Playwright and independently managed environment/data lifecycles. The deployed public-interface test seam remains accepted.
 
 Tests that need PostgreSQL or a running backend execute in an isolated namespace on k3s and observe only the deployed public HTTP interface, including browser-visible behavior. Pure logic keeps dependency-free unit tests, but testcontainers and tests that assemble the server in-process are retired so local development and CI exercise the same manifests, images, migrations, routing, and datastore integration.
 

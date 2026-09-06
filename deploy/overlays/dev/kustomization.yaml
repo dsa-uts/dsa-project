@@ -34,3 +34,10 @@ patches:
       - op: add
         path: /spec/storageClassName
         value: local-path
+  - target:
+      kind: Ingress
+      name: dsa
+    patch: |-
+      - op: add
+        path: /spec/rules/0/host
+        value: localhost

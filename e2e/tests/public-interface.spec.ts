@@ -1,8 +1,6 @@
-import { waitForDeployment } from './readiness.js'
 import { expect, test, type APIRequestContext, type APIResponse } from '@playwright/test'
-import { browserBaseURL } from '../environment.js'
+import { baseURL } from '../environment.js'
 
-test.setTimeout(270_000)
 const expiredToken = 'expired-development-session'
 
 function sessionCookie(response: APIResponse) {
@@ -19,25 +17,24 @@ async function login(request: APIRequestContext, cookie?: string) {
   })
 }
 
-test.beforeAll(waitForDeployment)
 
 test('the browser logs in, shows the User Account, logs out, and guards routes', async ({ page }) => {
-  await page.goto(new URL('/unknown', browserBaseURL).href)
+  await page.goto(new URL('/unknown', baseURL).href)
   await expect(page).toHaveURL(/\/login$/)
   await expect(page.getByRole('banner')).toHaveCount(0)
   await page.getByLabel('User ID').fill('admin')
   await page.getByLabel('Password').fill('admin')
   await page.getByRole('button', { name: 'Log in' }).click()
-  await expect(page).toHaveURL(new URL('/', browserBaseURL).href)
+  await expect(page).toHaveURL(new URL('/', baseURL).href)
   await expect(page.getByText('Development Admin')).toBeVisible()
   await expect(page.getByText('admin', { exact: true })).toBeVisible()
 
-  await page.goto(new URL('/unknown', browserBaseURL).href)
+  await page.goto(new URL('/unknown', baseURL).href)
   await expect(page.getByRole('heading', { name: '404' })).toBeVisible()
   await page.getByRole('banner').getByRole('link', { name: 'DSA', exact: true }).click()
-  await expect(page).toHaveURL(new URL('/', browserBaseURL).href)
-  await page.goto(new URL('/login', browserBaseURL).href)
-  await expect(page).toHaveURL(new URL('/', browserBaseURL).href)
+  await expect(page).toHaveURL(new URL('/', baseURL).href)
+  await page.goto(new URL('/login', baseURL).href)
+  await expect(page).toHaveURL(new URL('/', baseURL).href)
   await page.getByRole('banner').getByRole('button', { name: 'Logout' }).click()
   await expect(page).toHaveURL(/\/login$/)
 })
@@ -138,13 +135,13 @@ test('an expired browser session is cleared and redirected to login', async ({ c
   await context.addCookies([{
     name: '__Host-dsa_session',
     value: expiredToken,
-    domain: 'localhost',
+    domain: new URL(baseURL).hostname,
     path: '/',
     httpOnly: true,
     secure: true,
     sameSite: 'Lax',
   }])
-  await page.goto(new URL('/', browserBaseURL).href)
+  await page.goto(new URL('/', baseURL).href)
   await expect(page).toHaveURL(/\/login$/)
   expect((await context.cookies()).some(({ name }) => name === '__Host-dsa_session')).toBe(false)
 })

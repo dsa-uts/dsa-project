@@ -1,10 +1,7 @@
-import { waitForDeployment } from './readiness.js'
 import { randomUUID } from 'node:crypto'
 import { expect, test, type APIRequestContext, type APIResponse } from '@playwright/test'
-import { browserBaseURL } from '../environment.js'
+import { baseURL } from '../environment.js'
 
-test.setTimeout(270_000)
-test.beforeAll(waitForDeployment)
 const systemID = '00000000-0000-0000-0000-000000000097' // SeedDevelopment fixture
 const uniqueUserid = () => `u-${randomUUID().slice(0, 20)}`
 const valid = () => ({ userid: uniqueUserid(), name: '山田 🔑', role: 'student', password: 'initial-password' })
@@ -126,7 +123,7 @@ test('System Account and self-protection conflicts are atomic', async ({ request
 })
 
 test('browser Admin creates, filters, edits, confirms disable, and re-enables User Accounts', async ({ page }) => {
-  await page.goto(new URL('/login', browserBaseURL).href)
+  await page.goto(new URL('/login', baseURL).href)
   await page.getByLabel('User ID', { exact: true }).fill('admin')
   await page.getByLabel('Password', { exact: true }).fill('admin')
   await page.getByRole('button', { name: 'Log in' }).click()
@@ -185,13 +182,13 @@ test('browser Admin creates, filters, edits, confirms disable, and re-enables Us
 
 for (const role of ['student', 'manager']) {
   test(`browser ${role} has no Admin link and renders 403 on direct navigation`, async ({ page }) => {
-    await page.goto(new URL('/login', browserBaseURL).href)
+    await page.goto(new URL('/login', baseURL).href)
     await page.getByLabel('User ID', { exact: true }).fill(role)
     await page.getByLabel('Password', { exact: true }).fill('admin')
     await page.getByRole('button', { name: 'Log in' }).click()
-    await expect(page).toHaveURL(new URL('/', browserBaseURL).href)
+    await expect(page).toHaveURL(new URL('/', baseURL).href)
     await expect(page.getByRole('link', { name: 'Manage users' })).toHaveCount(0)
-    await page.goto(new URL('/admin/users', browserBaseURL).href)
+    await page.goto(new URL('/admin/users', baseURL).href)
     await expect(page.getByRole('heading', { name: '403 Forbidden' })).toBeVisible()
   })
 }
@@ -217,7 +214,7 @@ test('global order is Admin-only, requires every non-System ID once and preserve
 })
 
 test('browser bulk import retries failed rows and manual ordering saves or cancels globally', async ({ page, request }) => {
-  await page.goto(new URL('/login', browserBaseURL).href)
+  await page.goto(new URL('/login', baseURL).href)
   await page.getByLabel('User ID', { exact: true }).fill('admin')
   await page.getByLabel('Password', { exact: true }).fill('admin')
   await page.getByRole('button', { name: 'Log in' }).click()

@@ -1,0 +1,7 @@
+# Host Playwright against the deployed public interface
+
+Local Linux VM and CI runners execute Playwright from the working directory in the same Nix browser environment. Applications and PostgreSQL remain in the `dsa-e2e` Kubernetes namespace. This supersedes the test Job/image and per-run namespace lifecycle in ADRs 0012 and 0013, while preserving their public HTTP test seam and shared Kustomize base. Test-only edits no longer rebuild or import an image or build test sources with Nix.
+
+Shared Ingress routes `localhost` to development and `e2e.localhost` to E2E. The host resolver must resolve the latter for both Node and the browser; `E2E_BASE_URL` selects the reachable ingress URL (CI publishes the ingress on port 8080). A different hostname requires a matching Ingress rule. Ports alone do not select namespaces.
+
+Environment setup, explicit database reset, normal tests, outage tests, and deletion are independent commands. Reset stops the backend, recreates the database schema, and restarts the backend to run migrations and seed. Normal tests retain data and create unique User Accounts through HTTP; a single worker and sequential commands avoid shared-state races. Outage execution restores PostgreSQL on success, failure, and catchable termination, and reports recovery errors separately. Local environments remain until explicitly deleted; CI saves traces and workload diagnostics before deletion.
