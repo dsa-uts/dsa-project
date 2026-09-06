@@ -15,6 +15,8 @@ async function cookie(request: APIRequestContext, userid = 'admin', password = '
 }
 async function error(response: APIResponse, status: number, code: string) {
   expect(response.status()).toBe(status)
+  expect(response.headers()['cache-control']).toBe('no-store')
+  if (code === 'unauthorized') expect(response.headers()['set-cookie']).toContain('Max-Age=0')
   expect(await response.json()).toMatchObject({ error: { code } })
 }
 
@@ -27,12 +29,16 @@ test('every Admin user endpoint requires authentication and Admin Role, before v
       await request.patch(`/api/admin/users/${systemID}`, { headers, data: { name: 'changed' } }),
       await request.post('/api/admin/users', { headers, data: {} }),
       await request.patch(`/api/admin/users/${systemID}`, { headers, data: {} }),
+      await request.patch('/api/admin/users/not-a-uuid', { headers, data: { name: 'changed' } }),
+      await request.patch('/api/admin/users/not-a-uuid', { headers: { ...headers, 'Content-Type': 'application/json' }, data: '{' }),
     ]) await error(response, role ? 403 : 401, role ? 'forbidden' : 'unauthorized')
   }
 })
 
 test('creation appends, excludes the System Account, and validates immutable case-sensitive Userids and Unicode inputs', async ({ request }) => {
   const headers = await cookie(request)
+  await error(await request.patch('/api/admin/users/not-a-uuid', { headers, data: { name: 'changed' } }), 422, 'validation_failed')
+  await error(await request.post('/api/admin/users', { data: '{', headers: { ...headers, 'Content-Type': 'application/json' } }), 422, 'validation_failed')
   const before = (await (await request.get('/api/admin/users', { headers })).json()).users
   expect(before.some((u: { id: string }) => u.id === systemID)).toBe(false)
   expect(before.find((u: { userid: string }) => u.userid === 'disabled')).toMatchObject({ disabled: true })

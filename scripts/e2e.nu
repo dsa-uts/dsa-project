@@ -72,6 +72,31 @@ def remove-e2e-namespace [failure: string] {
   ] | ignore
 }
 
+# Stop the real datastore only after normal tests finish. Reuse the same test
+# image and public ingress, with a separate finite Job for outage assertions.
+def test-auth-outage [] {
+  stage test 'Stopping isolated PostgreSQL to verify authentication failures ...'
+  run-checked 'failed to stop E2E PostgreSQL' [
+    kubectl --namespace $e2e_namespace scale statefulset/dsa-postgresql --replicas=0
+  ] | ignore
+  run-checked 'E2E PostgreSQL did not stop' [
+    kubectl --namespace $e2e_namespace wait --for=delete pod/dsa-postgresql-0 --timeout=90s
+  ] | ignore
+
+  run-checked 'failed to start authentication outage Job' [
+    kubectl --namespace $e2e_namespace patch job/dsa-e2e-auth-outage
+    --type=merge --patch '{"spec":{"suspend":false}}'
+  ] | ignore
+  let result = do {
+    ^kubectl --namespace $e2e_namespace wait --for=condition=complete job/dsa-e2e-auth-outage --timeout=250s
+  } | complete
+  ^kubectl --namespace $e2e_namespace logs job/dsa-e2e-auth-outage --all-containers=true --tail=100
+  if $result.exit_code != 0 {
+    print-command-result $result
+    error make { msg: 'authentication outage tests failed' }
+  }
+}
+
 def main [--k3d-cluster: string] {
   let root = repo-root
   require-cluster
@@ -126,5 +151,12 @@ def main [--k3d-cluster: string] {
   }
 
   ^kubectl --namespace $e2e_namespace logs job/dsa-e2e --all-containers=true --tail=300
+  try {
+    test-auth-outage
+  } catch { |err|
+    diagnose-e2e
+    remove-e2e-namespace 'authentication outage tests failed, and namespace cleanup also failed'
+    error make { msg: $err.msg }
+  }
   remove-e2e-namespace 'E2E tests passed, but failed to delete the E2E namespace'
 }

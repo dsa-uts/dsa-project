@@ -3,9 +3,8 @@ package api
 import (
 	"fmt"
 
-	"github.com/dsa-uts/dsa-project/backend/internal/api/admin/users"
 	"github.com/dsa-uts/dsa-project/backend/internal/api/generated"
-	"github.com/dsa-uts/dsa-project/backend/internal/api/sessions"
+	"github.com/dsa-uts/dsa-project/backend/internal/api/httpauth"
 	"github.com/dsa-uts/dsa-project/backend/internal/api/validation"
 	"github.com/dsa-uts/dsa-project/backend/internal/store"
 	"github.com/labstack/echo/v4"
@@ -20,23 +19,14 @@ func Register(e *echo.Echo, authStore *store.AuthStore) {
 	// Deployment hosts are not part of request validation.
 	spec.Servers = nil
 
-	validator := validation.RequestValidator(spec)
-	// Registration uses raw OpenAPI operationIds; the embedded spec contains
-	// Go-normalized names, so it cannot supply these map keys.
-	middlewares := map[string][]echo.MiddlewareFunc{}
-	for _, policy := range []map[string][]echo.MiddlewareFunc{
-		sessions.OperationMiddlewares(),
-		users.OperationMiddlewares(authStore),
-	} {
-		for id, authorization := range policy {
-			middlewares[id] = append(authorization, validator)
-		}
+	if err := httpauth.ValidateAccessPolicies(spec); err != nil {
+		panic(fmt.Sprintf("invalid API access policy: %v", err))
 	}
-
-	g := e.Group("", noStore)
-	generated.RegisterHandlersWithOptions(g, generated.NewStrictHandler(newHandler(authStore), nil), generated.RegisterHandlersOptions{
-		OperationMiddlewares: middlewares,
-	})
+	validator := validation.RequestValidator(spec, httpauth.Authenticate(authStore))
+	// Group middleware wraps every generated route, before generated parameter
+	// binding. No operation ID list needs to track future endpoints.
+	g := e.Group("", noStore, validator)
+	generated.RegisterHandlers(g, generated.NewStrictHandler(newHandler(authStore), nil))
 }
 
 func noStore(next echo.HandlerFunc) echo.HandlerFunc {

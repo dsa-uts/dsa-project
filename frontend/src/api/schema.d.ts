@@ -44,9 +44,7 @@ export interface paths {
             query?: never;
             header?: never;
             path?: never;
-            cookie?: {
-                "__Host-dsa_session"?: components["parameters"]["SessionCookie"];
-            };
+            cookie?: never;
         };
         /** List all non-System User Accounts, including disabled accounts, in persisted display order */
         get: operations["listUserAccounts"];
@@ -66,9 +64,7 @@ export interface paths {
             path: {
                 user_id: string;
             };
-            cookie?: {
-                "__Host-dsa_session"?: components["parameters"]["SessionCookie"];
-            };
+            cookie?: never;
         };
         get?: never;
         put?: never;
@@ -275,9 +271,7 @@ export interface operations {
             query?: never;
             header?: never;
             path?: never;
-            cookie?: {
-                "__Host-dsa_session"?: components["parameters"]["SessionCookie"];
-            };
+            cookie?: never;
         };
         requestBody?: never;
         responses: {
@@ -299,9 +293,7 @@ export interface operations {
             query?: never;
             header?: never;
             path?: never;
-            cookie?: {
-                "__Host-dsa_session"?: components["parameters"]["SessionCookie"];
-            };
+            cookie?: never;
         };
         requestBody?: never;
         responses: {
@@ -326,9 +318,7 @@ export interface operations {
             query?: never;
             header?: never;
             path?: never;
-            cookie?: {
-                "__Host-dsa_session"?: components["parameters"]["SessionCookie"];
-            };
+            cookie?: never;
         };
         requestBody: {
             content: {
@@ -359,9 +349,7 @@ export interface operations {
             path: {
                 user_id: string;
             };
-            cookie?: {
-                "__Host-dsa_session"?: components["parameters"]["SessionCookie"];
-            };
+            cookie?: never;
         };
         requestBody: {
             content: {

@@ -11,7 +11,6 @@ import (
 	"github.com/dsa-uts/dsa-project/backend/internal/api/httpresponse"
 	"github.com/dsa-uts/dsa-project/backend/internal/auth"
 	"github.com/dsa-uts/dsa-project/backend/internal/store"
-	"github.com/labstack/echo/v4"
 )
 
 // Handler implements session and current User Account operations.
@@ -19,15 +18,6 @@ type Handler struct{ auth *store.AuthStore }
 
 func NewHandler(authStore *store.AuthStore) *Handler {
 	return &Handler{auth: authStore}
-}
-
-// OperationMiddlewares declares the session operations, which require no authorization.
-func OperationMiddlewares() map[string][]echo.MiddlewareFunc {
-	return map[string][]echo.MiddlewareFunc{
-		"createSession":  nil,
-		"deleteSession":  nil,
-		"getCurrentUser": nil,
-	}
 }
 
 var dummyPasswordHash = func() string {
@@ -86,26 +76,7 @@ func (h *Handler) DeleteSession(ctx context.Context, req generated.DeleteSession
 }
 
 func (h *Handler) GetCurrentUser(ctx context.Context, req generated.GetCurrentUserRequestObject) (generated.GetCurrentUserResponseObject, error) {
-	if req.Params.SessionToken == nil {
-		return unauthorizedCurrentUser(), nil
-	}
-	user, err := h.auth.CurrentUser(ctx, auth.HashToken(*req.Params.SessionToken), time.Now())
-	if errors.Is(err, store.ErrNotFound) {
-		return unauthorizedCurrentUser(), nil
-	}
-	if err != nil {
-		slog.ErrorContext(ctx, "get current user", "error", err)
-		return generated.GetCurrentUser500JSONResponse{generated.InternalErrorJSONResponse(httpresponse.NewError("internal", "Failed to get current user."))}, nil
-	}
-	return generated.GetCurrentUser200JSONResponse(userResponse(user)), nil
-}
-
-func unauthorizedCurrentUser() generated.GetCurrentUser401JSONResponse {
-	cookie := httpauth.ClearedSessionCookie()
-	return generated.GetCurrentUser401JSONResponse{generated.UnauthorizedJSONResponse{
-		Body:    httpresponse.NewError("unauthorized", "Authentication is required."),
-		Headers: generated.UnauthorizedResponseHeaders{SetCookie: &cookie},
-	}}
+	return generated.GetCurrentUser200JSONResponse(userResponse(httpauth.Actor(ctx))), nil
 }
 
 func userResponse(user *store.UserAccount) generated.CurrentUser {
