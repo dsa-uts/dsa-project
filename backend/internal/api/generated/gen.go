@@ -188,6 +188,11 @@ type DeleteSessionParams struct {
 	SessionToken *SessionToken `form:"__Host-dsa_session,omitempty" json:"__Host-dsa_session,omitempty"`
 }
 
+// ReorderUserAccountsJSONBody defines parameters for ReorderUserAccounts.
+type ReorderUserAccountsJSONBody struct {
+	UserIds []openapi_types.UUID `json:"user_ids"`
+}
+
 // CreateUserAccountJSONRequestBody defines body for CreateUserAccount for application/json ContentType.
 type CreateUserAccountJSONRequestBody = CreateUserAccountRequest
 
@@ -196,6 +201,9 @@ type UpdateUserAccountJSONRequestBody = UpdateUserAccountRequest
 
 // CreateSessionJSONRequestBody defines body for CreateSession for application/json ContentType.
 type CreateSessionJSONRequestBody = CreateSessionRequest
+
+// ReorderUserAccountsJSONRequestBody defines body for ReorderUserAccounts for application/json ContentType.
+type ReorderUserAccountsJSONRequestBody ReorderUserAccountsJSONBody
 
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
@@ -217,6 +225,9 @@ type ServerInterface interface {
 	// CreateSession userid と password でログインする
 	// (POST /api/session)
 	CreateSession(ctx echo.Context) error
+	// ReorderUserAccounts Save the global User Account display order (Admin only)
+	// (PATCH /api/users/order)
+	ReorderUserAccounts(ctx echo.Context) error
 }
 
 // ServerInterfaceWrapper converts echo contexts to parameters.
@@ -299,6 +310,15 @@ func (w *ServerInterfaceWrapper) CreateSession(ctx echo.Context) error {
 	return err
 }
 
+// ReorderUserAccounts converts echo context to params.
+func (w *ServerInterfaceWrapper) ReorderUserAccounts(ctx echo.Context) error {
+	var err error
+
+	// Invoke the callback with all the unmarshaled arguments
+	err = w.Handler.ReorderUserAccounts(ctx)
+	return err
+}
+
 // This is a simple interface which specifies echo.Route addition functions which
 // are present on both echo.Echo and echo.Group, since we want to allow using
 // either of them for path registration
@@ -352,6 +372,7 @@ func RegisterHandlersWithOptions(router EchoRouter, si ServerInterface, options 
 	router.GET(options.BaseURL+"/api/admin/users", wrapper.ListUserAccounts, options.OperationMiddlewares["listUserAccounts"]...)
 	router.POST(options.BaseURL+"/api/admin/users", wrapper.CreateUserAccount, options.OperationMiddlewares["createUserAccount"]...)
 	router.PATCH(options.BaseURL+"/api/admin/users/:user_id", wrapper.UpdateUserAccount, options.OperationMiddlewares["updateUserAccount"]...)
+	router.PATCH(options.BaseURL+"/api/users/order", wrapper.ReorderUserAccounts, options.OperationMiddlewares["reorderUserAccounts"]...)
 
 }
 
@@ -813,6 +834,81 @@ func (response CreateSession500JSONResponse) VisitCreateSessionResponse(w http.R
 	return err
 }
 
+type ReorderUserAccountsRequestObject struct {
+	Body *ReorderUserAccountsJSONRequestBody
+}
+
+type ReorderUserAccountsResponseObject interface {
+	VisitReorderUserAccountsResponse(w http.ResponseWriter) error
+}
+
+type ReorderUserAccounts204Response struct {
+}
+
+func (response ReorderUserAccounts204Response) VisitReorderUserAccountsResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type ReorderUserAccounts401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response ReorderUserAccounts401JSONResponse) VisitReorderUserAccountsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.SetCookie != nil {
+		w.Header().Set("Set-Cookie", fmt.Sprint(*response.Headers.SetCookie))
+	}
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ReorderUserAccounts403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response ReorderUserAccounts403JSONResponse) VisitReorderUserAccountsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ReorderUserAccounts422JSONResponse Error
+
+func (response ReorderUserAccounts422JSONResponse) VisitReorderUserAccountsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(422)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ReorderUserAccounts500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response ReorderUserAccounts500JSONResponse) VisitReorderUserAccountsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 // StrictServerInterface represents all server handlers.
 type StrictServerInterface interface {
 	// ListUserAccounts List all non-System User Accounts, including disabled accounts, in persisted display order
@@ -833,6 +929,9 @@ type StrictServerInterface interface {
 	// CreateSession userid と password でログインする
 	// (POST /api/session)
 	CreateSession(ctx context.Context, request CreateSessionRequestObject) (CreateSessionResponseObject, error)
+	// ReorderUserAccounts Save the global User Account display order (Admin only)
+	// (PATCH /api/users/order)
+	ReorderUserAccounts(ctx context.Context, request ReorderUserAccountsRequestObject) (ReorderUserAccountsResponseObject, error)
 }
 
 type StrictHandlerFunc func(ctx echo.Context, request any) (any, error)
@@ -1037,45 +1136,88 @@ func (sh *strictHandler) CreateSession(ctx echo.Context) error {
 	return nil
 }
 
+// ReorderUserAccounts operation middleware
+func (sh *strictHandler) ReorderUserAccounts(ctx echo.Context) error {
+	var request ReorderUserAccountsRequestObject
+
+	var body ReorderUserAccountsJSONRequestBody
+	var err error
+	if binder, ok := ctx.Echo().Binder.(*echo.DefaultBinder); ok {
+		// Bind only the request body, so that path and query parameters
+		// are not also bound into the body struct.
+		err = binder.BindBody(ctx, &body)
+	} else {
+		// A custom binder is installed on the Echo instance; defer to it
+		// entirely, since echo.Binder does not expose body-only binding.
+		err = ctx.Bind(&body)
+	}
+	if err != nil {
+		return err
+	}
+	request.Body = &body
+
+	handler := func(ctx echo.Context, request interface{}) (interface{}, error) {
+		return sh.ssi.ReorderUserAccounts(ctx.Request().Context(), request.(ReorderUserAccountsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ReorderUserAccounts")
+	}
+
+	response, err := handler(ctx, request)
+
+	if err != nil {
+		return err
+	} else if validResponse, ok := response.(ReorderUserAccountsResponseObject); ok {
+		return validResponse.VisitReorderUserAccountsResponse(ctx.Response())
+	} else if response != nil {
+		return fmt.Errorf("unexpected response type: %T", response)
+	}
+	return nil
+}
+
 // Base64 encoded, compressed with deflate, json marshaled OpenAPI spec.
 // Stored as a slice of fixed-width chunks rather than one concatenated
 // const string: with thousands of chunks the chained `+` fold is several
 // times slower for the Go compiler than parsing a slice literal.
 var swaggerSpec = []string{
-	"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",
-	"2ejzMmKOZGma/icAAP//",
+	"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",
+	"dtGM53zAKCl65x11/jcAAP//",
 }
 
 // decodeSpec returns the embedded OpenAPI spec as raw JSON bytes,

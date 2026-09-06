@@ -34,6 +34,7 @@
   - 提出
   - 結果の表示
 - Admin 機能
+  - ユーザーのグローバル表示順の手動並び替え（無効化済みを含み、System Account を除く）
   - ユーザーの作成・削除
     - 作成: シングルユーザーの作成、およびスプレッドシートから複数ユーザーの一括作成
   - Resource の作成・更新・削除
@@ -42,7 +43,6 @@
 - Manager 機能
   - 複数のユーザーが提出した Submission を全て一つにまとめたzipファイルをアップロードし、まとめて Request する。
   - フォーマットが微妙に異なることで Request が失敗する提出に対して、その場で修正して再 Request することができる
-  - ユーザーの並び替え(Manaba 等の外部ツールの並び順に合わせる。Admin も可)
 - Resource Version 管理
   - Resource を更新しても古い Resource Version を参照できる
   - 複数の Resource Version に対して Request することができる

@@ -12,6 +12,7 @@ import (
 )
 
 var (
+	ErrUserIDsMismatch           = errors.New("user_ids_mismatch")
 	ErrUseridTaken               = errors.New("userid_taken")
 	ErrCannotModifySelf          = errors.New("cannot_modify_self")
 	ErrCannotModifySystemAccount = errors.New("cannot_modify_system_account")
@@ -93,4 +94,41 @@ func (s *AuthStore) UpdateUser(ctx context.Context, actorID, userID uuid.UUID, u
 		return nil
 	})
 	return user, err
+}
+
+// ReorderUsers reuses the existing sequence-generated positions, so future
+// inserts still append. The table lock serializes membership changes and saves;
+// deferred uniqueness allows a permutation without temporary positions.
+func (s *AuthStore) ReorderUsers(ctx context.Context, ids []uuid.UUID) error {
+	return s.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
+		if _, err := tx.ExecContext(ctx, "LOCK TABLE user_accounts IN SHARE ROW EXCLUSIVE MODE"); err != nil {
+			return err
+		}
+		users := []UserAccount{}
+		if err := tx.NewSelect().Model(&users).Where("is_system = false").OrderExpr("display_order ASC").Scan(ctx); err != nil {
+			return err
+		}
+		if len(ids) != len(users) {
+			return ErrUserIDsMismatch
+		}
+		remaining := make(map[uuid.UUID]bool, len(users))
+		for _, user := range users {
+			remaining[user.ID] = true
+		}
+		for _, id := range ids {
+			if !remaining[id] {
+				return ErrUserIDsMismatch
+			}
+			delete(remaining, id)
+		}
+		if _, err := tx.ExecContext(ctx, "SET CONSTRAINTS user_accounts_display_order_key DEFERRED"); err != nil {
+			return err
+		}
+		for i, id := range ids {
+			if _, err := tx.NewUpdate().Model((*UserAccount)(nil)).Set("display_order = ?", users[i].DisplayOrder).Where("id = ?", id).Exec(ctx); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
 }

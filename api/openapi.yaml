@@ -133,6 +133,39 @@ paths:
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "500": { $ref: "#/components/responses/InternalError" }
+  /api/users/order:
+    patch:
+      operationId: reorderUserAccounts
+      security: [{ sessionAuth: [admin] }]
+      summary: Save the global User Account display order (Admin only)
+      description: |
+        Supply every non-System User Account ID exactly once, including disabled
+        accounts. Missing, duplicate, unknown, or System Account IDs return
+        422 user_ids_mismatch without changing the order.
+        The saved order drives the Admin list and future roster views.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [user_ids]
+              properties:
+                user_ids:
+                  type: array
+                  items: { type: string, format: uuid }
+      responses:
+        "204":
+          description: Global display order saved
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "422":
+          description: user_ids_mismatch for an incomplete or incorrect set; validation_failed for malformed input
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "500": { $ref: "#/components/responses/InternalError" }
 components:
   securitySchemes:
     sessionAuth:

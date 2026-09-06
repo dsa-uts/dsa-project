@@ -1,7 +1,7 @@
 import { afterEach, expect, test, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { MemoryRouter } from 'react-router-dom'
+import { createMemoryRouter, RouterProvider } from 'react-router-dom'
 import App from './App'
 
 afterEach(() => { cleanup(); vi.unstubAllGlobals() })
@@ -21,7 +21,7 @@ function renderAdmin() {
     }
     return new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } })
   }))
-  render(<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}><MemoryRouter initialEntries={['/admin/users']}><App /></MemoryRouter></QueryClientProvider>)
+  render(<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}><RouterProvider router={createMemoryRouter([{ path: '*', element: <App /> }], { initialEntries: ['/admin/users'] })} /></QueryClientProvider>)
 }
 
 test('creation keeps duplicate and server validation errors in the dialog', async () => {

@@ -1,9 +1,10 @@
+import { UserOrderEditor } from './UserOrderEditor'
 import { useState, type ReactNode, type SubmitEventHandler } from 'react'
 import { Link } from 'react-router-dom'
 import { useQueryClient } from '@tanstack/react-query'
 import { $api, fetchClient } from '@/api/client'
 import type { components } from '@/api/schema'
-import { useAuth } from '@/auth'
+import { useAuth } from '@/lib/auth'
 import { Button } from '@/components/ui/button'
 import { Dialog } from '@/components/ui/dialog'
 
@@ -80,6 +81,7 @@ function UserDialog({ user, onClose, onSaved }: { user: User | null; onClose: ()
 function UsersScreen() {
   const queryClient = useQueryClient()
   const users = $api.useQuery('get', '/api/admin/users', {}, { retry: false })
+  const [ordering, setOrdering] = useState(false)
   const [search, setSearch] = useState('')
   const [state, setState] = useState('all')
   const [editing, setEditing] = useState<{ user: User | null } | null>(null)
@@ -108,9 +110,14 @@ function UsersScreen() {
   return <main className="flex-1 bg-background p-6 text-foreground">
     <div className="mx-auto flex max-w-5xl flex-col gap-5">
       <Link to="/" className="underline">Home</Link>
-      <div className="flex items-center justify-between gap-4"><h1 className="text-2xl font-semibold">User Accounts</h1><Button onClick={() => setEditing({ user: null })}>Create user</Button></div>
+      <div className="flex items-center justify-between gap-4"><h1 className="text-2xl font-semibold">User Accounts</h1><div className="flex items-center gap-3">{!ordering && <><Link to="/admin/users/bulk" className="underline">一括作成</Link><Button variant="outline" disabled={!users.data} onClick={() => { setSearch(''); setState('all'); setMutationError(''); setNotification(''); setOrdering(true) }}>並び順を編集</Button><Button onClick={() => setEditing({ user: null })}>Create user</Button></>}</div></div>
       {notification && <p role="status" className="text-success">{notification}</p>}
       {mutationError && !disabling && <p role="alert" className="text-destructive">{mutationError}</p>}
+      {ordering && users.data ? <UserOrderEditor users={users.data.users} onCancel={() => setOrdering(false)} onSaved={async () => { await saved('並び順を保存しました。'); setOrdering(false) }} onMismatch={async () => {
+        setMutationError('ユーザー構成が変わりました。一覧を再取得しました。並び替えをやり直してください。')
+        await users.refetch()
+        setOrdering(false)
+      }} /> : <>
       <div className="flex flex-wrap gap-4">
         <Field name="search" label="Search users"><input id="search" className={inputClass} value={search} onChange={(event) => setSearch(event.target.value)} /></Field>
         <Field name="state" label="State"><select id="state" className={inputClass} value={state} onChange={(event) => setState(event.target.value)}><option value="all">All</option><option value="active">Active</option><option value="disabled">Disabled</option></select></Field>
@@ -126,6 +133,7 @@ function UsersScreen() {
           }}>{user.disabled ? 'Re-enable' : 'Disable account'}</Button></td>
         </tr>)}</tbody>
       </table>{visible.length === 0 && <p className="p-3 text-muted-foreground">No matching User Accounts.</p>}</div>}
+      </>}
       {editing && <UserDialog user={editing.user} onClose={() => setEditing(null)} onSaved={saved} />}
       {disabling && <Dialog title="Disable User Account" description={`Disable ${disabling.userid} (${disabling.name})? This ends all their sessions and prevents login. Their history is retained.`} onClose={() => setDisabling(null)} busy={busy}>
         {mutationError && <p role="alert" className="text-destructive">{mutationError}</p>}

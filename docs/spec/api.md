@@ -438,7 +438,7 @@ Query:
 }
 ```
 
-- `rows` は [`PATCH /api/users/order`](#patch-apiusersorder) のグローバル表示順。System Account を除く全ユーザー(disabled 含む)を、Submission の有無に関わらず全件返す。未提出者の把握も本 API の要件。
+- `rows` は [`PATCH /api/users/order`](../../api/openapi.yaml) のグローバル表示順。System Account を除く全ユーザー(disabled 含む)を、Submission の有無に関わらず全件返す。未提出者の把握も本 API の要件。
 - `submission` = その Project × Subject User の最新 non-archived evaluation Submission。なければ `null`(未提出)。同一ユーザーの過去の Submission はドリルダウン(Submission 単位の参照)で辿る。
 - 遅延強調はクライアント導出: Project の `deadline` が設定済み ∧ `original_submitted_at` > `deadline`。
 - Errors: `403`(Student)、`404`(Project / Version 不存在)
@@ -461,23 +461,6 @@ Artifact は Private-by-Default。Resource YAML で `public` 宣言され、か�
 - Errors: `404`(Request 不可視 / Artifact が private / capture 失敗で実体なし、のいずれも区別しない)
 
 private Artifact にはクライアント向けダウンロード API がない。
-
-## Users
-
-### `PATCH /api/users/order`
-
-Manager/Admin 専用。ユーザーの表示順を永続化する。外部ツール(Manaba 等)の並び順に合わせるための機能で、順序はグローバルに 1 本(Manager 個人ごとの設定ではない)。
-
-```json
-{
-  "user_ids": ["uuid-1", "uuid-2", "uuid-3"]
-}
-```
-
-- System Account を除く全ユーザー(無効化済みを含む)の ID を過不足なく含むこと。
-- [`GET /api/admin/users`](../../api/openapi.yaml) と今後のダッシュボード系 API のユーザー列挙は、この順序を既定とする。
-- Response: `204`
-- Errors: `403`(Student)、`422 user_ids_mismatch`(欠落・重複・未知の ID)
 
 ## Admin
 
