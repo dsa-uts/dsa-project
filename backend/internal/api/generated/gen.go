@@ -183,26 +183,6 @@ type UserConflict = Error
 // ValidationError defines model for ValidationError.
 type ValidationError = Error
 
-// ListUserAccountsParams defines parameters for ListUserAccounts.
-type ListUserAccountsParams struct {
-	SessionToken *SessionToken `form:"__Host-dsa_session,omitempty" json:"__Host-dsa_session,omitempty"`
-}
-
-// CreateUserAccountParams defines parameters for CreateUserAccount.
-type CreateUserAccountParams struct {
-	SessionToken *SessionToken `form:"__Host-dsa_session,omitempty" json:"__Host-dsa_session,omitempty"`
-}
-
-// UpdateUserAccountParams defines parameters for UpdateUserAccount.
-type UpdateUserAccountParams struct {
-	SessionToken *SessionToken `form:"__Host-dsa_session,omitempty" json:"__Host-dsa_session,omitempty"`
-}
-
-// GetCurrentUserParams defines parameters for GetCurrentUser.
-type GetCurrentUserParams struct {
-	SessionToken *SessionToken `form:"__Host-dsa_session,omitempty" json:"__Host-dsa_session,omitempty"`
-}
-
 // DeleteSessionParams defines parameters for DeleteSession.
 type DeleteSessionParams struct {
 	SessionToken *SessionToken `form:"__Host-dsa_session,omitempty" json:"__Host-dsa_session,omitempty"`
@@ -221,16 +201,16 @@ type CreateSessionJSONRequestBody = CreateSessionRequest
 type ServerInterface interface {
 	// ListUserAccounts List all non-System User Accounts, including disabled accounts, in persisted display order
 	// (GET /api/admin/users)
-	ListUserAccounts(ctx echo.Context, params ListUserAccountsParams) error
+	ListUserAccounts(ctx echo.Context) error
 	// CreateUserAccount Create a User Account at the end of the global display order
 	// (POST /api/admin/users)
-	CreateUserAccount(ctx echo.Context, params CreateUserAccountParams) error
+	CreateUserAccount(ctx echo.Context) error
 	// UpdateUserAccount Atomically update supplied fields of a User Account
 	// (PATCH /api/admin/users/{user_id})
-	UpdateUserAccount(ctx echo.Context, userId openapi_types.UUID, params UpdateUserAccountParams) error
+	UpdateUserAccount(ctx echo.Context, userId openapi_types.UUID) error
 	// GetCurrentUser 現在の User Account を返す
 	// (GET /api/me)
-	GetCurrentUser(ctx echo.Context, params GetCurrentUserParams) error
+	GetCurrentUser(ctx echo.Context) error
 	// DeleteSession 現在のセッションからログアウトする
 	// (DELETE /api/session)
 	DeleteSession(ctx echo.Context, params DeleteSessionParams) error
@@ -248,22 +228,8 @@ type ServerInterfaceWrapper struct {
 func (w *ServerInterfaceWrapper) ListUserAccounts(ctx echo.Context) error {
 	var err error
 
-	// Parameter object where we will unmarshal all parameters from the context
-	var params ListUserAccountsParams
-
-	if cookie, err := ctx.Cookie("__Host-dsa_session"); err == nil {
-
-		var value SessionToken
-		err = runtime.BindStyledParameterWithOptions("simple", "__Host-dsa_session", cookie.Value, &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationCookie, Explode: true, Required: false, Type: "string", Format: ""})
-		if err != nil {
-			return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Invalid format for parameter __Host-dsa_session: %s", err))
-		}
-		params.SessionToken = &value
-
-	}
-
 	// Invoke the callback with all the unmarshaled arguments
-	err = w.Handler.ListUserAccounts(ctx, params)
+	err = w.Handler.ListUserAccounts(ctx)
 	return err
 }
 
@@ -271,22 +237,8 @@ func (w *ServerInterfaceWrapper) ListUserAccounts(ctx echo.Context) error {
 func (w *ServerInterfaceWrapper) CreateUserAccount(ctx echo.Context) error {
 	var err error
 
-	// Parameter object where we will unmarshal all parameters from the context
-	var params CreateUserAccountParams
-
-	if cookie, err := ctx.Cookie("__Host-dsa_session"); err == nil {
-
-		var value SessionToken
-		err = runtime.BindStyledParameterWithOptions("simple", "__Host-dsa_session", cookie.Value, &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationCookie, Explode: true, Required: false, Type: "string", Format: ""})
-		if err != nil {
-			return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Invalid format for parameter __Host-dsa_session: %s", err))
-		}
-		params.SessionToken = &value
-
-	}
-
 	// Invoke the callback with all the unmarshaled arguments
-	err = w.Handler.CreateUserAccount(ctx, params)
+	err = w.Handler.CreateUserAccount(ctx)
 	return err
 }
 
@@ -301,22 +253,8 @@ func (w *ServerInterfaceWrapper) UpdateUserAccount(ctx echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Invalid format for parameter user_id: %s", err))
 	}
 
-	// Parameter object where we will unmarshal all parameters from the context
-	var params UpdateUserAccountParams
-
-	if cookie, err := ctx.Cookie("__Host-dsa_session"); err == nil {
-
-		var value SessionToken
-		err = runtime.BindStyledParameterWithOptions("simple", "__Host-dsa_session", cookie.Value, &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationCookie, Explode: true, Required: false, Type: "string", Format: ""})
-		if err != nil {
-			return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Invalid format for parameter __Host-dsa_session: %s", err))
-		}
-		params.SessionToken = &value
-
-	}
-
 	// Invoke the callback with all the unmarshaled arguments
-	err = w.Handler.UpdateUserAccount(ctx, userId, params)
+	err = w.Handler.UpdateUserAccount(ctx, userId)
 	return err
 }
 
@@ -324,22 +262,8 @@ func (w *ServerInterfaceWrapper) UpdateUserAccount(ctx echo.Context) error {
 func (w *ServerInterfaceWrapper) GetCurrentUser(ctx echo.Context) error {
 	var err error
 
-	// Parameter object where we will unmarshal all parameters from the context
-	var params GetCurrentUserParams
-
-	if cookie, err := ctx.Cookie("__Host-dsa_session"); err == nil {
-
-		var value SessionToken
-		err = runtime.BindStyledParameterWithOptions("simple", "__Host-dsa_session", cookie.Value, &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationCookie, Explode: true, Required: false, Type: "string", Format: ""})
-		if err != nil {
-			return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Invalid format for parameter __Host-dsa_session: %s", err))
-		}
-		params.SessionToken = &value
-
-	}
-
 	// Invoke the callback with all the unmarshaled arguments
-	err = w.Handler.GetCurrentUser(ctx, params)
+	err = w.Handler.GetCurrentUser(ctx)
 	return err
 }
 
@@ -453,7 +377,6 @@ type UserConflictJSONResponse Error
 type ValidationErrorJSONResponse Error
 
 type ListUserAccountsRequestObject struct {
-	Params ListUserAccountsParams
 }
 
 type ListUserAccountsResponseObject interface {
@@ -522,8 +445,7 @@ func (response ListUserAccounts500JSONResponse) VisitListUserAccountsResponse(w 
 }
 
 type CreateUserAccountRequestObject struct {
-	Params CreateUserAccountParams
-	Body   *CreateUserAccountJSONRequestBody
+	Body *CreateUserAccountJSONRequestBody
 }
 
 type CreateUserAccountResponseObject interface {
@@ -619,7 +541,6 @@ func (response CreateUserAccount500JSONResponse) VisitCreateUserAccountResponse(
 
 type UpdateUserAccountRequestObject struct {
 	UserId openapi_types.UUID `json:"user_id"`
-	Params UpdateUserAccountParams
 	Body   *UpdateUserAccountJSONRequestBody
 }
 
@@ -729,7 +650,6 @@ func (response UpdateUserAccount500JSONResponse) VisitUpdateUserAccountResponse(
 }
 
 type GetCurrentUserRequestObject struct {
-	Params GetCurrentUserParams
 }
 
 type GetCurrentUserResponseObject interface {
@@ -928,10 +848,8 @@ type strictHandler struct {
 }
 
 // ListUserAccounts operation middleware
-func (sh *strictHandler) ListUserAccounts(ctx echo.Context, params ListUserAccountsParams) error {
+func (sh *strictHandler) ListUserAccounts(ctx echo.Context) error {
 	var request ListUserAccountsRequestObject
-
-	request.Params = params
 
 	handler := func(ctx echo.Context, request interface{}) (interface{}, error) {
 		return sh.ssi.ListUserAccounts(ctx.Request().Context(), request.(ListUserAccountsRequestObject))
@@ -953,10 +871,8 @@ func (sh *strictHandler) ListUserAccounts(ctx echo.Context, params ListUserAccou
 }
 
 // CreateUserAccount operation middleware
-func (sh *strictHandler) CreateUserAccount(ctx echo.Context, params CreateUserAccountParams) error {
+func (sh *strictHandler) CreateUserAccount(ctx echo.Context) error {
 	var request CreateUserAccountRequestObject
-
-	request.Params = params
 
 	var body CreateUserAccountJSONRequestBody
 	var err error
@@ -994,11 +910,10 @@ func (sh *strictHandler) CreateUserAccount(ctx echo.Context, params CreateUserAc
 }
 
 // UpdateUserAccount operation middleware
-func (sh *strictHandler) UpdateUserAccount(ctx echo.Context, userId openapi_types.UUID, params UpdateUserAccountParams) error {
+func (sh *strictHandler) UpdateUserAccount(ctx echo.Context, userId openapi_types.UUID) error {
 	var request UpdateUserAccountRequestObject
 
 	request.UserId = userId
-	request.Params = params
 
 	var body UpdateUserAccountJSONRequestBody
 	var err error
@@ -1036,10 +951,8 @@ func (sh *strictHandler) UpdateUserAccount(ctx echo.Context, userId openapi_type
 }
 
 // GetCurrentUser operation middleware
-func (sh *strictHandler) GetCurrentUser(ctx echo.Context, params GetCurrentUserParams) error {
+func (sh *strictHandler) GetCurrentUser(ctx echo.Context) error {
 	var request GetCurrentUserRequestObject
-
-	request.Params = params
 
 	handler := func(ctx echo.Context, request interface{}) (interface{}, error) {
 		return sh.ssi.GetCurrentUser(ctx.Request().Context(), request.(GetCurrentUserRequestObject))
@@ -1129,39 +1042,40 @@ func (sh *strictHandler) CreateSession(ctx echo.Context) error {
 // const string: with thousands of chunks the chained `+` fold is several
 // times slower for the Go compiler than parsing a slice literal.
 var swaggerSpec = []string{
-	"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",
+	"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",
+	"2ejzMmKOZGma/icAAP//",
 }
 
 // decodeSpec returns the embedded OpenAPI spec as raw JSON bytes,

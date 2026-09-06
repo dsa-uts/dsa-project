@@ -103,7 +103,7 @@ test('login ignores a presented session and logout is isolated and idempotent', 
   const logout = await request.delete('/api/session', { headers: { Cookie: `__Host-dsa_session=${latest}` } })
   expect(logout.status()).toBe(204)
   expect(logout.headers()['set-cookie']).toContain('Max-Age=0')
-  expect((await request.delete('/api/session')).status()).toBe(204)
+  expect((await request.delete('/api/session', { headers: { Cookie: '' } })).status()).toBe(204)
   expect((await request.get('/api/me', { headers: { Cookie: `__Host-dsa_session=${independent}` } })).status()).toBe(200)
 })
 
@@ -150,6 +150,10 @@ test('an expired browser session is cleared and redirected to login', async ({ c
 })
 
 test('invalid and expired sessions are rejected and cleared', async ({ request }) => {
+  const missing = await request.get('/api/me', { headers: { Cookie: '' } })
+  expect(missing.status()).toBe(401)
+  expect(missing.headers()['set-cookie']).toContain('Max-Age=0')
+  expect(missing.headers()['cache-control']).toBe('no-store')
   for (const token of ['invalid-session', expiredToken]) {
     const response = await request.get('/api/me', { headers: { Cookie: `__Host-dsa_session=${token}` } })
     expect(response.status()).toBe(401)
@@ -161,6 +165,8 @@ test('invalid and expired sessions are rejected and cleared', async ({ request }
 
 test('health and the generic API error envelope remain available', async ({ request }) => {
   expect((await request.get('/health')).status()).toBe(200)
+  const wrongMethod = await request.put('/api/me', { headers: { Cookie: '' } })
+  expect(wrongMethod.status()).toBe(405)
   const response = await request.get('/api/unknown')
   expect(response.status()).toBe(404)
   await expect(response.json()).resolves.toMatchObject({ error: { code: 'not_found', message: expect.any(String) } })

@@ -6,6 +6,7 @@ resources:
   - ../../base
   - datastore-secret.yaml
   - test-job.yaml
+  - auth-outage-job.yaml
 images:
   - name: dsa-backend
     newTag: e2e
@@ -32,7 +33,7 @@ patches:
         value: Never
   - target:
       kind: Job
-      name: dsa-e2e
+      name: dsa-e2e(-auth-outage)?
     patch: |-
       - op: replace
         path: /spec/template/spec/containers/0/imagePullPolicy
