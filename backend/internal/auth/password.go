@@ -42,10 +42,11 @@ func VerifyPassword(encoded, password string) bool {
 	}
 	values := make([]uint32, 3)
 	for i, prefix := range []string{"m=", "t=", "p="} {
-		if !strings.HasPrefix(params[i], prefix) {
+		value, ok := strings.CutPrefix(params[i], prefix)
+		if !ok {
 			return false
 		}
-		n, err := strconv.ParseUint(strings.TrimPrefix(params[i], prefix), 10, 32)
+		n, err := strconv.ParseUint(value, 10, 32)
 		if err != nil || n == 0 {
 			return false
 		}
