@@ -75,3 +75,14 @@ func (h *Handler) UpdateUserAccount(ctx context.Context, req generated.UpdateUse
 	}
 	return generated.UpdateUserAccount200JSONResponse(userAccountResponse(user)), nil
 }
+
+func (h *Handler) ReorderUserAccounts(ctx context.Context, req generated.ReorderUserAccountsRequestObject) (generated.ReorderUserAccountsResponseObject, error) {
+	err := h.auth.ReorderUsers(ctx, req.Body.UserIds)
+	if errors.Is(err, store.ErrUserIDsMismatch) {
+		return generated.ReorderUserAccounts422JSONResponse(httpresponse.NewError("user_ids_mismatch", "User Accounts changed. Reload the complete list and reorder again.")), nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return generated.ReorderUserAccounts204Response{}, nil
+}

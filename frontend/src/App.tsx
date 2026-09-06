@@ -1,5 +1,7 @@
 import { useState, type ReactNode, type SubmitEventHandler } from 'react'
 import { Link, Navigate, Outlet, Route, Routes } from 'react-router-dom'
+import { BulkUsersPage } from '@/BulkUsers'
+import { NavigationGuard } from '@/navigation-guard'
 import { AdminUsersPage } from '@/AdminUsers'
 import { $api } from '@/api/client'
 import { AuthLayout, ProtectedLayout, useAuth } from '@/auth'
@@ -105,7 +107,7 @@ function AuthenticatedLayout() {
 
 function App() {
   return (
-    <div className="flex min-h-svh flex-col">
+    <NavigationGuard><div className="flex min-h-svh flex-col">
       <Routes>
         <Route element={<AuthLayout loadingElement={<Page>Loading...</Page>} />}>
           <Route path="/login" element={<LoginPage />} />
@@ -114,12 +116,13 @@ function App() {
             <Route element={<AuthenticatedLayout />}>
               <Route path="/" element={<HomePage />} />
               <Route path="/admin/users" element={<AdminUsersPage />} />
+              <Route path="/admin/users/bulk" element={<BulkUsersPage />} />
               <Route path="*" element={<NotFoundPage />} />
             </Route>
           </Route>
         </Route>
       </Routes>
-    </div>
+    </div></NavigationGuard>
   )
 }
 

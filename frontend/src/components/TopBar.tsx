@@ -1,9 +1,11 @@
+import { useNavigationGuard } from '@/navigation-guard'
 import { Link } from 'react-router-dom'
 import { $api } from '@/api/client'
 import { useAuth } from '@/auth'
 import { Button } from '@/components/ui/button'
 
 export function TopBar() {
+  const { canLeave } = useNavigationGuard()
   const { setUser } = useAuth()
   const logout = $api.useMutation('delete', '/api/session', {
     onSuccess: () => setUser(null),
@@ -19,7 +21,7 @@ export function TopBar() {
           type="button"
           variant="ghost"
           className="h-11 text-base hover:bg-top-bar-foreground/15 hover:text-top-bar-foreground focus-visible:ring-top-bar-foreground"
-          onClick={() => logout.mutate({})}
+          onClick={() => { if (canLeave()) logout.mutate({}) }}
           disabled={logout.isPending}
         >
           Logout
