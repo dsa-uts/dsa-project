@@ -60,28 +60,53 @@ tasks:
     cmds:
       - nix build .#frontend-image
 
-  e2e:image:build:
-    desc: Build the deployed public-interface test image
-    cmds:
-      - nix build .#e2e-image
-
   images:build:
-    desc: Build all container images
+    desc: Build application container images
     cmds:
-      - nix build -L .#backend-image .#frontend-image .#e2e-image
+      - nix build -L .#backend-image .#frontend-image
 
-  test:
-    aliases: [e2e:test]
-    desc: Run deployed public-interface tests on the configured k3s cluster
+  e2e:install:
+    desc: Install host test dependencies from the lockfile
+    dir: e2e
     cmds:
-      - nu scripts/e2e.nu
+      - npm ci
 
-  k3d:test:
-    desc: Run deployed public-interface tests on an existing k3d cluster
-    requires:
-      vars: [K3D_CLUSTER]
+  e2e:up:
+    desc: Build and deploy E2E applications, preserving existing data
     cmds:
-      - nu scripts/e2e.nu --k3d-cluster {{.K3D_CLUSTER}}
+      - nu scripts/e2e.nu up {{.CLI_ARGS}}
+
+  e2e:reset:
+    desc: Clear the E2E database and apply migrations and seed
+    cmds:
+      - nu scripts/e2e.nu reset
+
+  e2e:test:
+    aliases: [test]
+    desc: Run host Playwright tests against the existing deployment
+    dir: e2e
+    cmds:
+      - npm test -- {{.CLI_ARGS}}
+
+  e2e:test:outage:
+    desc: Stop the E2E database, test authentication failures, and restore it
+    cmds:
+      - bash scripts/e2e-outage.sh {{.CLI_ARGS}}
+
+  e2e:typecheck:
+    dir: e2e
+    cmds:
+      - npm run typecheck
+
+  e2e:diagnostics:
+    desc: Print E2E workload logs and events
+    cmds:
+      - nu scripts/e2e.nu diagnostics
+
+  e2e:down:
+    desc: Delete the E2E namespace and its data
+    cmds:
+      - nu scripts/e2e.nu down
 
   codegen:generate:
     desc: Generate backend and frontend code from the OpenAPI contract

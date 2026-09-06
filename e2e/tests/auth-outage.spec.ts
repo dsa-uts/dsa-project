@@ -1,10 +1,9 @@
 import { expect, test } from '@playwright/test'
 
-// scripts/e2e.nu runs this in a separate Job after stopping PostgreSQL in the
+// scripts/e2e-outage.sh runs this on the host after stopping PostgreSQL in the
 // isolated test namespace. Assertions still use only the public HTTP interface.
 test('authentication backend outage returns 500 before input validation', async ({ request }) => {
   test.skip(process.env.E2E_AUTH_OUTAGE !== '1', 'Requires the isolated datastore outage phase')
-  test.setTimeout(180_000)
   const headers = { Cookie: '__Host-dsa_session=outage-test-token' }
   for (const response of [
     await request.get('/api/me', { headers }),

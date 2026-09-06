@@ -5,14 +5,10 @@ resources:
   - namespace.yaml
   - ../../base
   - datastore-secret.yaml
-  - test-job.yaml
-  - auth-outage-job.yaml
 images:
   - name: dsa-backend
     newTag: e2e
   - name: dsa-frontend
-    newTag: e2e
-  - name: dsa-e2e
     newTag: e2e
 patches:
   - target:
@@ -32,13 +28,6 @@ patches:
         path: /spec/template/spec/containers/0/imagePullPolicy
         value: Never
   - target:
-      kind: Job
-      name: dsa-e2e(-auth-outage)?
-    patch: |-
-      - op: replace
-        path: /spec/template/spec/containers/0/imagePullPolicy
-        value: Never
-  - target:
       kind: PersistentVolumeClaim
       name: dsa-postgresql
     patch: |-
@@ -51,10 +40,4 @@ patches:
     patch: |-
       - op: add
         path: /spec/rules/0/host
-        value: traefik.kube-system.svc.cluster.local
-      - op: copy
-        from: /spec/rules/0
-        path: /spec/rules/-
-      - op: replace
-        path: /spec/rules/1/host
-        value: localhost
+        value: e2e.localhost
