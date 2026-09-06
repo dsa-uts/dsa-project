@@ -6,18 +6,16 @@ test('authentication backend outage returns 500 before input validation', async 
   test.skip(process.env.E2E_AUTH_OUTAGE !== '1', 'Requires the isolated datastore outage phase')
   test.setTimeout(180_000)
   const headers = { Cookie: '__Host-dsa_session=outage-test-token' }
-  const me = await request.get('/api/me', { headers })
-  expect(me.status()).toBe(500)
-  expect(await me.json()).toEqual({ error: { code: 'internal', message: 'Failed to get current user.' } })
-  expect(me.headers()['cache-control']).toBe('no-store')
-  expect(me.headers()['set-cookie']).toBeUndefined()
   for (const response of [
+    await request.get('/api/me', { headers }),
     await request.get('/api/admin/users', { headers }),
     await request.post('/api/admin/users', { headers, data: {} }),
     await request.patch('/api/admin/users/not-a-uuid', { headers, data: {} }),
   ]) {
     expect(response.status()).toBe(500)
-    expect(await response.json()).toMatchObject({ error: { code: 'internal_server_error' } })
+    expect(await response.json()).toEqual({
+      error: { code: 'internal_server_error', message: 'Internal server error.' },
+    })
     expect(response.headers()['cache-control']).toBe('no-store')
     expect(response.headers()['set-cookie']).toBeUndefined()
   }

@@ -7,11 +7,9 @@ import (
 	"github.com/getkin/kin-openapi/openapi3"
 )
 
-const accessPolicyExtension = "x-access-policy"
-
 // ValidateAccessPolicies checks every operation before any API route is registered.
-// Only explicit public access or a single cookie requirement is supported; neither
-// inherited security nor alternative requirements may silently grant access.
+// Each operation declares public access or sessionAuth requirements explicitly.
+// A sessionAuth requirement declares at most one minimum Role.
 func ValidateAccessPolicies(spec *openapi3.T) error {
 	for path, item := range spec.Paths.Map() {
 		for method, operation := range item.Operations() {
@@ -31,26 +29,25 @@ func ValidateAccessPolicies(spec *openapi3.T) error {
 }
 
 func validateAccessPolicy(operation *openapi3.Operation) error {
-	policy, ok := operation.Extensions[accessPolicyExtension].(string)
-	if !ok {
-		return fmt.Errorf("%s must be a string", accessPolicyExtension)
+	if operation.Security == nil {
+		return fmt.Errorf("explicit security is required")
 	}
-	switch policy {
-	case "public":
-		if operation.Security == nil || len(*operation.Security) != 0 {
-			return fmt.Errorf("public requires explicit security: []")
+	if len(*operation.Security) > 1 {
+		return fmt.Errorf("at most one security requirement is supported")
+	}
+	for _, requirement := range *operation.Security {
+		roles, ok := requirement["sessionAuth"]
+		if !ok || len(requirement) != 1 {
+			return fmt.Errorf("each security requirement must contain only sessionAuth")
 		}
-	case "authenticated", "admin":
-		if operation.Security == nil || len(*operation.Security) != 1 {
-			return fmt.Errorf("%s requires exactly one sessionAuth requirement", policy)
+		if len(roles) > 1 {
+			return fmt.Errorf("sessionAuth accepts at most one minimum Role")
 		}
-		requirement := (*operation.Security)[0]
-		scopes, ok := requirement["sessionAuth"]
-		if !ok || len(requirement) != 1 || len(scopes) != 0 {
-			return fmt.Errorf("%s requires only sessionAuth with no scopes", policy)
+		for _, role := range roles {
+			if !auth.AllowsRole(role, role) {
+				return fmt.Errorf("unknown sessionAuth Role %q", role)
+			}
 		}
-	default:
-		return fmt.Errorf("unknown %s %q", accessPolicyExtension, policy)
 	}
 	return nil
 }

@@ -14,7 +14,8 @@ import (
 )
 
 func init() {
-	// kin-openapi does not enable UUID validation by default. Register once,
+	// kin-openapi does not enable UUID validation by default. Since v0.148.0,
+	// registered validators also apply to OpenAPI 3.1. Register once,
 	// before serving requests, so invalid path parameters produce 422 here
 	// instead of 400 from generated UUID binding after this middleware.
 	openapi3.DefineStringFormatValidator("uuid", openapi3.NewCallbackValidator(uuid.Validate))
