@@ -1,7 +1,6 @@
 package app_test
 
 import (
-	"context"
 	"strings"
 	"testing"
 
@@ -9,7 +8,7 @@ import (
 )
 
 func TestConnectDatabaseRequiresPostgreSQLURL(t *testing.T) {
-	_, err := app.ConnectDatabase(context.Background(), "", false)
+	_, err := app.ConnectDatabase(t.Context(), "", false)
 	if err == nil || !strings.Contains(err.Error(), "PostgreSQL") {
 		t.Fatalf("ConnectDatabase() error = %v, want missing PostgreSQL configuration", err)
 	}

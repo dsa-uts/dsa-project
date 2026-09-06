@@ -72,8 +72,7 @@ func (s *AuthStore) UpdateUser(ctx context.Context, actorID, userID uuid.UUID, u
 		}
 		if update.Disabled != nil {
 			if *update.Disabled && user.DisabledAt == nil {
-				now := time.Now()
-				user.DisabledAt = &now
+				user.DisabledAt = new(time.Now())
 				invalidate = true
 			}
 			if !*update.Disabled {

@@ -2,6 +2,7 @@
 package server
 
 import (
+	"cmp"
 	"errors"
 	"fmt"
 	"net/http"
@@ -47,10 +48,7 @@ func httpErrorHandler(err error, c echo.Context) {
 	}
 	// 404 → not_found のように status text から機械可読 code を導出する
 	code := strings.ReplaceAll(strings.ToLower(http.StatusText(status)), " ", "_")
-	if code == "" {
-		code = "error"
-	}
-	if err := c.JSON(status, httpresponse.NewError(code, message)); err != nil {
+	if err := c.JSON(status, httpresponse.NewError(cmp.Or(code, "error"), message)); err != nil {
 		c.Logger().Error(err)
 	}
 }
