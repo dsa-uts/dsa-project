@@ -109,6 +109,7 @@ jobs:
     timeout-minutes: 20
     env:
       K3D_CLUSTER: dsa-e2e
+      E2E_BASE_URL: http://e2e.localhost:8080
     steps:
       - uses: actions/checkout@v5
 
@@ -125,18 +126,48 @@ jobs:
           restore-prefixes-first-match: nix-${{ runner.os }}-
           save: false
 
+      - name: Resolve the E2E ingress hostname on the host
+        run: echo '127.0.0.1 e2e.localhost' | sudo tee -a /etc/hosts
+
       - name: Create k3d cluster
-        run: nix develop -c k3d cluster create "$K3D_CLUSTER" --wait --timeout 2m
+        run: nix develop -c k3d cluster create "$K3D_CLUSTER" --port '8080:80@loadbalancer' --wait --timeout 2m
+
+      - name: Install host test dependencies
+        run: nix develop -c task e2e:install
+
+      - name: Deploy E2E applications
+        run: nix develop -c task e2e:up -- --k3d-cluster "$K3D_CLUSTER"
+
+      - name: Reset E2E database
+        id: reset
+        run: nix develop -c task e2e:reset
 
       - name: Run deployed public-interface tests
-        run: nix develop -c task k3d:test
+        run: nix develop -c task e2e:test
 
-      - name: Print Kubernetes diagnostics
-        if: ${{ failure() }}
+      - name: Run authentication outage tests
+        if: ${{ !cancelled() && steps.reset.outcome == 'success' }}
+        run: nix develop -c task e2e:test:outage
+
+      - name: Save Kubernetes diagnostics
+        if: ${{ always() }}
         run: |
-          nix develop -c kubectl --namespace dsa-e2e get statefulset,deployment,job,pods -o wide || true
-          nix develop -c kubectl --namespace dsa-e2e logs job/dsa-e2e --all-containers=true --tail=300 || true
-          nix develop -c kubectl --namespace dsa-e2e get events --sort-by=.metadata.creationTimestamp || true
+          mkdir -p e2e/diagnostics
+          nix develop -c task e2e:diagnostics > e2e/diagnostics/kubernetes.log 2>&1
+
+      - name: Upload E2E diagnostics
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: deployed-e2e-diagnostics
+          path: |
+            e2e/test-results/
+            e2e/playwright-report/
+            e2e/diagnostics/
+
+      - name: Delete E2E environment
+        if: ${{ always() }}
+        run: nix develop -c task e2e:down
 
       - name: Delete k3d cluster
         if: ${{ always() }}

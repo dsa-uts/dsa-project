@@ -29,7 +29,8 @@ same VM's k3s containerd, and applies application manifests.
 - The development environment is named `dev`, not `local`, because it denotes
   an environment rather than the physical location of the cluster.
 - Deployed public-interface tests use an isolated namespace on the provided
-  cluster and remove that namespace after the run.
+  cluster. ADR 0018 supersedes automatic per-run deletion: local environments
+  persist until explicitly deleted, and CI saves diagnostics before cleanup.
 - k3s server runtime dependencies are removed from the development shell. The
   `k3s` CLI remains available for image import, alongside `kubectl` and
   `kustomize`.

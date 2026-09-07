@@ -2,8 +2,8 @@
 
 The local/production environment split and repository-managed cluster lifecycle
 described below are superseded by ADR 0016. The secret delivery assumed by
-those overlays is superseded by ADR 0017. The shared Kustomize base and ordinary
-Kubernetes Job decisions remain accepted.
+those overlays is superseded by ADR 0017. The shared Kustomize base remains accepted. ADR 0018 supersedes the
+ordinary Kubernetes test Job with host Playwright.
 
 The application is deployed from a shared Kustomize base with local and production overlays, replacing the internal Helm chart. The chart was not distributed and its values mostly passed directly into five Kubernetes resources, so Helm added a second template language without hiding meaningful deployment complexity. Local deployment imports Nix-built images into the single-node k3s containerd and renders immutable Nix hash tags into a temporary local overlay; production deployment uses GHCR images pinned by digest.
 
