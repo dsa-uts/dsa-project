@@ -4,6 +4,7 @@ import { baseURL } from './environment.js'
 const outage = process.env.E2E_AUTH_OUTAGE === '1'
 
 export default defineConfig({
+  globalSetup: outage ? undefined : './readiness.ts',
   testDir: './tests',
   testMatch: outage ? '**/auth-outage.spec.ts' : '**/*.spec.ts',
   testIgnore: outage ? [] : ['**/auth-outage.spec.ts'],
