@@ -252,6 +252,8 @@ test('browser bulk import retries failed rows and manual ordering saves or cance
   await page.getByRole('link', { name: 'User Accounts', exact: true }).click()
   await page.getByRole('button', { name: '離れる', exact: true }).click()
   await page.getByLabel('Search users').fill(first)
+  // Navigation can reuse the pre-import list until its refresh completes.
+  await expect(page.getByRole('cell', { name: first, exact: true })).toBeVisible()
   await page.getByLabel('State', { exact: true }).selectOption('active')
   await page.getByRole('button', { name: '並び順を編集' }).click()
   await expect(page.getByLabel('Search users')).toHaveCount(0)

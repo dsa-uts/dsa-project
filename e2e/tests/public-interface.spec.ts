@@ -161,7 +161,10 @@ test('invalid and expired sessions are rejected and cleared', async ({ request }
 })
 
 test('health and the generic API error envelope remain available', async ({ request }) => {
-  expect((await request.get('/health')).status()).toBe(200)
+  // Exercise connection reuse through the public ingress, not just its first response.
+  for (let attempt = 0; attempt < 3; attempt++) {
+    expect((await request.get('/health')).status()).toBe(200)
+  }
   const wrongMethod = await request.put('/api/me', { headers: { Cookie: '' } })
   expect(wrongMethod.status()).toBe(405)
   const response = await request.get('/api/unknown')

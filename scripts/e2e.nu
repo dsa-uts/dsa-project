@@ -15,7 +15,7 @@ def repo-root [] {
 def import-k3d-images [cluster: string, images: list<record>] {
   for image in $images {
     stage import $"Loading ($image.reference) into Docker ..."
-    let load = run-external $image.path | ^docker image load | complete
+    let load = do { ^docker image load --input $image.path } | complete
     if $load.exit_code != 0 {
       print-command-result $load
       error make { msg: $"failed to load ($image.reference) into Docker" }
@@ -68,19 +68,24 @@ def wait-for-application [] {
 
 def "main up" [--k3d-cluster: string] {
   let root = repo-root
-  require-cluster
-  let images = build-images $root $image_specifications
+  let context = if $k3d_cluster == null { 'orbstack' } else { $"k3d-($k3d_cluster)" }
+  require-cluster $context
+  let images = build-images $root $image_specifications --system (cluster-image-system)
   if $k3d_cluster == null {
-    import-k3s-images $images
+    import-orbstack-images $images
   } else {
     import-k3d-images $k3d_cluster $images
   }
-  let manifests = render-manifests $root e2e $images
+  let overlay = if $k3d_cluster == null { 'e2e' } else { 'e2e-ci' }
+  let manifests = render-manifests $root $overlay $images
   stage apply 'Applying E2E manifests without deleting existing data ...'
   let result = $manifests | ^kubectl apply -f - | complete
   print-command-result $result
   if $result.exit_code != 0 { error make { msg: 'failed to apply E2E manifests; environment retained' } }
   wait-for-application
+  let default_url = if $k3d_cluster == null { 'https://dsa-e2e.k8s.orb.local' } else { 'http://e2e.localhost:8080' }
+  let url = $env.E2E_BASE_URL? | default $default_url
+  stage ready $"E2E: ($url)"
 }
 
 # Only this explicit command clears the database. Restarting the backend applies
@@ -104,9 +109,10 @@ def "main reset" [] {
   if $reset != null { error make { msg: $reset } }
 }
 
-def "main diagnostics" [] { diagnose-e2e }
+def "main diagnostics" [] { require-cluster; diagnose-e2e }
 
 def "main down" [] {
+  require-cluster
   run-checked 'failed to delete the E2E namespace' [
     kubectl delete namespace $e2e_namespace --ignore-not-found --wait=true --timeout=2m
   ] | print

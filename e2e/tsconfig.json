@@ -5,7 +5,8 @@
     "noEmit": true,
     "strict": true,
     "target": "ES2022",
-    "types": ["node"]
+    "types": ["node"],
+    "allowImportingTsExtensions": true
   },
-  "include": ["environment.ts", "playwright.config.ts", "tests/**/*.ts"]
+  "include": ["environment.ts", "readiness.ts", "playwright.config.ts", "tests/**/*.ts"]
 }

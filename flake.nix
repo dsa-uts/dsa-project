@@ -15,6 +15,7 @@
       systems = [
         "x86_64-linux"
         "aarch64-linux"
+        "aarch64-darwin"
       ];
       eachSystem = f: lib.genAttrs systems (system: f nixpkgs.legacyPackages.${system});
       packagesFor = eachSystem (
@@ -26,9 +27,11 @@
         in
         {
           inherit backend frontend e2e;
+          kustomize-build = import ./nix/kustomize-check.nix { inherit pkgs; };
+        }
+        // lib.optionalAttrs pkgs.stdenv.isLinux {
           backend-image = import ./nix/backend-image.nix { inherit pkgs backend; };
           frontend-image = import ./nix/frontend-image.nix { inherit pkgs frontend; };
-          kustomize-build = import ./nix/kustomize-check.nix { inherit pkgs; };
         }
       );
     in

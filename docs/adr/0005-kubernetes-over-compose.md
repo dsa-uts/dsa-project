@@ -1,5 +1,7 @@
 # Kubernetes (k3s) over Docker Compose
 
+See [ADR 0019](0019-orbstack-development.md) for the superseding OrbStack development, image delivery, ingress, and host-browser decisions.
+
 The Helm-specific deployment consequence below is superseded by ADR 0013. The
 decision to run the platform on k3s remains accepted. ADR 0016 supersedes the
 repository-managed k3s lifecycle described below.

@@ -26,10 +26,8 @@ tasks:
 
   backend:image:build:
     desc: Refresh dependencies and build the backend container image
-    deps:
-      - backend:deps:refresh
     cmds:
-      - nix build .#backend-image
+      - nu scripts/images.nu backend
 
   frontend:install:
     desc: Install frontend dependencies from the lockfile
@@ -58,18 +56,25 @@ tasks:
   frontend:image:build:
     desc: Build the frontend container image
     cmds:
-      - nix build .#frontend-image
+      - nu scripts/images.nu frontend
 
   images:build:
     desc: Build application container images
     cmds:
-      - nix build -L .#backend-image .#frontend-image
+      - nu scripts/images.nu
+
+  cluster:setup:
+    desc: Install or update the pinned Traefik ingress controller
+    cmds:
+      - nu scripts/cluster.nu setup {{.CLI_ARGS}}
 
   e2e:install:
-    desc: Install host test dependencies from the lockfile
+    desc: Install host test dependencies and macOS Chromium
     dir: e2e
     cmds:
       - npm ci
+      - cmd: npx playwright install chromium
+        platforms: [darwin]
 
   e2e:up:
     desc: Build and deploy E2E applications, preserving existing data
@@ -119,7 +124,7 @@ tasks:
       - nu scripts/codegen.nu check
 
   deploy:
-    desc: Build and deploy the complete application to the configured k3s cluster
+    desc: Build and deploy the complete application to OrbStack
     cmds:
       - nu scripts/deploy.nu deploy
 

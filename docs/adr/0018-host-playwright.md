@@ -1,5 +1,7 @@
 # Host Playwright against the deployed public interface
 
+See [ADR 0019](0019-orbstack-development.md) for the superseding OrbStack development, image delivery, ingress, and host-browser decisions.
+
 Local Linux VM and CI runners execute Playwright from the working directory in the same Nix browser environment. Applications and PostgreSQL remain in the `dsa-e2e` Kubernetes namespace. This supersedes the test Job/image and per-run namespace lifecycle in ADRs 0012 and 0013, while preserving their public HTTP test seam and shared Kustomize base. Test-only edits no longer rebuild or import an image or build test sources with Nix.
 
 Shared Ingress routes `localhost` to development and `e2e.localhost` to E2E. The host resolver must resolve the latter for both Node and the browser; `E2E_BASE_URL` selects the reachable ingress URL (CI publishes the ingress on port 8080). A different hostname requires a matching Ingress rule. Ports alone do not select namespaces.
