@@ -28,16 +28,13 @@ patches:
         path: /spec/template/spec/containers/0/imagePullPolicy
         value: Never
   - target:
-      kind: PersistentVolumeClaim
-      name: dsa-postgresql
-    patch: |-
-      - op: add
-        path: /spec/storageClassName
-        value: local-path
-  - target:
       kind: Ingress
       name: dsa
     patch: |-
       - op: add
         path: /spec/rules/0/host
-        value: e2e.localhost
+        value: dsa-e2e.k8s.orb.local
+      # OrbStack supplies the certificate; Traefik must route TLS on web too.
+      - op: add
+        path: /metadata/annotations/traefik.ingress.kubernetes.io~1router.tls
+        value: "true"

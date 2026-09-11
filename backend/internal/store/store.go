@@ -6,6 +6,7 @@ package store
 import (
 	"context"
 	"database/sql"
+	"time"
 
 	"github.com/uptrace/bun"
 	"github.com/uptrace/bun/dialect/pgdialect"
@@ -17,7 +18,12 @@ import (
 
 // Open creates a PostgreSQL handle. Callers must Ping before serving requests.
 func Open(dsn string) *bun.DB {
-	sqldb := sql.OpenDB(pgdriver.NewConnector(pgdriver.WithDSN(dsn)))
+	// A missing Kubernetes Service endpoint can drop connection attempts instead
+	// of rejecting them. Bound dialing so API failures return promptly.
+	sqldb := sql.OpenDB(pgdriver.NewConnector(
+		pgdriver.WithDSN(dsn),
+		pgdriver.WithDialTimeout(2*time.Second),
+	))
 	return bun.NewDB(sqldb, pgdialect.New())
 }
 

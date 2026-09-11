@@ -130,7 +130,10 @@ jobs:
         run: echo '127.0.0.1 e2e.localhost' | sudo tee -a /etc/hosts
 
       - name: Create k3d cluster
-        run: nix develop -c k3d cluster create "$K3D_CLUSTER" --port '8080:80@loadbalancer' --wait --timeout 2m
+        run: nix develop -c k3d cluster create "$K3D_CLUSTER" --port '8080:80@loadbalancer' --k3s-arg '--disable=traefik@server:*' --wait --timeout 2m
+
+      - name: Install shared Traefik ingress controller
+        run: nix develop -c task cluster:setup -- --k3d-cluster "$K3D_CLUSTER"
 
       - name: Install host test dependencies
         run: nix develop -c task e2e:install

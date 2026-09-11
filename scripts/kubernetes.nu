@@ -12,7 +12,15 @@ export def stage [name: string, message: string] {
   print $"[($name)] ($message)"
 }
 
-export def require-cluster [] {
+# Keep image loading, manifests, reset, and diagnostics on the same cluster.
+export def require-cluster [expected?: string] {
+  let context = if $expected != null { $expected } else if ($env.K3D_CLUSTER? | default '') != '' {
+    $"k3d-($env.K3D_CLUSTER)"
+  } else { 'orbstack' }
+  let current = run-checked 'failed to read kubectl context' [kubectl config current-context] | str trim
+  if $current != $context {
+    error make { msg: $"expected kubectl context ($context), got ($current); select it before retrying" }
+  }
   let connection = do { ^kubectl --request-timeout=5s get --raw=/readyz } | complete
   if $connection.exit_code != 0 {
     print --stderr ($connection.stderr | str trim)
@@ -29,19 +37,38 @@ export def print-command-result [result: record] {
   }
 }
 
-export def build-images [root: path, specifications: list<record>] {
-  stage dependencies 'Refreshing backend dependency metadata ...'
-  run-checked 'failed to refresh backend dependency metadata' [
-    nu ($root | path join scripts backend-deps.nu) refresh
-  ] | ignore
+export def cluster-image-system [] {
+  let nodes = run-checked 'failed to read node architectures' [kubectl get nodes -o json] | from json
+  let architectures = $nodes.items | each { |node| $node.status.nodeInfo.architecture } | uniq
+  if ($architectures | length) != 1 {
+    error make { msg: 'image import requires a cluster with a single architecture' }
+  }
+  match $architectures.0 {
+    arm64 => 'aarch64-linux'
+    amd64 => 'x86_64-linux'
+    _ => { error make { msg: $"unsupported node architecture: ($architectures.0)" } }
+  }
+}
+
+export def build-images [root: path, specifications: list<record>, --system: string] {
+  let target = if $system != null { $system } else {
+    run-checked 'failed to determine Nix host system' [nix eval --impure --raw --expr builtins.currentSystem]
+      | str trim | str replace '-darwin' '-linux'
+  }
+  if 'backend-image' in $specifications.attribute {
+    stage dependencies 'Refreshing backend dependency metadata ...'
+    run-checked 'failed to refresh backend dependency metadata' [
+      nu ($root | path join scripts backend-deps.nu) refresh
+    ] | ignore
+  }
 
   $specifications | each { |specification|
     stage build $"Building the ($specification.label) image ..."
     let path = run-checked $"failed to build the ($specification.label) image" [
-      nix build --no-link --print-out-paths $"($root)#($specification.attribute)"
+      nix build --no-link --print-out-paths $"($root)#packages.($target).($specification.attribute)"
     ] | str trim
     let tag = run-checked $"failed to evaluate the ($specification.label) image tag" [
-      nix eval --raw $"($root)#($specification.attribute).imageTag"
+      nix eval --raw $"($root)#packages.($target).($specification.attribute).imageTag"
     ] | str trim
     {
       name: $specification.name
@@ -51,15 +78,12 @@ export def build-images [root: path, specifications: list<record>] {
   }
 }
 
-export def import-k3s-images [images: list<record>] {
-  # sudo commonly replaces PATH with secure_path, which excludes Nix store paths.
-  let k3s = which k3s | get 0.path
+export def import-orbstack-images [images: list<record>] {
   for image in $images {
-    stage import $"Importing ($image.reference) into k3s; sudo is required ..."
-    run-external $image.path | ^sudo $k3s ctr -n k8s.io images import -
-    if $env.LAST_EXIT_CODE != 0 {
-      error make { msg: $"failed to import ($image.reference) into k3s" }
-    }
+    stage import $"Loading ($image.reference) into OrbStack ..."
+    run-checked $"failed to load ($image.reference) into OrbStack" [
+      docker --context orbstack load --input $image.path
+    ] | print
   }
 }
 

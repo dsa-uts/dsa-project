@@ -1,5 +1,7 @@
 # Development Kubernetes Secret
 
+See [ADR 0019](0019-orbstack-development.md) for the superseding OrbStack development, image delivery, ingress, and host-browser decisions.
+
 Status: accepted
 
 OpenBao is removed because its operational cost is not justified during the

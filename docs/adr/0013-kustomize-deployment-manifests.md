@@ -1,5 +1,7 @@
 # Kustomize Deployment Manifests Without Helm
 
+See [ADR 0019](0019-orbstack-development.md) for the superseding OrbStack development, image delivery, ingress, and host-browser decisions.
+
 The local/production environment split and repository-managed cluster lifecycle
 described below are superseded by ADR 0016. The secret delivery assumed by
 those overlays is superseded by ADR 0017. The shared Kustomize base remains accepted. ADR 0018 supersedes the

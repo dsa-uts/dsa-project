@@ -1,5 +1,7 @@
 # Externally Managed k3s
 
+See [ADR 0019](0019-orbstack-development.md) for the superseding OrbStack development, image delivery, ingress, and host-browser decisions.
+
 Status: accepted
 
 The repository assumes an available, long-running k3s cluster whose lifecycle

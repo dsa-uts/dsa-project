@@ -72,9 +72,9 @@ def main [] {
 
 def 'main deploy' [] {
   let root = repo-root
-  require-cluster
-  let images = build-images $root $image_specifications
-  import-k3s-images $images
+  require-cluster orbstack
+  let images = build-images $root $image_specifications --system (cluster-image-system)
+  import-orbstack-images $images
   let manifests = render-manifests $root dev $images
 
   stage apply 'Applying the development Kubernetes manifests ...'
@@ -99,9 +99,17 @@ def 'main deploy' [] {
     print-command-result $rollout
   }
 
-  stage readiness 'Waiting for all application Pods to become Ready ...'
+  stage readiness 'Waiting for current application Pods to become Ready ...'
+  # A completed rollout can still leave terminating Pods in the selector.
+  # Waiting on those Pods can time out after they have already been deleted.
+  let pods = run-checked 'failed to list application Pods' [
+    kubectl --namespace $development_namespace get pods $"--selector=($application_selector)" -o json
+  ] | from json | get items
+    | where { |pod| $pod.metadata.deletionTimestamp? == null }
+    | each { |pod| $"pod/($pod.metadata.name)" }
+  if ($pods | is-empty) { error make { msg: 'no current application Pods found' } }
   let readiness = do {
-    ^kubectl --namespace $development_namespace wait pod $"--selector=($application_selector)" --for=condition=Ready --timeout=5m
+    ^kubectl --namespace $development_namespace wait ...$pods --for=condition=Ready --timeout=5m
   } | complete
   if $readiness.exit_code != 0 {
     print-command-result $readiness
@@ -110,13 +118,12 @@ def 'main deploy' [] {
   }
   print-command-result $readiness
 
-  let node_ip = ^kubectl get nodes -o 'jsonpath={.items[0].status.addresses[?(@.type=="InternalIP")].address}'
   print ''
-  stage ready $"Open: http://($node_ip)/"
+  stage ready 'Open: https://dsa.k8s.orb.local'
 }
 
 def 'main status' [] {
-  require-cluster
+  require-cluster orbstack
   development-status
 }
 
@@ -124,7 +131,7 @@ def 'main logs' [component: string = 'all'] {
   if $component != 'all' and $component not-in $components {
     error make { msg: $"unknown component '($component)'; expected one of: ($components | str join ', '), all" }
   }
-  require-cluster
+  require-cluster orbstack
   let selected_components = if $component == 'all' { $components } else { [$component] }
   for selected in $selected_components {
     component-logs $selected
@@ -132,7 +139,7 @@ def 'main logs' [component: string = 'all'] {
 }
 
 def 'main reset' [] {
-  require-cluster
+  require-cluster orbstack
   stage reset $"Deleting namespace/($development_namespace) and its development data ..."
   ^kubectl delete namespace $development_namespace --ignore-not-found --wait=true
 }
