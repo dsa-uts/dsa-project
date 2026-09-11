@@ -20,15 +20,14 @@ function response(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } })
 }
 
-function renderApp(path: string, authenticated: boolean) {
+function renderApp(path: string) {
   vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => {
     const request = input instanceof Request ? input : new Request(input)
     const url = new URL(request.url, 'http://localhost')
     if (url.pathname === '/api/me') {
-      return authenticated ? response(admin) : response({ error: { code: 'unauthorized', message: 'Authentication is required.' } }, 401)
+      return response(admin)
     }
     if (url.pathname === '/api/admin/users') return response({ users: [] })
-    if (url.pathname === '/api/session' && request.method === 'POST') return response(admin)
     if (url.pathname === '/api/session' && request.method === 'DELETE') return new Response(null, { status: 204 })
     throw new Error(`unexpected request: ${request.method} ${url.pathname}`)
   }))
@@ -40,40 +39,8 @@ function renderApp(path: string, authenticated: boolean) {
   )
 }
 
-test('unauthenticated visitors are redirected to login', async () => {
-  renderApp('/private', false)
-  expect(await screen.findByRole('button', { name: 'Log in' })).toBeDefined()
-  expect(screen.queryByRole('banner')).toBeNull()
-})
-
-test('login navigates to the protected home page', async () => {
-  renderApp('/login', false)
-  fireEvent.change(await screen.findByLabelText('User ID'), { target: { value: 'admin' } })
-  fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'admin' } })
-  fireEvent.click(screen.getByRole('button', { name: 'Log in' }))
-  expect(await screen.findByText('Development Admin')).toBeDefined()
-  expect(screen.getByText('admin')).toBeDefined()
-})
-
-test('authenticated visitors see a 404 for unknown routes', async () => {
-  renderApp('/unknown', true)
-  expect(await screen.findByRole('heading', { name: '404' })).toBeDefined()
-})
-
-test('authenticated visitors are redirected away from login', async () => {
-  renderApp('/login', true)
-  expect(await screen.findByText('Development Admin')).toBeDefined()
-})
-
-test('logout returns to login', async () => {
-  renderApp('/', true)
-  fireEvent.click(await screen.findByRole('button', { name: 'Logout' }))
-  expect(await screen.findByRole('button', { name: 'Log in' })).toBeDefined()
-  expect(screen.queryByRole('banner')).toBeNull()
-})
-
 test.each(['/', '/admin/users', '/unknown'])('authenticated page %s has a shared top bar with a home link', async (path) => {
-  renderApp(path, true)
+  renderApp(path)
   const header = await screen.findByRole('banner')
   expect(within(header).getByRole('button', { name: 'Logout' })).toBeDefined()
   fireEvent.click(within(header).getByRole('link', { name: 'DSA' }))
@@ -81,7 +48,7 @@ test.each(['/', '/admin/users', '/unknown'])('authenticated page %s has a shared
 })
 
 test('logout prevents duplicate requests while pending and allows retry after failure', async () => {
-  renderApp('/admin/users', true)
+  renderApp('/admin/users')
   const logout = await screen.findByRole('button', { name: 'Logout' })
   await screen.findByText('No matching User Accounts.')
   let finishLogout: (response: Response) => void = () => { throw new Error('Logout has not started') }

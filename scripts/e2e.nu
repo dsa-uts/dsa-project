@@ -3,10 +3,6 @@
 use kubernetes.nu *
 
 const e2e_namespace = 'dsa-e2e'
-const image_specifications = [
-  { name: 'dsa-backend', attribute: 'backend-image', label: 'backend' }
-  { name: 'dsa-frontend', attribute: 'frontend-image', label: 'frontend' }
-]
 
 def repo-root [] {
   $env.FILE_PWD | path join .. | path expand
@@ -37,18 +33,7 @@ def diagnose-e2e [] {
   print-command-result $resources
 
   for component in [postgresql backend frontend] {
-    let selector = $"app.kubernetes.io/component=($component)"
-    stage diagnostics $"Current ($component) logs ..."
-    let current = do {
-      ^kubectl --namespace $e2e_namespace logs --selector $selector --all-containers=true --prefix --tail=200
-    } | complete
-    print-command-result $current
-
-    stage diagnostics $"Previous ($component) logs, when available ..."
-    let previous = do {
-      ^kubectl --namespace $e2e_namespace logs --selector $selector --all-containers=true --prefix --tail=200 --previous
-    } | complete
-    print-command-result $previous
+    component-logs $e2e_namespace $component
   }
 
   stage diagnostics 'Recent Kubernetes events ...'
