@@ -1,9 +1,5 @@
 # Development Kubernetes Secret
 
-See [ADR 0019](0019-orbstack-development.md) for the superseding OrbStack development, image delivery, ingress, and host-browser decisions.
-
-Status: accepted
-
 OpenBao is removed because its operational cost is not justified during the
 current development stage. The `dev` overlay provides a Git-tracked, explicitly
 non-production Kubernetes Secret with the fixed development PostgreSQL
@@ -31,8 +27,6 @@ base manifests to a particular product.
 
 ## Consequences
 
-- OpenBao, Helm, the Secrets Store CSI integration, and their scripts,
-  manifests, dependencies, runbooks, and research notes are removed.
 - The tracked development Secret must never be reused for production.
 - E2E and development provide environment-specific values under the same
   `dsa-datastore` Secret contract.

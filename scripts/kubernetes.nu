@@ -1,3 +1,8 @@
+export const image_specifications = [
+  { name: 'dsa-backend', attribute: 'backend-image', label: 'backend' }
+  { name: 'dsa-frontend', attribute: 'frontend-image', label: 'frontend' }
+]
+
 export def run-checked [description: string, args: list<string>] {
   let result = run-external ...$args | complete
   if $result.exit_code != 0 {
@@ -108,4 +113,19 @@ export def render-manifests [root: path, overlay: string, images: list<record>] 
     error make { msg: $"failed to render ($overlay) manifests" }
   }
   $result.stdout
+}
+
+export def component-logs [namespace: string, component: string] {
+  let selector = $"app.kubernetes.io/component=($component)"
+  stage logs $"Current logs for ($component) ..."
+  let current = do {
+    ^kubectl --namespace $namespace logs --selector $selector --all-containers=true --prefix --tail=200
+  } | complete
+  print-command-result $current
+
+  stage logs $"Previous container logs for ($component), when available ..."
+  let previous = do {
+    ^kubectl --namespace $namespace logs --selector $selector --all-containers=true --prefix --tail=200 --previous
+  } | complete
+  print-command-result $previous
 }

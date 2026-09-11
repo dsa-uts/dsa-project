@@ -10,28 +10,9 @@ const development_workloads = [
   { resource: 'deployment/dsa-frontend', component: 'frontend' }
 ]
 const components = $development_workloads.component
-const image_specifications = [
-  { name: 'dsa-backend', attribute: 'backend-image', label: 'backend' }
-  { name: 'dsa-frontend', attribute: 'frontend-image', label: 'frontend' }
-]
 
 def repo-root [] {
   $env.FILE_PWD | path join .. | path expand
-}
-
-def component-logs [component: string] {
-  let selector = $"app.kubernetes.io/component=($component)"
-  stage logs $"Current logs for ($component) ..."
-  let current = do {
-    ^kubectl --namespace $development_namespace logs --selector $selector --all-containers=true --prefix --tail=200
-  } | complete
-  print-command-result $current
-
-  stage logs $"Previous container logs for ($component), when available ..."
-  let previous = do {
-    ^kubectl --namespace $development_namespace logs --selector $selector --all-containers=true --prefix --tail=200 --previous
-  } | complete
-  print-command-result $previous
 }
 
 def development-status [] {
@@ -62,7 +43,7 @@ def diagnose-development [component?: string] {
 
   let selected_components = if $component == null { $components } else { [$component] }
   for selected in $selected_components {
-    component-logs $selected
+    component-logs $development_namespace $selected
   }
 }
 
@@ -134,7 +115,7 @@ def 'main logs' [component: string = 'all'] {
   require-cluster orbstack
   let selected_components = if $component == 'all' { $components } else { [$component] }
   for selected in $selected_components {
-    component-logs $selected
+    component-logs $development_namespace $selected
   }
 }
 

@@ -1,20 +1,17 @@
-# Deployed Public Interface Tests
+# Deployed Public Interface Tests with Host Playwright
 
-See [ADR 0019](0019-orbstack-development.md) for the superseding OrbStack development, image delivery, ingress, and host-browser decisions.
+Tests requiring PostgreSQL, a running backend, Ingress, or frontend observe the deployed public HTTP interface in an isolated Kubernetes namespace. Host Playwright reads test sources directly from the working directory, so test-only edits require no image build. Local development uses OrbStack and CI uses k3d with the same Kustomize base and application image definitions ([ADR 0019](0019-orbstack-development.md)).
 
-ADR 0013 replaces the Helm release and Helm Test mechanism described below with an isolated namespace and an ordinary Kubernetes test Job. ADR 0018 supersedes that Job runner with host Playwright and independently managed environment/data lifecycles. The deployed public-interface test seam remains accepted.
-
-Tests that need PostgreSQL or a running backend execute in an isolated namespace on k3s and observe only the deployed public HTTP interface, including browser-visible behavior. Pure logic keeps dependency-free unit tests, but testcontainers and tests that assemble the server in-process are retired so local development and CI exercise the same manifests, images, migrations, routing, and datastore integration.
-
-This ADR supersedes only the real-database and in-process HTTP test strategy from ADR 0011. ADR 0011's seam-limited interface decision remains in effect: store types stay concrete, and repository interfaces are not introduced solely for testing.
+Primary successful screen flows belong in browser E2E; API contracts difficult to reach through the UI use direct public HTTP requests from the same runner. Test data is created through public interfaces, not database assertions. Dependency-free logic and frontend-specific failures such as duplicate submission prevention and retry remain in unit tests. Stores stay concrete ([ADR 0011](0011-seam-limited-interfaces.md)).
 
 ## Considered Options
 
-- Keep testcontainers-based HTTP-seam tests alongside deployment tests. Rejected because it preserves a second application assembly and dependency-provisioning path that can pass while the deployed system is broken.
-- Test the deployed backend directly while testing the frontend separately. Rejected because it misses failures in browser execution, same-origin API calls, and ingress routing.
+- Testcontainers or in-process HTTP tests alongside deployment tests. Rejected because a second application assembly can pass while manifests, migrations, or routing are broken.
+- Test only the deployed backend and test frontend separately. Rejected because this misses browser execution and same-origin routing failures.
+- A Kubernetes test Job/image. Rejected because host Playwright supports direct browser debugging and test edits without rebuilding a runner image.
 
 ## Consequences
 
-- Local tests use host k3s and CI uses k3d, but both run the same Kustomize base and Kubernetes test Job image; only the overlay, cluster provisioning, and image delivery differ.
-- Each run uses an isolated test namespace. PostgreSQL is test infrastructure, not a mock, and test state is created through the public interface.
-- Tests that require the deployed system are slower than in-process tests, so only pure dependency-free behavior remains in the fast unit-test suite.
+Environment setup, database reset, normal tests, outage tests, diagnostics, and deletion remain independent commands. Local environments and data persist after success or failure until explicitly reset or deleted, allowing inspection. CI saves traces and workload diagnostics before cleanup.
+
+Reset stops the backend, recreates the schema, and restarts the backend through the normal migration/seed path. Normal tests create unique User Accounts through HTTP; one worker and sequential commands avoid shared-state races. Outage tests restore PostgreSQL after success, failure, or catchable termination and report recovery errors separately.

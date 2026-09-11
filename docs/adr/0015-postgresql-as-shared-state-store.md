@@ -1,11 +1,5 @@
 # PostgreSQL as the Shared State Store
 
-The OpenBao integration mentioned below is superseded by ADR 0017. PostgreSQL
-remains the shared state store.
-
-Status: accepted
-
-Redis is removed from the deployment before the first production release.
 PostgreSQL owns durable domain state, login sessions with an `expires_at`
 timestamp, workflow and job progress, and the job queue shared by backend and
 Judge Pods. Expired session rows may be deleted asynchronously; authorization
@@ -20,7 +14,7 @@ not sessions, mutable progress, job claims, or notifications.
 ## Considered Options
 
 - Keep Redis for sessions, progress caches, and job notifications. Rejected
-  because these features have not been implemented yet, the expected deployment
+  because the expected deployment
   is about 100 users, and a second datastore adds deployment, secret, monitoring,
   failure, and consistency concerns before measured load requires it.
 - Store transient shared state in object storage. Rejected because object stores
@@ -32,10 +26,8 @@ not sessions, mutable progress, job claims, or notifications.
 
 ## Consequences
 
-- Redis deployments, services, client dependencies, configuration, credentials,
-  and OpenBao access are removed.
 - Session expiry requires query-time checks, an index on `expires_at`, and an
-  eventual cleanup process when sessions are implemented.
+  eventual cleanup process.
 - Progress updates must be rate-limited or coalesced if measurements show
   excessive write amplification.
 - Job pickup may have polling latency. `LISTEN`/`NOTIFY` can reduce that latency
