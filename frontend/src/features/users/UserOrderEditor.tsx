@@ -3,7 +3,7 @@ import { DndContext, KeyboardSensor, MouseSensor, TouchSensor, closestCenter, us
 import { restrictToVerticalAxis } from '@dnd-kit/modifiers'
 import { SortableContext, arrayMove, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
-import { flexRender, getCoreRowModel, useReactTable, type ColumnDef, type Row } from '@tanstack/react-table'
+import { flexRender, tableFeatures, useTable, type ColumnDef, type Row } from '@tanstack/react-table'
 import { GripVertical } from 'lucide-react'
 import { fetchClient } from '@/api/client'
 import type { components } from '@/api/schema'
@@ -11,7 +11,8 @@ import { Button } from '@/components/ui/button'
 
 type User = components['schemas']['UserAccount']
 
-const columns: ColumnDef<User>[] = [
+const features = tableFeatures({})
+const columns: ColumnDef<typeof features, User>[] = [
   { id: 'move', header: '移動' },
   { accessorKey: 'userid', header: 'User ID' },
   { accessorKey: 'name', header: 'Display name' },
@@ -22,12 +23,12 @@ const screenReaderInstructions = {
   draggable: 'Space キーで行を持ち上げ、上下キーで移動します。Space キーで確定、Escape キーで取り消します。',
 }
 
-function SortableUserRow({ row, busy }: { row: Row<User>; busy: boolean }) {
+function SortableUserRow({ row, busy }: { row: Row<typeof features, User>; busy: boolean }) {
   const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, transition, isDragging } = useSortable({ id: row.id, disabled: busy })
   return <tr ref={setNodeRef}
     className={`relative border-t ${isDragging ? 'z-10 bg-accent shadow-lg' : 'bg-background'}`}
     style={{ transform: CSS.Translate.toString(transform), transition }}>
-    {row.getVisibleCells().map((cell) => <td key={cell.id} className="p-3">
+    {row.getAllCells().map((cell) => <td key={cell.id} className="p-3">
       {cell.column.id === 'move' ? <Button
         ref={setActivatorNodeRef}
         type="button" variant="ghost" size="icon" disabled={busy}
@@ -46,7 +47,7 @@ export function UserOrderEditor({ users, onCancel, onSaved, onMismatch }: { user
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const ids = useMemo(() => order.map((user) => user.id), [order])
-  const table = useReactTable({ data: order, columns, getCoreRowModel: getCoreRowModel(), getRowId: (user) => user.id })
+  const table = useTable({ features, data: order, columns, getRowId: (user) => user.id })
   const sensors = useSensors(
     useSensor(MouseSensor, { activationConstraint: { distance: 5 } }),
     useSensor(TouchSensor, { activationConstraint: { delay: 200, tolerance: 5 } }),
