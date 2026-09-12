@@ -7,7 +7,7 @@
 ## Conventions
 
 - Base path: `/api`
-- 認証: backend-managed session cookie。`HttpOnly` / `Secure` / `SameSite=Lax`。例外として [`POST /api/admin/resource-versions`](#post-apiadminresource-versions) の認証方式は未決定。
+- 認証: backend-managed session cookie。`HttpOnly` / `Secure` / `SameSite=Lax`。
 - ID: opaque な UUID 文字列。
 - Timestamp: RFC 3339 UTC 文字列。
 - User の埋め込みは常に 3 点セット `{"id": "uuid", "userid": "student001", "name": "山田 太郎"}` で統一する。
@@ -50,7 +50,7 @@
 | --- | --- |
 | Student | 自分の validation Submission と Request を作成・参照する。 |
 | Manager | evaluation の Submission / Request を管理し、全ユーザーの結果を参照する。 |
-| Admin | ユーザー、Project の表示順、Resource 登録の credential を管理する。 |
+| Admin | ユーザー、Project の表示順、Resource の手動インポートを管理する。 |
 | System Account | システムが自動作成する Request の actor。ログイン不可。 |
 
 ## Projects
@@ -466,35 +466,43 @@ private Artifact にはクライアント向けダウンロード API がない�
 
 Admin 専用。Student / Manager は `403`。
 
-### `POST /api/admin/resource-versions`
+### `POST /api/admin/resource-imports`
 
-Registration-only API。sandbox image の build / push 後に GitHub Actions が呼ぶ。登録フロー、Backend 側の validation、payload の意味は [resource.md](./resource.md) の「Resource Version 登録フロー」を正とする。
+Manual Resource Import。Adminが指定コミットの全Resourceを手動で取り込む。GitHub Actionsからは呼ばない。登録契約、変更判定、原子的な適用、監査は [resource.md](./resource.md) の「Resource Version 登録フロー」を正とする。
 
-- 認証: GitHub Actionsからの登録を認可する必要がある。具体的なcredentialと認証方式は未決定。
+- 認証: 通常のAdmin session cookieとCSRF対策。
+- source repositoryはBackend設定で固定。`source_ref` はmain履歴上の40桁commit SHA。
 
 ```json
 {
-  "resource_id": "dsa-basic",
-  "source_ref": "git-commit-sha",
-  "actions_run_id": "github-actions-run-id",
-  "sandbox_images": {
-    "default": {
-      "image": "ghcr.io/example/dsa-basic-sandbox",
-      "tag": "git-commit-sha",
-      "digest": "sha256:..."
-    }
-  }
+  "source_ref": "0123456789abcdef0123456789abcdef01234567"
 }
 ```
 
-- `sandbox_images` の key は Resource YAML の `sandbox-images` ID。
-- 登録成功の副作用として Queued Rerun(CONTEXT.md)を enqueue する: 新 Version に対し、Project × ユーザーごとに直近の non-archived validation Submission(遡り件数は運用設定値、既定 5)と、Project × Subject User ごとに最新の non-archived evaluation Submission 1 件へ、System Account 名義の Request を自動作成する。
-- Response: `201`
+image名・tag・digest、Actions Run IDは対象Gitコミットから読む。クライアントから上書きしない。
+
+- Response: `200`（同期的に全体の取り込みが完了、変更なしも成功）。
+
+```json
+{
+  "source_ref": "0123456789abcdef0123456789abcdef01234567",
+  "created_versions": [
+    {"project_id": "11111111-1111-4111-8111-111111111111", "version_id": "22222222-2222-4222-8222-222222222222"}
+  ],
+  "unchanged_project_ids": [],
+  "archived_project_ids": []
+}
+```
+
+- 新VersionごとにQueued Rerunをenqueueする。対象はProject × ユーザーごとの直近non-archived validation Submission（既定5件）とProject × Subject Userごとの最新non-archived evaluation Submission 1件。System Account名義とする。
+- 同じ実効内容の再取り込みはno-opで、VersionやRequestを重複作成しない。
 - Errors:
-  - `401`(token 不正)
-  - `409 version_already_registered`(同一 `source_ref` の再登録。GitHub Actions の再実行で起きうる)
-  - `422 invalid_resource_yaml`(Resource YAML の validation 失敗)
-  - `422 missing_image_digest`(全 `sandbox-images` ID に digest が揃っていない)
+  - `401`（未認証）、`403`（Admin以外）
+  - `422 invalid_source_ref`（対象repositoryのmain履歴にないcommit）
+  - `422 invalid_resource_yaml`（Schema・参照・依存関係などのvalidation失敗）
+  - `422 missing_image_digest`（全image lockが揃っていない）
+  - `422 stale_image_lock`（build入力とlockが一致しない）
+  - `503 resource_source_unavailable`（Git source取得失敗）
 
 ## 未定
 

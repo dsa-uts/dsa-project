@@ -8,51 +8,49 @@ Resource は GitHub org の private repository で管理する。main ブラン�
 
 ### Repository layout
 
-root manifest `resources.yaml` が各 Resource の `resource.yaml` を指す。
-
 ```yaml
 resources:
-  - id: dsa-basic
-    path: dsa-basic/resource.yaml
+  - id: ex1
+    path: ex1/resource.yaml
+sandbox-images:
+  default:
+    build:
+      context: sandbox
+      dockerfile: sandbox/Dockerfile
+      image: ghcr.io/dsa-uts/dsa-resource-sandbox
+      platforms: [linux/amd64]
+    lock: null
 ```
 
-Resource directory の構成例:
-
-```text
-dsa-basic/
-  resource.yaml
-  descriptions/judge.md
-  sandbox/Dockerfile
-  presets/Makefile
-  presets/check.sh
-  input/sample.txt
-  expected/test.stdout
-```
+共通 Dockerfile は root `sandbox/` に配置する。Resource は専用 directory に `resource.yaml`、課題説明、Preset、期待出力を持つ。
+`lock: null` は初回ビルド前であり、インポートできない。
 
 ### Resource Version 登録フロー
 
-1. main ブランチへの push で GitHub Actions が起動する。
-2. GitHub Actions は `sandbox-images` の build 定義から image を build / push し、`docker/build-push-action` の `outputs.digest` を取得する。
-3. GitHub Actions は Registration-only API(`POST /api/admin/resource-versions`、形は [api.md](./api.md))で Resource Version を登録する。
-4. Backend は private repository から `resources.yaml` と Resource YAML を取得して validate し、全 `sandbox-images` ID に digest が揃っていることを検証する。validation 失敗時は登録を reject する。
-5. source repository、branch、commit SHA、Actions run ID、image digest を監査ログに残す。
+Actions は main 更新時に source を検証し、未ビルドまたは入力ハッシュが変わったイメージのみ build / GHCR push する。手動で全イメージを再ビルドする入口も設ける。ビルド完了後、tag・digest・input-hash・source-ref・Actions Run IDを定義元YAMLへmainに直接コミットする。生成PRやBackend API呼び出しは行わない。
+
+公開処理は直列とし、開始時の最新mainで検証する。ビルド中にmainが進んだ場合は古い結果をコミットせず拒否し、後続Runで最新mainを処理する。push直前の競合もfast-forward制約で拒否する。生成コミット自身は不要な再ビルドを起動しない。説明文・テストのみの変更は共通build入力に含まれずdigestを維持する。
+
+Admin は main 履歴の commit SHA を指定して全 Resource を手動インポートする。Backend はそのコミット全体を取得し、Schema・参照・依存関係・全イメージlockの入力ハッシュ一致を検証する。未ビルド、失敗したbuild、digest未反映、stale lock は全体をrejectする。取り込み完了までは現在のVersionを維持する。
+
+Backend は各 Resource の実効内容(Resource YAMLのWorkflow/Job/表示名等（image build/lock宣言は除く）、参照する説明/Preset/stdin/expected bytes、解決済みimage名・tag・digest)を比較し、変更Resourceだけ新Versionを作る。map順・監査metadataだけの差や未参照イメージ変更は変更としない。共通digest変更は参照する全Resourceの変更となる。manifestによるactive集合更新とVersion更新を原子的に適用し、同一内容はno-op。新VersionだけQueued Rerunをenqueueする。
+
+repository、指定commit、Admin、build source-ref、Actions Run ID、image tag/digestを監査する。Backend実装は別タスクとする。
 
 ### Digest Pinning
 
-Resource YAML は source declaration であり、build 後に決まる image digest を持たない。digest は Resource Version metadata として Backend / Judge が保持し、Request 実行時は `image@sha256:...` を pull する。
-
-Resource Version metadata の例:
+イメージのtag・digestはGitの定義元YAMLに保存し、Backend metadataにも取り込み時点の値を保持する。実行時は `image@sha256:...` をpullする。lockは次の全項目を持つ。
 
 ```yaml
-resource-id: dsa-basic
-source-ref: <git-commit-sha>
-actions-run-id: <github-actions-run-id>
-images:
-  default:
-    image: ghcr.io/example/dsa-basic-sandbox
-    tag: <git-commit-sha>
-    digest: sha256:...
+lock:
+  tag: <build-commit>-<actions-run-id>-<attempt>
+  digest: sha256:<64-hex>
+  input-hash: sha256:<64-hex>
+  source-ref: <build-commit-40-hex>
+  actions-run-id: "123456789"
 ```
+
+input-hash は build宣言とcontext全entryの内容・path・実行bit・空directory、Dockerfileに対応する。mtimeは含めない。ハッシュの参照実装とJSON Schemaは `dsa-resource/scripts/resources.py` と `dsa-resource/schemas/`、byte-level契約は同repoの `docs/resource-contract.md` を正とする。Admin管理GitとActionsを信頼境界とし、入力ハッシュを暗号署名とは扱わない。
 
 ## Resource YAML
 
@@ -63,13 +61,16 @@ Resource YAML は Project に含まれる Sandbox Image、Workflow、Job、Step�
 ```yaml
 resource:
   id: dsa-basic
+  name: DSA Basic
 
 sandbox-images:
   default:
     build:
-      context: .
+      context: sandbox
       dockerfile: sandbox/Dockerfile
       image: ghcr.io/example/dsa-basic-sandbox
+      platforms: [linux/amd64]
+    lock: null
 
 workflows:
   judge:
@@ -130,10 +131,11 @@ workflows:
 
 ### 基本規則
 
-- Resource 側 path(`description-path`, `presets.files[].source`, `stdin.path`, `expected.*.path`, `sandbox-images.<id>.build.context`, `sandbox-images.<id>.build.dockerfile`)は Resource root からの相対 path。
+- Resource 固有の path(`description-path`, `presets.files[].source`, `stdin.path`, `expected.*.path`, `sandbox-images.<id>.build.context`, `sandbox-images.<id>.build.dockerfile`)は Resource root からの相対 path。
 - Preset path(`presets.files[].path`)は fixed read-only `/preset` mount からの相対 path。
 - workspace path(`artifacts.*[].path`)は Sandbox Workspace からの相対 path。
-- Resource YAML 上の相対 path は clean な POSIX path として扱う。空 path、`.`、絶対 path、`..` component、NUL byte、backslash を含む path は validation error。
+- 相対 path は clean POSIX形式。空 path、`.`、絶対 path、`..` component、NUL、backslash、colon、空componentはvalidation error。`build.context` に限り `.` は字句上許可するが、contextは `.git` やmanifestを含まない専用directoryとし、lockが自身の入力になる循環を禁止する。
+- root manifest の共通build pathはrepository root基準。Resource固有build pathはResource root基準。共通imageはIDで参照し、Resource pathの越境は許さない。
 - path は Resource root、fixed read-only `/preset` mount、Sandbox Workspace のいずれか該当する root の外を指してはいけない。
 - map key は機械 ID。`name` は表示名。
 - `run` は shell 文字列ではなく argv 配列で指定する。空配列は禁止。
@@ -160,7 +162,8 @@ Normalization rules:
 | field | required | description |
 | --- | --- | --- |
 | `resource.id` | yes | Resource の安定 ID。root manifest の `id` と一致する。 |
-| `sandbox-images` | yes | Sandbox Image ID を key にした map。 |
+| `resource.name` | yes | Project の表示名。 |
+| `sandbox-images` | no | Resource 固有 Sandbox Image ID の map。共通定義とのID衝突は禁止。 |
 | `workflows` | yes | Workflow ID を key にした map。 |
 
 ## Sandbox Image
@@ -169,20 +172,25 @@ Normalization rules:
 sandbox-images:
   default:
     build:
-      context: .
+      context: sandbox
       dockerfile: sandbox/Dockerfile
       image: ghcr.io/example/dsa-basic-sandbox
+      platforms: [linux/amd64]
+    lock: null
 ```
 
 | field | required | description |
 | --- | --- | --- |
-| `build.context` | no | Docker build context。省略時 `.`。 |
-| `build.dockerfile` | yes | Dockerfile path。 |
-| `build.image` | yes | push 先 image repository。digest は含めない(Digest Pinning)。 |
+| `build.context` | yes | Docker build context。定義を所有するroot基準。 |
+| `build.dockerfile` | yes | Dockerfile path。contextではなく定義のroot基準。 |
+| `build.image` | yes | GHCRのpush先repository。tag/digestは含めない。 |
+| `build.platforms` | yes | 空でない `linux/amd64` / `linux/arm64` の配列。 |
+| `lock` | yes | 未ビルドはnull。確定後は上記の全lock項目。 |
 
-- Sandbox Image は top-level でのみ定義し、Job は `sandbox-image: <id>` で参照する。
-- Dockerfile は project-approved hardened base image を `FROM` に使う。
-- Job から参照されていない entry も定義してよいが、登録時は全 entry に digest が必要。
+- root manifest の共通定義とResourceの固有定義を合成してJobのIDを解決する。ID衝突はrejectし、shadowingはしない。異なるResourceの固有IDは独立。
+- Dockerfileは通常のDebian slim系など承認済みbaseをtag＋digestで固定する。現在のbuild契約は単一FROM、追加fileはcontext内COPY、ADD・外部frontend・追加build args/secret/contextは未対応。
+- GCC・makeを含めnon-root実行する。FROM固定でもAPT配布物まで完全再現する保証はしない。完成imageのdigestで実行環境を固定する。
+- Job未参照entryも定義可。インポート時は全共通・固有entryに現在入力と一致するlockが必要。
 
 ### Sandbox hardening
 
@@ -258,7 +266,7 @@ Job は独立 sandbox 実行単位。同一 Job 内の Step は同じ workspace 
 | `name` | no | 表示名。 |
 | `visibility` | no | `public` または `private`。省略時 `private`(Private-by-Default)。 |
 | `depends` | no | 先行して完了している必要がある Job ID 配列。省略時 `[]`。 |
-| `sandbox-image` | yes | top-level `sandbox-images` の ID。未定義 ID は validation error。 |
+| `sandbox-image` | yes | 共通＋当該Resource固有の `sandbox-images` の ID。未定義 ID は validation error。 |
 | `working-directory` | no | Step 実行時の working directory。省略時 `/workspace`。 |
 | `limits` | yes | resource limit と timeout。 |
 | `artifacts` | no | Job 間で明示的に受け渡す Artifact。 |

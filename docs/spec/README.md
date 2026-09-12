@@ -39,7 +39,7 @@
     - 作成: シングルユーザーの作成、およびスプレッドシートから複数ユーザーの一括作成
   - Resource の作成・更新・削除
     - Resource は GitHub org の private repository で管理する
-    - main ブランチ更新時に GitHub Actions が sandbox 用コンテナイメージを build / push し、Backend の Admin API に新しい Resource を登録する
+    - main更新時にActionsが変更されたbuild入力のイメージをbuild / pushし、tag・digestをGitへ直接コミットする。Adminが指定コミットの全Resourceを手動インポートし、変更Resourceのみ新Versionにする
 - Manager 機能
   - 複数のユーザーが提出した Submission を全て一つにまとめたzipファイルをアップロードし、まとめて Request する。
   - フォーマットが微妙に異なることで Request が失敗する提出に対して、その場で修正して再 Request することができる
@@ -53,7 +53,7 @@
 ### 非機能要件
 - セキュリティ
   - ログイン認証時に、ロール毎に異なる権限を設定
-  - GitHub Actions から Backend への Resource Version 登録は Registration-only API で行う([resource.md](./resource.md) 参照)
+  - Resourceの手動インポートはAdminのみ許可し、Gitの全イメージlockと入力の一致を検証する([resource.md](./resource.md) 参照)
   - sandbox 上での任意のコード実行は resource limit と platform 固定 hardening で隔離する([resource.md](./resource.md) 参照)
 - 可用性
   - 24時間稼働
@@ -97,7 +97,8 @@ flowchart LR
 
   repo -->|push to main| gha
   gha -->|buildx build / push image| ghcr
-  gha -->|Admin API: Resource Version + image digest| IG
+  gha -->|commit image locks| repo
+  BE -->|read selected commit on manual import| repo
 
   client -->|HTTPS :443| IG
   IG -->|SPA / static files| FE
@@ -118,9 +119,9 @@ flowchart LR
   - セッション情報、Workflow の進捗、ジョブキューを保存する
 * GitHub private repository: Resource の管理
   - main ブランチ更新を Resource 更新の入口とする
-* GitHub Actions: sandbox 用コンテナイメージの build / push と Resource Version 登録
+* GitHub Actions: sandbox 用コンテナイメージの build / push とGitへのlock記録
   - GitHub-hosted runner 上で buildx / BuildKit を用いる
-  - Backend の Registration-only API に Resource Version や image digest 等の情報を登録する
+  - Backend APIは呼ばない。手動インポート完了までは現在のResource Versionを維持する
 * GHCR: sandbox 用コンテナイメージの registry
   - Digest Pinning に従い、k3s 内蔵 containerd は digest 指定で pull する
 * k3s: コンテナ基盤
