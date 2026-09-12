@@ -13,13 +13,29 @@ test('B3:C5 changes only the pasted rectangle and preserves row count and other 
   expect(rows[2].username).toBe('Name 2')
 })
 
-test('clipboard preserves blanks, leading zeros, commas, quoted delimiters and escaped quotes', () => {
-  expect(clipboardCells('001\t"a\tb"\t\r\n\t"line1\nline2 ""quote"""\t\r\n')).toEqual([['001', 'a\tb', ''], ['', 'line1\nline2 "quote"', '']])
-  expect(clipboardCells('a,b')).toEqual([['a,b']])
-  expect(clipboardCells('a\n\n')).toEqual([['a'], ['']])
-  expect(clipboardCells('a\tb\nc')).toEqual([['a', 'b'], ['c', '']])
-  expect(clipboardCells('')).toEqual([['']])
-  expect(() => clipboardCells('"unfinished')).toThrow('引用符')
+test.each([
+  ['', [['']]],
+  ['\t', [['']]],
+  ['a\n\n', [['a'], ['']]],
+  ['a\n\t', [['a'], ['']]],
+  ['a\tb\t', [['a', 'b']]],
+  ['"unfinished', [['"unfinished']]],
+])('handles empty cells and malformed input following SheetJS behavior %j', (text, expected) => {
+  expect(clipboardCells(text)).toEqual(expected)
+})
+
+test('discards excess columns before padding the rectangle', () => {
+  expect(clipboardCells('a\tb\tc\td\textra\nnext')).toEqual([
+    ['a', 'b', 'c', 'd'],
+    ['next', '', '', ''],
+  ])
+  expect(clipboardCells('a\tb\tc\td\t"ignored\ncell"\nnext')).toEqual([
+    ['a', 'b', 'c', 'd'],
+    ['next', '', '', ''],
+  ])
+  const cells = clipboardCells('\t'.repeat(1999) + '\n' + 'a\n'.repeat(1999))
+  expect(cells).toHaveLength(2000)
+  expect(cells.every((row) => row.length === 4)).toBe(true)
 })
 
 test('extends rows, clears empty cells and atomically rejects overflow or created rows', () => {
@@ -32,4 +48,17 @@ test('extends rows, clears empty cells and atomically rejects overflow or create
   expect(next[2]).toEqual(emptyUser())
   expect(next.filter(hasUserData)).toHaveLength(3)
   expect(writeCells(next, { row: 4, col: 1 }, [['']])[4]).toMatchObject({ username: '' })
+})
+
+test.each(['\t\n\t\n\t', '\t\r\n\t\r\n\t\r\n', 'b\tb\nb\t\nb\tb'])('pastes a 3 by 2 rectangle including blank cells %j', (text) => {
+  const cells = clipboardCells(text)
+  const expected = text.startsWith('b') ? [['b', 'b'], ['b', ''], ['b', 'b']] : [['', ''], ['', ''], ['', '']]
+  expect(cells).toEqual(expected)
+  const rows = Array.from({ length: 5 }, () => ({ ...emptyUser(), userid: 'keep', username: 'old', role: 'student', password: 'keep-password' }))
+  const next = writeCells(rows, { row: 1, col: 1 }, cells)
+  expect(next.slice(1, 4).map((row) => [row.username, row.role])).toEqual(expected)
+  expect(next.map((row) => row.userid)).toEqual(rows.map((row) => row.userid))
+  expect(next.map((row) => row.password)).toEqual(rows.map((row) => row.password))
+  expect(next[0]).toEqual(rows[0])
+  expect(next[4]).toEqual(rows[4])
 })
