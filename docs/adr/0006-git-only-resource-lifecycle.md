@@ -11,6 +11,6 @@ Everything that defines a Project's content lives in the Resource repository and
 ## Consequences
 
 - There is no instant retraction: a broken `latest` stays `latest` until a fix or revert commit is pushed and registered. This is accepted; the failure mode folds into `completed` + IE Statuses rather than blocking the pipeline.
-- Title typo fixes and semester-end retirement each require a push, not a console click.
+- Title typo fixes and semester-end retirement each require a Git change followed by a manual import. The console does not edit Resource content.
 - Publish time, deadline, and display order can be changed at any moment without minting a Resource Version, so day-to-day operations never touch git.
-- Every content change is auditable through git history plus the Registration-only API's audit log; the console cannot create states that git history does not explain.
+- Every content change is auditable through git history plus the manual Resource import audit log; the console cannot create states that git history does not explain.

@@ -17,7 +17,7 @@ Project のコンソール管理属性。enforcement はしない。evaluation S
 _Avoid_: 提出期限, cutoff
 
 **Resource**:
-Admin が管理する trusted な Project 定義素材。Resource YAML、Preset file、課題説明文、sandbox image build 入力を含む。
+Admin が管理する trusted な Project 定義素材。Resource YAML、Preset file、課題説明文、Sandbox Image の定義と確定済み実行環境を含む。
 _Avoid_: Test bundle, judge files
 
 **Archived Project**:
@@ -25,7 +25,7 @@ root manifest から entry が外された Project(manifest 掲載 = active の�
 _Avoid_: Deleted project, disabled project
 
 **Resource Version**:
-source 履歴と sandbox image metadata に紐づく、Resource の immutable な version。
+Git 上の確定済み素材と Sandbox Image に紐づく、Resource の immutable な version。Admin の手動インポート時に、実効内容が変わった Resource のみ作成する。
 _Avoid_: Release, revision
 
 **User Account**:
@@ -89,7 +89,7 @@ Job 内の 1 回の argv 形式 command 実行。
 _Avoid_: Command, script
 
 **Sandbox Image**:
-Resource YAML の top-level `sandbox-images` で一度だけ定義し、Job が ID で参照する container image。Resource Version ごとに build され、digest は Resource YAML ではなく Resource Version metadata が持つ。
+Resource 間で共有、または Resource 固有として定義し、Job が ID で参照する container image。ビルド済み digest を Git に記録し、Resource Version はその確定済み実行環境を保持する。
 _Avoid_: Job image, build config
 
 **Preset File**:
@@ -148,11 +148,11 @@ Resource Version は Sandbox Image を tag ではなく `repo@sha256:...` digest
 **Private-by-Default**:
 Job と Artifact の `visibility` は省略時 `private`。クライアントに見せるものは常に明示的に `public` 宣言する。
 
-**Registration-only API**:
-GitHub Actions が呼ぶ Admin API の権限は Resource Version の作成のみに限定する。
+**Manual Resource Import**:
+Admin が Git の指定コミットの全 Resource をまとめて取り込む操作。変更がある Resource だけを新 Version とし、完了までは現在の Version を使い続ける。
 
 **Fix-Forward Resource**:
-Resource Version は archive も撤回もできない。訂正は Resource repo への push による新 Version 登録のみで行い、latest は常に最新の登録済み Version。Resource の編集入口を git に一本化し、コンソール側に第二の編集経路を作らない。(ADR 0006)
+Resource Version は archive も撤回もできない。訂正は Resource repo への push と手動インポートによる新 Version 登録のみで行い、latest は常に最新の登録済み Version。Resource の編集入口を git に一本化し、コンソール側に第二の編集経路を作らない。(ADR 0006)
 
 **Git-for-Logic, Console-for-Operations**:
 採点ロジック(Workflow、Job、Preset、Sandbox Image)と課題タイトルは git 管理の Resource が所有する。運用メタデータ(公開日時、締切日時、並び順)はコンソール管理の Project 属性が所有し、変更に Resource Version 登録を要しない。(ADR 0006)
