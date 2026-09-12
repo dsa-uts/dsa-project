@@ -36,7 +36,7 @@
 - Admin 機能
   - ユーザーのグローバル表示順の手動並び替え（無効化済みを含み、System Account を除く）
   - ユーザーの作成・削除
-    - 作成: シングルユーザーの作成、およびスプレッドシートから複数ユーザーの一括作成
+    - 作成: シングルユーザーの作成、および[スプレッドシートから複数ユーザーの一括作成](bulk-users.md)
   - Resource の作成・更新・削除
     - Resource は GitHub org の private repository で管理する
     - main ブランチ更新時に GitHub Actions が sandbox 用コンテナイメージを build / push し、Backend の Admin API に新しい Resource を登録する
