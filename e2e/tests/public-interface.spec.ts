@@ -18,23 +18,21 @@ async function login(request: APIRequestContext, cookie?: string) {
 }
 
 
-test('the browser logs in, shows the User Account, logs out, and guards routes', async ({ page }) => {
+test('the browser logs in, opens about, logs out, and guards routes', async ({ page }) => {
   await page.goto(new URL('/unknown', baseURL).href)
   await expect(page).toHaveURL(/\/login$/)
   await expect(page.getByRole('banner')).toHaveCount(0)
   await page.getByLabel('User ID').fill('admin')
   await page.getByLabel('Password').fill('admin')
   await page.getByRole('button', { name: 'Log in' }).click()
-  await expect(page).toHaveURL(new URL('/', baseURL).href)
-  await expect(page.getByText('Development Admin')).toBeVisible()
-  await expect(page.getByText('admin', { exact: true })).toBeVisible()
+  await expect(page).toHaveURL(new URL('/about', baseURL).href)
 
   await page.goto(new URL('/unknown', baseURL).href)
   await expect(page.getByRole('heading', { name: '404' })).toBeVisible()
   await page.getByRole('banner').getByRole('link', { name: 'DSA', exact: true }).click()
-  await expect(page).toHaveURL(new URL('/', baseURL).href)
+  await expect(page).toHaveURL(new URL('/about', baseURL).href)
   await page.goto(new URL('/login', baseURL).href)
-  await expect(page).toHaveURL(new URL('/', baseURL).href)
+  await expect(page).toHaveURL(new URL('/about', baseURL).href)
   await page.getByRole('banner').getByRole('button', { name: 'Logout' }).click()
   await expect(page).toHaveURL(/\/login$/)
 })
