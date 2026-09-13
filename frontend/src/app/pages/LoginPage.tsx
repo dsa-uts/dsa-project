@@ -15,7 +15,7 @@ export function LoginPage() {
     },
   })
 
-  if (authenticated) return <Navigate to="/" replace />
+  if (authenticated) return <Navigate to="/about" replace />
 
   const submit: SubmitEventHandler = (event) => {
     event.preventDefault()

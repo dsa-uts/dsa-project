@@ -186,7 +186,7 @@ for (const role of ['student', 'manager']) {
     await page.getByLabel('User ID', { exact: true }).fill(role)
     await page.getByLabel('Password', { exact: true }).fill('admin')
     await page.getByRole('button', { name: 'Log in' }).click()
-    await expect(page).toHaveURL(new URL('/', baseURL).href)
+    await expect(page).toHaveURL(new URL('/about', baseURL).href)
     await expect(page.getByRole('link', { name: 'Manage users' })).toHaveCount(0)
     await page.goto(new URL('/admin/users', baseURL).href)
     await expect(page.getByRole('heading', { name: '403 Forbidden' })).toBeVisible()
