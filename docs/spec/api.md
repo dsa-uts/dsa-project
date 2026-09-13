@@ -1,6 +1,6 @@
 # REST API 仕様
 
-このドキュメントはクライアント向け REST API の形(path、method、リクエスト/レスポンススキーマ、ステータスコード、エンドポイントごとの認可)を所有する。ドメイン規則はここで再説明せず、[CONTEXT.md](../../CONTEXT.md) の用語と Principles を名前で参照する。Resource リポジトリと Resource YAML の仕様は [resource.md](./resource.md) を正とする。
+このドキュメントはクライアント向け REST API の形(path、method、リクエスト/レスポンススキーマ、ステータスコード、エンドポイントごとの認可)を所有する。ドメイン規則はここで再説明せず、[CONTEXT.md](../../CONTEXT.md) の用語と Principles を名前で参照する。Resource リポジトリの仕様は [Resource リポジトリ契約](https://github.com/dsa-uts/dsa-resource-public/blob/main/docs/resource-contract.md)、Resource YAML の仕様は [Resource 定義書](https://github.com/dsa-uts/dsa-resource-public/blob/main/docs/resource.md) を正とする。
 
 公開 API の語彙では Project と Version を使う。Resource / Resource Version は internal / admin の概念に留める(例外は [Versions](#get-apiprojectsproject_idversions) の `source_ref` を参照)。
 
@@ -130,7 +130,7 @@ Query:
 }
 ```
 
-- `description_markdown`: Workflow の `description-path`(resource.md 所有)の Markdown 本文をインラインで埋め込む。宣言がなければ `null`。
+- `description_markdown`: Workflow の `description-path`([Resource 定義書](https://github.com/dsa-uts/dsa-resource-public/blob/main/docs/resource.md) 所有)の Markdown 本文をインラインで埋め込む。宣言がなければ `null`。
 - `jobs`: 現在の Role に可視な Job のみ(Private-by-Default)。Student には public Job のみ、Manager/Admin には全 Job。
 - Errors: `404`(Project 不存在、または未公開・Archived で Student から不可視)、`403 version_not_allowed`(Student が latest 以外の `version_id` を指定)
 
@@ -346,7 +346,7 @@ Request を作成する。Request はその Version の全 Workflow を実行す
 
 - `jobs` は現在の Role に可視なもののみ(Private-by-Default)。
 - Workflow / Request の `status` は可視性に関係なく全 Job から Worst-wins で導出した値。
-- `stdout` / `stderr` はインラインで返す。サイズ上限は Job の `limits`(resource.md 所有)が保証する。
+- `stdout` / `stderr` はインラインで返す。サイズ上限は Job の `limits`([Resource 定義書](https://github.com/dsa-uts/dsa-resource-public/blob/main/docs/resource.md) 所有)が保証する。
 - 未実行の Step の `exit_code` / `status` / `stdout` / `stderr` / `duration_ms` は `null`。
 - `artifacts` の `capture_status`: `captured` / `missing`。Artifact の取得は [Artifacts](#artifacts) を参照。
 - Errors: `404`(不存在・不可視)
@@ -445,7 +445,7 @@ Query:
 
 ## Artifacts
 
-Artifact は Private-by-Default。Resource YAML で `public` 宣言され、かつ生成元の Job がそのクライアントに可視な場合のみ配信する。`artifact_id` は [`GET /api/requests/{request_id}`](#get-apirequestsrequest_id) の `artifacts` 配列で発見する。`content-type` の許可リストは [resource.md](./resource.md) が所有する。
+Artifact は Private-by-Default。Resource YAML で `public` 宣言され、かつ生成元の Job がそのクライアントに可視な場合のみ配信する。`artifact_id` は [`GET /api/requests/{request_id}`](#get-apirequestsrequest_id) の `artifacts` 配列で発見する。`content-type` の許可リストは [Resource 定義書](https://github.com/dsa-uts/dsa-resource-public/blob/main/docs/resource.md) が所有する。
 
 ### `GET /api/requests/{request_id}/artifacts/{artifact_id}`
 
@@ -468,7 +468,7 @@ Admin 専用。Student / Manager は `403`。
 
 ### `POST /api/admin/resource-imports`
 
-Manual Resource Import。Adminが指定コミットの全Resourceを手動で取り込む。GitHub Actionsからは呼ばない。登録契約、変更判定、原子的な適用、監査は [resource.md](./resource.md) の「Resource Version 登録フロー」を正とする。
+Manual Resource Import。Adminが指定コミットの全Resourceを手動で取り込む。GitHub Actionsからは呼ばない。登録契約、変更判定、原子的な適用、監査は [Resource リポジトリ契約](https://github.com/dsa-uts/dsa-resource-public/blob/main/docs/resource-contract.md) の「手動インポート」を正とする。
 
 - 認証: 通常のAdmin session cookieとCSRF対策。
 - source repositoryはBackend設定で固定。`source_ref` はmain履歴上の40桁commit SHA。
