@@ -4,6 +4,7 @@
 React / TypeScriptのfrontend、GoのbackendをKubernetesへデプロイする。
 [仕様](docs/spec/README.md)、[ドメイン用語](CONTEXT.md)、[設計判断](docs/adr/)、
 [開発規約](docs/agents/coding-standards.md)を参照。
+課題・CI結果の画面案は[ページデザイン](docs/design/README.md)を参照。
 
 ## 初回セットアップ
 
