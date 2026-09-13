@@ -18,6 +18,8 @@
   --popover: oklch(1 0 0);
   --popover-foreground: oklch(0.145 0 0);
   --top-bar: #407bff;
+  --top-bar-hover: #2b5eff;
+  --link: #2b5eff;
   --inline-code: #e91e8c;
   --inline-code-background: #f3f4f6;
   --code-background: #282c34;
@@ -76,6 +78,8 @@
   --color-popover: var(--popover);
   --color-popover-foreground: var(--popover-foreground);
   --color-top-bar: var(--top-bar);
+  --color-top-bar-hover: var(--top-bar-hover);
+  --color-link: var(--link);
   --color-top-bar-foreground: var(--top-bar-foreground);
   --color-primary: var(--primary);
   --color-primary-foreground: var(--primary-foreground);
