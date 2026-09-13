@@ -107,7 +107,7 @@ workflows:
               path: build/program
         steps:
           - name: Compile
-            run: ["make", "-f", "/preset/Makefile", "build"]
+            run: "make -f /preset/Makefile build"
             timeout-seconds: 30
             expected:
               exit-code: 0
@@ -116,7 +116,7 @@ workflows:
                 value: ""
 
           - name: Test
-            run: ["/preset/scripts/check.sh"]
+            run: "/preset/scripts/check.sh"
             stdin:
               path: input/sample.txt
             expected:
@@ -138,9 +138,12 @@ workflows:
 - root manifest の共通build pathはrepository root基準。Resource固有build pathはResource root基準。共通imageはIDで参照し、Resource pathの越境は許さない。
 - path は Resource root、fixed read-only `/preset` mount、Sandbox Workspace のいずれか該当する root の外を指してはいけない。
 - map key は機械 ID。`name` は表示名。
-- `run` は shell 文字列ではなく argv 配列で指定する。空配列は禁止。
-- `run[0]` は executable。Judge は sandbox の `PATH` で解決する。絶対 path / 相対 path も許可する。
-- shell expansion、pipe、redirect、glob は解釈しない。必要な場合は script file を Preset として置き、その script 実行用の executable を明示する。
+- `run` は Bash script を表す単体の文字列。argv 配列は禁止。YAML の `|` による複数行を許可し、空文字列・空白のみ・NUL byte を含む文字列は validation error。
+- Judge は sandbox 内で `/bin/bash -e -o pipefail -c <run文字列>` を実行する。script は単一の引数としてそのまま渡し、Judge 側では分割・展開しない。Sandbox Image は `/bin/bash` を提供しなければならない。
+- shell expansion、pipe、redirect、glob を Bash が解釈する。script 内のコマンドは sandbox の `PATH` で解決し、絶対 path / 相対 path も許可する。
+- `-e` により通常のコマンドの失敗で停止し、`pipefail` により pipeline は右端の非0終了コードを返す。`if`、`&&`、`||` 等には Bash の `-e` の例外規則が適用される。
+- Step の終了コードは Bash の終了コード。working-directory、stdin、stdout/stderr、timeout の既存規則は script 全体に適用する。
+- Resource 展開時も `run` は元の文字列を維持し、argv への変換や実行を行わない。
 - `expected.*.path` の file は Judge が Resource root から読み込む。sandbox には配置しない。
 - `schema-version` は持たない。
 
@@ -199,6 +202,7 @@ sandbox は gVisor(runsc) RuntimeClass を指定した k8s Pod として専用 N
 - network egress の既定 deny
 - Linux capabilities は全て drop
 - `no_new_privileges`
+- `/bin/bash` を提供
 - fixed non-root user で Step を実行
 - read-only root filesystem。書き込み可能領域は platform が許可した Sandbox Workspace 等に限定
 - 監査ログを必須とする
@@ -423,7 +427,7 @@ buffer =
 ```yaml
 steps:
   - name: Test
-    run: ["make", "test"]
+    run: "make test"
     timeout-seconds: 60
     expected:
       exit-code: 0
@@ -438,12 +442,23 @@ steps:
 | field | required | description |
 | --- | --- | --- |
 | `name` | no | 表示名。 |
-| `run` | yes | argv 配列。先頭要素が executable、残りが args。空配列は禁止。 |
+| `run` | yes | Bash script 文字列。複数行可。空・空白のみ・NUL byte・argv 配列は禁止。 |
 | `stdin` | no | Step の標準入力。 |
 | `timeout-seconds` | no | Step wall time timeout。 |
 | `expected` | no | 期待結果。 |
 
 `expected.exit-code` は省略時 `0`。`expected.stdout` と `expected.stderr` は省略時、比較しない。
+
+複数行の script と pipe・redirect の例:
+
+```yaml
+run: |
+  make
+  ./main < input.txt | sort > result.txt
+```
+
+この例の `input.txt` は workspace 内の file。`stdin.path` は Judge が読み込む入力であり、workspace に file を配置する指定ではない。
+`make` の失敗では後続行を実行しない。pipeline 内の失敗も Step の非0終了コードになる。
 
 ### Step stdin
 
