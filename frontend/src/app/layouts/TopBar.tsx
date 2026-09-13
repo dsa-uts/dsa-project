@@ -14,19 +14,19 @@ export function TopBar() {
   return (
     <header className="shrink-0 bg-top-bar text-top-bar-foreground">
       <div className="flex h-16 items-center justify-between gap-4 px-4 sm:px-8">
-        <Link to="/about" className="rounded-sm text-3xl font-bold outline-none focus-visible:ring-2 focus-visible:ring-top-bar-foreground">
+        <Link to="/about" className="rounded-sm px-2 py-1 text-3xl font-bold outline-none transition-opacity hover:bg-top-bar-hover hover:opacity-80 focus-visible:ring-2 focus-visible:ring-top-bar-foreground">
           DSA
         </Link>
         <div className="flex items-center gap-4">
           {user?.role === 'admin' && (
-            <Link to="/admin/users" className="rounded-sm underline outline-none focus-visible:ring-2 focus-visible:ring-top-bar-foreground">
-              Manage users
+            <Link to="/admin/list" className="rounded-sm px-4 py-2 outline-none transition-colors hover:bg-top-bar-hover focus-visible:ring-2 focus-visible:ring-top-bar-foreground">
+              Admin
             </Link>
           )}
           <Button
             type="button"
             variant="ghost"
-            className="h-11 text-base hover:bg-top-bar-foreground/15 hover:text-top-bar-foreground focus-visible:ring-top-bar-foreground"
+            className="h-auto rounded-sm text-base font-normal transition-colors hover:bg-top-bar-hover hover:text-top-bar-foreground focus-visible:ring-top-bar-foreground"
             onClick={() => { if (canLeave()) logout.mutate({}) }}
             disabled={logout.isPending}
           >
