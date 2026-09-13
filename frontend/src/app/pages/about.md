@@ -12,7 +12,7 @@
 
 質問は[メール](mailto:dsa-ta@kde.cs.tsukuba.ac.jp)でも可能です。
 
-GitHubのIssueやPull Requestも歓迎します。GitHubリポジトリは[こちら](https://github.com/dsa-uts/dsa-project)。
+GitHubのIssueも歓迎します。GitHubリポジトリは[こちら](https://github.com/dsa-uts/dsa-project)。
 
 # プログラムの採点について
 
