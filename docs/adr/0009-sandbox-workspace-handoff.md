@@ -15,5 +15,5 @@ Topology-Agnostic Manifests (ADR 0008) retire hostPath injection, so the Judge n
 - The sandbox namespace's default egress deny needs no exception; the exec channel the Judge already uses for Steps and `stdin.path` streaming is the only data path in and out of a sandbox Pod.
 - Workspace placement, Preset placement, and Artifact collection all stay enforced by the Judge; nothing inside the Pod holds credentials or upload rights.
 - The loader's exact form (native sidecar vs. keep-alive regular container) is deliberately not fixed here; it is decided during `judge/` template implementation.
-- The Judge must treat tar streams coming back from the loader as untrusted (path traversal, symlink/hardlink/device entries), consistent with the Artifact rules in docs/spec/resource.md.
+- The Judge must treat tar streams coming back from the loader as untrusted (path traversal, symlink/hardlink/device entries), consistent with the Artifact rules in the [Resource specification](https://github.com/dsa-uts/dsa-resource-public/blob/main/docs/resource.md).
 - If workspaces ever grow well beyond MB scale, revisit the object-storage option.

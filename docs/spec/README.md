@@ -4,7 +4,7 @@
 
 ## 仕様ファイル
 
-- [Resource 仕様](./resource.md) — Resource リポジトリ契約、Resource YAML スキーマ、sandbox hardening
+- Resource 定義書は [dsa-resource-public](https://github.com/dsa-uts/dsa-resource-public/blob/main/docs/resource.md) / [dsa-resource](https://github.com/dsa-uts/dsa-resource/blob/main/docs/resource.md) で管理する。重複編集を避けるため、このリポジトリには複製を置かない
 - [REST API 仕様](../../api/openapi.yaml) — クライアント向け REST API の形(single source of truth、ADR 0010)。[api.md](./api.md) は Conventions と未実装エンドポイントの草稿
 - DB スキーマは [backend/internal/store/migrations/](../../backend/internal/store/migrations/) の SQL ファイルが正(Markdown の複製は持たない)
 
@@ -53,8 +53,8 @@
 ### 非機能要件
 - セキュリティ
   - ログイン認証時に、ロール毎に異なる権限を設定
-  - Resourceの手動インポートはAdminのみ許可し、Gitの全イメージlockと入力の一致を検証する([resource.md](./resource.md) 参照)
-  - sandbox 上での任意のコード実行は resource limit と platform 固定 hardening で隔離する([resource.md](./resource.md) 参照)
+  - Resourceの手動インポートはAdminのみ許可し、Gitの全イメージlockと入力の一致を検証する([Resource リポジトリ契約](https://github.com/dsa-uts/dsa-resource-public/blob/main/docs/resource-contract.md) 参照)
+  - sandbox 上での任意のコード実行は resource limit と platform 固定 hardening で隔離する([Resource 定義書](https://github.com/dsa-uts/dsa-resource-public/blob/main/docs/resource.md) 参照)
 - 可用性
   - 24時間稼働
 - 可搬性
@@ -135,7 +135,7 @@ flowchart LR
   - ValidatingAdmissionPolicy で sandbox Pod の image を GHCR の特定 org 配下かつ digest 指定必須に制限し (Digest Pinning の強制層)、hostPath volume を禁止する
   - Sandbox Workspace / Preset Directory の受け渡しと Artifact 回収は pods/exec loader 方式。詳細は ADR 0009 が所有する
   - Isolated Job Workspace / Explicit Artifact Handoff / Private-by-Default に従う
-  - resource limit と platform 固定 hardening(network deny、capabilities drop 等)の詳細は [resource.md](./resource.md) が所有する
+  - resource limit と platform 固定 hardening(network deny、capabilities drop 等)の詳細は [Resource 定義書](https://github.com/dsa-uts/dsa-resource-public/blob/main/docs/resource.md) が所有する
 
 ### 技術選定
 - コンテナ基盤: k3s (containerd 内蔵、gVisor RuntimeClass)
