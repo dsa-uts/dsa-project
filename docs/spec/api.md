@@ -2,7 +2,7 @@
 
 このドキュメントは Conventions と未実装エンドポイントの API 草稿を所有する。実装時に [OpenAPI](../../api/openapi.yaml) へ移す(ADR 0010)。ドメイン規則は [CONTEXT.md](../../CONTEXT.md)、取得・保存は [Resource 取り込み仕様](resource-imports.md)、Resource の形式は [dsa-resource-spec](https://github.com/dsa-uts/dsa-resource-spec) を参照する。
 
-公開 API の語彙では Project と Version を使う。Resource / Resource Version は internal / admin の概念に留める。`version_id` は DB 上の UUID、`version` は表示用の正式版 SemVer (`v1.2.3` など)。
+公開 API の語彙では Project と Version を使う。Resource / Resource Version は internal / admin の概念に留める。ただし Project 一覧には対応する Resource の識別子 `resource_id` を含める。`version_id` は DB 上の UUID、`version` は表示用の正式版 SemVer (`v1.2.3` など)。
 
 ## Conventions
 
@@ -50,14 +50,14 @@
 | --- | --- |
 | Student | 自分の validation Submission と Request を作成・参照する。 |
 | Manager | evaluation の Submission / Request を管理し、全ユーザーの結果を参照する。 |
-| Admin | ユーザー、Project の表示順、Resource の手動インポートを管理する。 |
+| Admin | ユーザー、Project の公開日時・締切・表示順、Resource の手動インポートを管理する。 |
 | System Account | システムが自動作成する Request の actor。ログイン不可。 |
 
 ## Projects
 
 ### `GET /api/projects`
 
-全 Project を `display_order` 昇順で返す。クライアントの Project 一覧ページ(学生の一層目: 進捗列付き)の受け口。
+全 Project を `display_order` 昇順で返す。クライアントの Project 一覧ページ(学生の一層目: 進捗列付き)と管理者の Project Management ページの受け口。
 
 Role による可視範囲:
 
@@ -69,6 +69,7 @@ Role による可視範囲:
   "projects": [
     {
       "id": "uuid",
+      "resource_id": "ex1",
       "name": "DSA Basic",
       "latest_version_id": "uuid",
       "latest_version": "v1.0.0",
@@ -78,7 +79,7 @@ Role による可視範囲:
       "workflows": [
         { "id": "basic", "name": "基本課題" },
         { "id": "applied", "name": "発展課題" }
-      ]
+      ],
       "my_result": {
         "submission_id": "uuid",
         "uploaded_at": "2026-04-10T12:00:00Z",
@@ -99,6 +100,7 @@ Role による可視範囲:
 }
 ```
 
+- `resource_id`: 対応する Resource の識別子。Project の UUID とは別で、全 Role に返す。
 - `published_at` / `deadline` は nullable。`published_at` が `null` は未公開と同義(CONTEXT.md「公開日時」)。
 - `my_result`: 自分の validation Submission に属する最新 Request とその Submission を返す。Version で絞らない。Request がなければ `my_result: null`。課題更新だけでは変化しない。
 - `my_result.request.workflows`: per-Workflow の Status。進捗セル(「2/3 AC」や status chip)はここからクライアント導出。
@@ -156,34 +158,7 @@ Manager/Admin 専用。過去結果の比較・検索のために取り込み済
 - Version は `version` の SemVer を表示する。
 - Errors: `403`(Student)
 
-### `PATCH /api/projects/{project_id}`
-
-Manager/Admin 専用。コンソール管理の運用メタデータを部分更新する(Git-for-Logic, Console-for-Operations)。
-
-```json
-{
-  "published_at": "2026-04-01T00:00:00Z",
-  "deadline": null
-}
-```
-
-- 更新できるのは `published_at` / `deadline` のみ。`null` 指定で未設定に戻す。並び順は [`PATCH /api/projects/order`](#patch-apiprojectsorder) が所有する。
-- Response: `200` + [`GET /api/projects`](#get-apiprojects) の要素と同形
-- Errors: `403`(Student)、`404`、`422`
-
-### `PATCH /api/projects/order`
-
-Admin 専用。表示順を永続化する。初回取り込みで作成した Project は末尾に追加し、Version 更新では順序を変更しない。
-
-```json
-{
-  "project_ids": ["uuid-1", "uuid-2", "uuid-3"]
-}
-```
-
-- 全 Project の ID を過不足なく含むこと。部分更新は許可しない。
-- Response: `204`
-- Errors: `403`、`422 project_ids_mismatch`(欠落・重複・未知の ID)
+Project の公開日時・締切・表示順の更新は Admin 専用の [`PATCH /api/admin/projects`](#patch-apiadminprojects) に統一する。個別更新 API と並び順専用 API は設けない。初回取り込みで作成した Project は末尾に追加し、Version 更新では順序を変更しない。
 
 ## Submissions
 
@@ -461,6 +436,41 @@ private Artifact にはクライアント向けダウンロード API がない�
 ## Admin
 
 Admin 専用。Student / Manager は `403`。
+
+### `PATCH /api/admin/projects`
+
+全 Project の公開日時・締切・表示順を一括更新する(Git-for-Logic, Console-for-Operations)。Project Management ページの「変更を保存」の受け口。
+
+- 認証: 通常の Admin session cookie と CSRF 対策。
+
+```json
+{
+  "projects": [
+    {
+      "id": "uuid-1",
+      "published_at": "2026-09-12T10:59:00Z",
+      "deadline": "2026-09-19T10:59:00Z"
+    },
+    {
+      "id": "uuid-2",
+      "published_at": null,
+      "deadline": null
+    }
+  ]
+}
+```
+
+- `projects` は必須。全 Project の ID を過不足なく含むこと。欠落・重複・未知の ID は拒否する。Project が存在しない場合は空配列を許可する。
+- 各要素の `id` / `published_at` / `deadline` は必須。日時は RFC 3339 UTC 文字列または `null`。`null` は未設定を表し、フィールド省略による部分更新は許可しない。
+- 両日時が設定されている場合は `published_at <= deadline` を必須とする。同時刻、および片方・両方が `null` の設定は許可する。
+- 配列順を `display_order` に反映する。更新対象は公開日時・締切・表示順のみで、名前・Resource・Version は変更しない。
+- 検証と全 Project の更新を1トランザクションで行う。不備があれば何も更新しない。
+- リビジョン等による同時編集の競合検知は設けない。後から保存した日時・表示順で上書きする。ただし、全 ID の過不足チェックは保存時に行う。
+- Response: `204 No Content`。クライアントは保存後に [`GET /api/projects`](#get-apiprojects) を再取得する。
+- Errors:
+  - `401`(未認証)、`403`(Admin 以外)
+  - `422 project_ids_mismatch`(ID の欠落・重複・未知の ID)
+  - `422`(必須フィールドの欠落、日時の形式違反、締切が公開日時より前)
 
 ### `POST /api/admin/resource-imports`
 
