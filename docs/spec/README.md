@@ -4,7 +4,8 @@
 
 ## 仕様ファイル
 
-- Resource 定義書は [dsa-resource-public](https://github.com/dsa-uts/dsa-resource-public/blob/main/docs/resource.md) / [dsa-resource](https://github.com/dsa-uts/dsa-resource/blob/main/docs/resource.md) で管理する。重複編集を避けるため、このリポジトリには複製を置かない
+- Resource の形式・公開手順・実行規則は [dsa-resource-spec v1.1.0](https://github.com/dsa-uts/dsa-resource-spec/tree/v1.1.0/docs) を参照する。形式の定義は複製しない
+- [Resource 取り込み仕様](resource-imports.md) — GitHub からの取得・検証・DB 保存・認証設定・E2E 方針
 - [REST API 仕様](../../api/openapi.yaml) — クライアント向け REST API の形(single source of truth、ADR 0010)。[api.md](./api.md) は Conventions と未実装エンドポイントの草稿
 - DB スキーマは [backend/internal/store/migrations/](../../backend/internal/store/migrations/) の SQL ファイルが正(Markdown の複製は持たない)
 
@@ -22,7 +23,7 @@
 
 | Role | 人数 | 権限 |
 | -- | -- | -- |
-| Admin | 1 | ManagerおよびUserの作成・削除、課題の作成・更新・削除 |
+| Admin | 1 | ManagerおよびUserの作成・削除、課題の取り込み・更新・公開管理 |
 | Manager | 4~5 (想定) | 全ユーザーの提出物をまとめて Request する |
 | * (全員) | 90~100 (想定) | 自身の提出物をリクエストする |
 
@@ -37,24 +38,28 @@
   - ユーザーのグローバル表示順の手動並び替え（無効化済みを含み、System Account を除く）
   - ユーザーの作成・削除
     - 作成: シングルユーザーの作成、およびスプレッドシートから複数ユーザーの一括作成
-  - Resource の作成・更新・削除
-    - Resource は GitHub org の private repository で管理する
-    - main更新時にActionsが変更されたbuild入力のイメージをbuild / pushし、tag・digestをGitへ直接コミットする。Adminが指定コミットの全Resourceを手動インポートし、変更Resourceのみ新Versionにする
+  - Resource の取り込み・更新
+    - 環境ごとに 1 つの GitHub リポジトリを環境変数で固定する。Dev / Prod は private、E2E は public を使う
+    - Admin が課題 ID・正式版 SemVer を指定し、公開済み JSON を同期的に取得・検証して DB に保存する
+    - 初回は未公開の Project を作成する。更新時はタイトルを追従させ、公開日時・締切・表示順を維持する
+    - リポジトリから消えた Project も維持し、公開停止は手動で行う
 - Manager 機能
   - 複数のユーザーが提出した Submission を全て一つにまとめたzipファイルをアップロードし、まとめて Request する。
   - フォーマットが微妙に異なることで Request が失敗する提出に対して、その場で修正して再 Request することができる
 - Resource Version 管理
-  - Resource を更新しても古い Resource Version を参照できる
-  - 複数の Resource Version に対して Request することができる
-    - 差分を確認するため
-  - Resource Version には、GitHub の commit SHA、GitHub Actions の Actions run ID、GHCR の image digest を紐づける
-  - Request 実行時は Resource Version に固定された image digest を参照する
+  - 同じ Version の再取り込みは外部アクセスせず変更なし。古い Version は拒否し、ロールバックは設けない
+  - 新規・手動再実行とも Request 作成時点の最新版に固定する。Version の指定は受け付けない
+  - validation / evaluation とも自動再採点は行わない
+  - 結果一覧は Request 単位で Version を明示する。学生も自分の過去 Version のバリデーション結果を閲覧でき、本採点も過去の結果を保持する
+  - 課題詳細は常に最新版を参照する
+  - Request 実行時は保存済み JSON に固定された image digest を参照する。取り込み時にはイメージ取得・存在確認をしない
 
 ### 非機能要件
 - セキュリティ
   - ログイン認証時に、ロール毎に異なる権限を設定
-  - Resourceの手動インポートはAdminのみ許可し、Gitの全イメージlockと入力の一致を検証する([Resource リポジトリ契約](https://github.com/dsa-uts/dsa-resource-public/blob/main/docs/resource-contract.md) 参照)
-  - sandbox 上での任意のコード実行は resource limit と platform 固定 hardening で隔離する([Resource 定義書](https://github.com/dsa-uts/dsa-resource-public/blob/main/docs/resource.md) 参照)
+  - Resource の取り込みは Admin のみ許可する。`dsa-resource-spec v1.1.0` の関数で JSON を検証し、指定 ID・Version と index のハッシュを照合する
+  - リポジトリと GHCR の認証情報は別設定とし、public では省略可能。保存・注入方式は未定
+  - sandbox 上での任意のコード実行は resource limit と platform 固定 hardening で隔離する([Resource 定義書](https://github.com/dsa-uts/dsa-resource-spec/blob/v1.1.0/docs/resource.md) 参照)
 - 可用性
   - 24時間稼働
 - 可搬性
@@ -72,7 +77,7 @@ flowchart LR
   client[Client]
 
   subgraph github["GitHub"]
-    repo["Private repository (main)"]
+    repo["Resource repository (main)"]
     gha["GitHub Actions<br/>GitHub-hosted runner + buildx"]
     ghcr["GHCR<br/>Container registry"]
   end
@@ -97,8 +102,8 @@ flowchart LR
 
   repo -->|push to main| gha
   gha -->|buildx build / push image| ghcr
-  gha -->|commit image locks| repo
-  BE -->|read selected commit on manual import| repo
+  gha -->|publish release JSON and index| repo
+  BE -->|read release JSON on manual import| repo
 
   client -->|HTTPS :443| IG
   IG -->|SPA / static files| FE
@@ -116,10 +121,10 @@ flowchart LR
 ```
 
 * PostgreSQL: データの永続化 (User, Resource, Request, etc)
-  - セッション情報、Workflow の進捗、ジョブキューを保存する
-* GitHub private repository: Resource の管理
+  - セッション情報、Workflow の進捗、ジョブキュー、検証済みの Resource JSON を保存する
+* GitHub repository: Resource の管理（Dev / Prod は private、E2E は public）
   - main ブランチ更新を Resource 更新の入口とする
-* GitHub Actions: sandbox 用コンテナイメージの build / push とGitへのlock記録
+* GitHub Actions: sandbox 用コンテナイメージの build / push と release JSON・index の公開
   - GitHub-hosted runner 上で buildx / BuildKit を用いる
   - Backend APIは呼ばない。手動インポート完了までは現在のResource Versionを維持する
 * GHCR: sandbox 用コンテナイメージの registry
@@ -135,7 +140,7 @@ flowchart LR
   - ValidatingAdmissionPolicy で sandbox Pod の image を GHCR の特定 org 配下かつ digest 指定必須に制限し (Digest Pinning の強制層)、hostPath volume を禁止する
   - Sandbox Workspace / Preset Directory の受け渡しと Artifact 回収は pods/exec loader 方式。詳細は ADR 0009 が所有する
   - Isolated Job Workspace / Explicit Artifact Handoff / Private-by-Default に従う
-  - resource limit と platform 固定 hardening(network deny、capabilities drop 等)の詳細は [Resource 定義書](https://github.com/dsa-uts/dsa-resource-public/blob/main/docs/resource.md) が所有する
+  - resource limit と platform 固定 hardening(network deny、capabilities drop 等)の詳細は [Resource 定義書](https://github.com/dsa-uts/dsa-resource-spec/blob/v1.1.0/docs/resource.md) が所有する
 
 ### 技術選定
 - コンテナ基盤: k3s (containerd 内蔵、gVisor RuntimeClass)
@@ -152,7 +157,7 @@ flowchart LR
 - Secret 管理: 環境が `dsa-datastore` Kubernetes Secret を提供する。production方式は未定
 - オブジェクトストレージ: Seaweedfs
 - Resource 管理:
-  - GitHub org private repository
+  - 環境ごとに固定した GitHub repository
   - GitHub Actions (GitHub-hosted runner + buildx / BuildKit)
   - GHCR (Container registry)
 - ジャッジサーバー: Go

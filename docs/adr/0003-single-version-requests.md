@@ -4,4 +4,4 @@ Each Request targets exactly one Resource Version. Comparing a Submission across
 
 ## Consequences
 
-Manager diffing is an application view over multiple Requests, not a multi-version Request. When a Project receives a new latest Resource Version, queued rerun work creates new Requests for latest validation and evaluation Submissions rather than mutating or extending old Requests.
+Manager diffing is an application view over multiple Requests, not a multi-version Request. New Requests, including manual reruns, always pin the latest imported Resource Version at creation. Clients cannot select a Version, and a Version update never changes pending or existing Requests. Registering a Version does not create Requests automatically.

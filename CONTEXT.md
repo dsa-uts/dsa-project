@@ -5,7 +5,7 @@
 ## Language
 
 **Project**:
-1 つのプログラミング演習または judging setup のための Workflow の集合。採点ロジック(Workflow)と表示名(課題タイトル、resource.yaml の `resource.name`)は Resource Version が持ち、表示名は Version 登録のたびに最新値へ更新される。Project 自体はコンソール管理の運用メタデータ(公開日時、締切日時、並び順)を持つ。
+1 つのプログラミング演習または judging setup のための Workflow の集合。採点ロジック(Workflow)と表示名(課題タイトル、resource.yaml の `resource.name`)は Resource Version が持ち、表示名は Version 登録のたびに最新値へ更新される。Project 自体はコンソール管理の運用メタデータ(公開日時、締切日時、並び順)を持つ。初回取り込みで作成され、リポジトリから課題が削除されても維持される。公開停止は公開日時を未設定に戻して行う。
 _Avoid_: Assignment, repository
 
 **公開日時 (Publish Time)**:
@@ -20,12 +20,8 @@ _Avoid_: 提出期限, cutoff
 Admin が管理する trusted な Project 定義素材。Resource YAML、Preset file、課題説明文、Sandbox Image の定義と確定済み実行環境を含む。
 _Avoid_: Test bundle, judge files
 
-**Archived Project**:
-root manifest から entry が外された Project(manifest 掲載 = active の定義)。新規 Submission / Request の対象にできず Student に不可視だが、Manager/Admin は過去の結果を引き続き閲覧できる。復活は manifest への再追加。Project の物理削除はドメイン操作として存在しない。
-_Avoid_: Deleted project, disabled project
-
 **Resource Version**:
-Git 上の確定済み素材と Sandbox Image に紐づく、Resource の immutable な version。Admin の手動インポート時に、実効内容が変わった Resource のみ作成する。
+Git 上の確定済み素材と Sandbox Image に紐づく、Resource の immutable な version。課題 ID と正式版 SemVer (`vMAJOR.MINOR.PATCH`) で識別し、Admin が指定して取り込む。latest は取り込み済みの最大 Version であり、リポジトリ上の未取り込み Version は含まない。
 _Avoid_: Release, revision
 
 **User Account**:
@@ -45,11 +41,11 @@ soft delete された User Account。ログイン不可だがレコードは保�
 _Avoid_: Deleted user, removed user
 
 **Submission**:
-ある Project と Subject User に対してアップロードされた、正規化済み file tree の immutable な記録。uploader、アップロード時刻、content hash、kind(validation / evaluation)を含む。kind はアップロード時に確定し変更しない。kind を変えたい場合は新しい Submission を作る。誤った Submission は編集せず archive して置き換える。
+ある Project と Subject User に対してアップロードされた、正規化済み file tree の immutable な記録。uploader、アップロード時刻、content hash、kind(validation / evaluation)を含む。kind はアップロード時に確定し変更しない。kind を変えたい場合は新しい Submission を作る。訂正は新しい Submission で行い、archive は evaluation のみ可能。validation は過去の結果も履歴に残す。
 _Avoid_: Upload, answer
 
 **Archived Submission**:
-訂正版 Submission に置き換えられたため、Request 作成と通常の結果表示から外された Submission。
+対象者の取り違えなどの誤りにより、Request 作成と通常の結果表示から外された evaluation Submission。所属するすべての Request が通常の結果表示から外れる。
 _Avoid_: Deleted submission, mutable submission
 
 **Request**:
@@ -67,10 +63,6 @@ _Avoid_: Batch request, delegated request
 **Subject User**:
 Evaluation Request で Submission が評価される User Account。
 _Avoid_: Delegator, owner
-
-**Queued Rerun**:
-新しい Resource Version の登録を契機に、System Account 名義で自動作成される Request。対象は Project × ユーザーごとに直近の non-archived validation Submission(件数は運用設定値)と、Project × Subject User ごとに最新の non-archived evaluation Submission 1 件。
-_Avoid_: Auto rejudge, batch rerun
 
 **Workflow**:
 Resource が定義する、依存順に並んだ Job の pipeline。"workflow" という語はこのドメイン語彙専用とし、GitHub Actions の実行は Actions Run(`actions-run-id`)と呼ぶ。
@@ -134,10 +126,10 @@ Job 間の受け渡しは宣言された Artifact file のみ。暗黙の worksp
 Submission の同一性は正規化済み file tree とその content hash で定義する。(ADR 0002)
 
 **Single-Version Request**:
-1 Request は 1 Submission × 1 Resource Version × その Version の全 Workflow を対象とする。Submission と Resource Version は同一 Project に属していなければならない。(ADR 0003)
+1 Request は 1 Submission × 1 Resource Version × その Version の全 Workflow を対象とする。Submission と Resource Version は同一 Project に属する。新規・手動再実行とも作成時点の latest に固定し、待機中も変更しない。利用者は Version を指定できない。(ADR 0003)
 
 **Archive-not-Edit**:
-訂正は Submission の編集ではなく、archive して新しい Submission を作ることで行う。(ADR 0004)
+evaluation Submission の訂正は編集ではなく、archive して新しい Submission を作ることで行う。validation Submission は archive せず、新しい Submission で訂正する。訂正・再実行の導出関係は保持しない。(ADR 0004)
 
 **Worst-wins**:
 Status の集約は最悪値優先。`IE > OLE > MLE > TLE > RE > WA > AC`。
@@ -149,7 +141,7 @@ Resource Version は Sandbox Image を tag ではなく `repo@sha256:...` digest
 Job と Artifact の `visibility` は省略時 `private`。クライアントに見せるものは常に明示的に `public` 宣言する。
 
 **Manual Resource Import**:
-Admin が Git の指定コミットの全 Resource をまとめて取り込む操作。変更がある Resource だけを新 Version とし、完了までは現在の Version を使い続ける。
+Admin が課題 ID と Version を指定して 1 課題を取得・検証し、最新版として採用する操作。完了までは現在の Version を維持する。同じ Version は変更なし、古い Version は拒否する。validation / evaluation とも自動再実行は行わない。
 
 **Fix-Forward Resource**:
 Resource Version は archive も撤回もできない。訂正は Resource repo への push と手動インポートによる新 Version 登録のみで行い、latest は常に最新の登録済み Version。Resource の編集入口を git に一本化し、コンソール側に第二の編集経路を作らない。(ADR 0006)
@@ -157,8 +149,8 @@ Resource Version は archive も撤回もできない。訂正は Resource repo 
 **Git-for-Logic, Console-for-Operations**:
 採点ロジック(Workflow、Job、Preset、Sandbox Image)と課題タイトルは git 管理の Resource が所有する。運用メタデータ(公開日時、締切日時、並び順)はコンソール管理の Project 属性が所有し、変更に Resource Version 登録を要しない。(ADR 0006)
 
-**Converge-to-Latest**:
-既定の結果表示は latest Resource Version 上の Request に固定する。latest 上の Request を持たない Submission は「未実行」として扱い、Queued Rerun が表示を latest へ収束させる。古い Version 上の結果は明示的な Version 選択(Manager/Admin のみ)でしか見えない。(ADR 0007)
+**Request-Based Results**:
+結果一覧・詳細は Request と実行対象の Resource Version に紐づく。課題更新によって過去の結果を置換・非表示にしない。学生も自分の過去 Version の Validation Request を参照でき、本採点も過去の結果を保持する。課題詳細は latest を参照する。(ADR 0007)
 
 **Topology-Agnostic Manifests**:
 アプリケーションのmanifestはクラスタのノード構成を仮定しない。Pod同士のノード同居に依存する機構(hostPath等)は使わない。デプロイの既定がシングルノードであっても、マルチノードクラスタでそのまま動作する。(ADR 0008)
