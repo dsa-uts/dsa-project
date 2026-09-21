@@ -4,4 +4,6 @@ Submissions and Requests are treated as immutable records. When an Evaluation Su
 
 ## Consequences
 
-Archived Submissions and their Requests are hidden from normal result views. They remain available for viewing past results and Request lineage through `derived_from_request_id`.
+Only evaluation Submissions can be archived, hiding all their Requests from normal result views while retaining the records. Validation Submissions cannot be archived, including by Managers or Admins; corrections are new uploads and earlier attempts remain in the result history.
+
+Submissions and Requests do not store correction or rerun lineage: no current operation needs those links. Each Request still references its Submission and Resource Version.

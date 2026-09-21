@@ -9,7 +9,7 @@ This decision replaces latest-Version-only result views and automatic queued rer
 
 ## Consequences
 
-- Students can view their own validation results from older Versions. Existing ownership, publication, Job visibility, and Submission archive rules still apply.
+- Students can view their own validation results from older Versions. Existing ownership, publication, and Job visibility rules still apply. Submission archive rules apply only to evaluation results.
 - Result details use the Request's pinned Version, including its Workflow definitions. Each row has its own Workflow set; counts cannot be taken from the current Project Version.
 - A Version update does not produce synthetic “not run” result rows. A Request that has not completed uses its normal execution state.
 - Project detail always uses the latest imported Version. New Requests and manual reruns pin that Version at creation, while existing Requests retain their original target.

@@ -41,11 +41,11 @@ soft delete された User Account。ログイン不可だがレコードは保�
 _Avoid_: Deleted user, removed user
 
 **Submission**:
-ある Project と Subject User に対してアップロードされた、正規化済み file tree の immutable な記録。uploader、アップロード時刻、content hash、kind(validation / evaluation)を含む。kind はアップロード時に確定し変更しない。kind を変えたい場合は新しい Submission を作る。誤った Submission は編集せず archive して置き換える。
+ある Project と Subject User に対してアップロードされた、正規化済み file tree の immutable な記録。uploader、アップロード時刻、content hash、kind(validation / evaluation)を含む。kind はアップロード時に確定し変更しない。kind を変えたい場合は新しい Submission を作る。訂正は新しい Submission で行い、archive は evaluation のみ可能。validation は過去の結果も履歴に残す。
 _Avoid_: Upload, answer
 
 **Archived Submission**:
-訂正版 Submission に置き換えられたため、Request 作成と通常の結果表示から外された Submission。
+対象者の取り違えなどの誤りにより、Request 作成と通常の結果表示から外された evaluation Submission。所属するすべての Request が通常の結果表示から外れる。
 _Avoid_: Deleted submission, mutable submission
 
 **Request**:
@@ -129,7 +129,7 @@ Submission の同一性は正規化済み file tree とその content hash で�
 1 Request は 1 Submission × 1 Resource Version × その Version の全 Workflow を対象とする。Submission と Resource Version は同一 Project に属する。新規・手動再実行とも作成時点の latest に固定し、待機中も変更しない。利用者は Version を指定できない。(ADR 0003)
 
 **Archive-not-Edit**:
-訂正は Submission の編集ではなく、archive して新しい Submission を作ることで行う。(ADR 0004)
+evaluation Submission の訂正は編集ではなく、archive して新しい Submission を作ることで行う。validation Submission は archive せず、新しい Submission で訂正する。訂正・再実行の導出関係は保持しない。(ADR 0004)
 
 **Worst-wins**:
 Status の集約は最悪値優先。`IE > OLE > MLE > TLE > RE > WA > AC`。

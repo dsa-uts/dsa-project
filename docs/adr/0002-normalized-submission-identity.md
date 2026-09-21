@@ -4,4 +4,4 @@ Submissions have stable IDs, and their file contents are fingerprinted by hashin
 
 ## Consequences
 
-Two uploads with the same normalized paths and file bytes have the same content hash even if their archive bytes differ. Correcting a mistaken Submission archives the old Submission and creates a new one instead of mutating file contents, uploader, upload time, or Project.
+Two uploads with the same normalized paths and file bytes have the same content hash even if their archive bytes differ. Correcting a mistaken Submission creates a new one instead of mutating file contents, uploader, upload time, or Project. Only evaluation Submissions can be archived; validation attempts remain in the result history.

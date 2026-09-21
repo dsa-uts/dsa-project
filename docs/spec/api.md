@@ -100,7 +100,7 @@ Role による可視範囲:
 ```
 
 - `published_at` / `deadline` は nullable。`published_at` が `null` は未公開と同義(CONTEXT.md「公開日時」)。
-- `my_result`: 自分の non-archived validation Submission に属する最新 Request とその Submission を返す。Version で絞らない。Request がなければ `my_result: null`。課題更新だけでは変化しない。
+- `my_result`: 自分の validation Submission に属する最新 Request とその Submission を返す。Version で絞らない。Request がなければ `my_result: null`。課題更新だけでは変化しない。
 - `my_result.request.workflows`: per-Workflow の Status。進捗セル(「2/3 AC」や status chip)はここからクライアント導出。
 
 ### `GET /api/projects/{project_id}`
@@ -199,7 +199,7 @@ Admin 専用。表示順を永続化する。初回取り込みで作成した P
 | `uploaded_at` | アップロード時刻。 |
 | `original_submitted_at` | 外部ツール(Manaba 等)上の提出時刻。evaluation では必須、validation では持たない(`null`)。遅延表示の判定(Deadline との比較)にのみ使う。 |
 | `content_hash` | `sha256:...`(Normalized Submission Identity)。 |
-| `archived_at` | archive されるまで `null`。 |
+| `archived_at` | evaluation は archive されるまで `null`。validation は常に `null`。 |
 
 `archived_at` 以外の全フィールドと file 内容は immutable(Archive-not-Edit)。
 
@@ -239,12 +239,12 @@ Request: `multipart/form-data`
 
 ### `POST /api/submissions/{submission_id}/archive`
 
-Manager/Admin 専用。Submission を archive し、その Request を通常の結果表示から外す(Archive-not-Edit)。
+Manager/Admin 専用。evaluation Submission を archive し、所属するすべての Request を通常の結果表示から外す(Archive-not-Edit)。validation Submission は全 Role で archive 不可。
 
 - 冪等: 既に archived でも `204` を返す。
 - 対象 Submission の pending / queued / running な Request はキャンセルしない。走っているものは走り切る。
 - Response: `204`
-- Errors: `403`(Student)、`404`(不存在)
+- Errors: `403`(Student)、`404`(不存在)、`422 submission_kind_not_archivable`(validation Submission)
 
 ## Requests
 
@@ -262,7 +262,7 @@ Manager/Admin 専用。Submission を archive し、その Request を通常の�
 | `state` | `pending` / `queued` / `running` / `completed`。 |
 | `status` | `completed` まで `null`。完了後は Status(Worst-wins で集約)。 |
 
-上記を Request コアオブジェクトと呼ぶ。作成 API のレスポンスはコアのみ、詳細 API はコア + `workflows` を返す。
+上記を Request コアオブジェクトと呼ぶ。作成 API のレスポンスはコアのみ、詳細 API はコア + `workflows` を返す。Submission / Request 間の訂正元・再実行元を示す導出関係は保存しない。各 Request の対象 Submission と Resource Version への参照は保持する。
 
 ### `POST /api/projects/{project_id}/requests`
 
@@ -276,7 +276,7 @@ Request を作成する。Request はその Version の全 Workflow を実行す
 
 - サーバーが Request 作成時点の latest を確定する。初回・手動再実行とも同じ規則で、待機中の課題更新でも Version は変更しない。`version_id` は受け付けない。
 - 認可:
-  - Student: 自分の non-archived な validation Submission に対してのみ。Version は latest のみ。
+  - Student: 自分の validation Submission に対してのみ。Version は latest のみ。
   - Manager/Admin: non-archived な evaluation Submission と、自分の validation Submission。いずれも作成時点の latest。
 - Response: `201` + Request コアオブジェクト(`state` は `pending`)
 - Errors:
@@ -287,7 +287,7 @@ Request を作成する。Request はその Version の全 Workflow を実行す
 
 ### `GET /api/requests/{request_id}`
 
-1 つの Request の全結果ツリーを返す。polling の受け口。Version が古くなっても参照可能で、学生は自分の validation Request を閲覧できる。Workflow の構成・実行内容は Request に固定された Version を使う。Project の公開状態・所有者・Submission の archive・Job の可視性による認可は維持する。
+1 つの Request の全結果ツリーを返す。polling の受け口。Version が古くなっても参照可能で、学生は自分の validation Request を閲覧できる。Workflow の構成・実行内容は Request に固定された Version を使う。Project の公開状態・所有者・evaluation Submission の archive・Job の可視性による認可は維持する。
 
 ```json
 {
@@ -356,7 +356,7 @@ Request を作成する。Request はその Version の全 Workflow を実行す
 一覧系の読み取りはビュー専用エンドポイントで返す。validation / evaluation とも Request-Based Results に従う。
 
 - 1 行 = 1 Request。同じ Submission の再実行も別の行として残す。
-- archived Submission とその Request は通常の結果一覧に表示しない。
+- archived evaluation Submission とその Request は通常の結果一覧に表示しない。validation に archive による非表示はない。
 - 過去 Version の Request も返す。課題更新だけで一覧・詳細を置換したり「未実行」の行を作ったりしない。
 - 各行に `version_id` と SemVer の `version` を含める。`request` は必ず存在する。
 - `request.workflows` はその Request の Version の `{id, name, status}`。Workflow 数や進捗は行ごとに導出し、latest の Workflow 構成を流用しない。
@@ -393,7 +393,7 @@ Request を作成する。Request はその Version の全 Workflow を実行す
 }
 ```
 
-- 自分の non-archived validation Submission に属する Request を返す。Request がなければ `results: []`。
+- 自分の validation Submission に属する Request を返す。Request がなければ `results: []`。
 - Errors: `404`(Project 不存在・不可視)
 
 ### `GET /api/projects/{project_id}/results`
