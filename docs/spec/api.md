@@ -1,8 +1,8 @@
 # REST API 仕様
 
-このドキュメントはクライアント向け REST API の形(path、method、リクエスト/レスポンススキーマ、ステータスコード、エンドポイントごとの認可)を所有する。ドメイン規則はここで再説明せず、[CONTEXT.md](../../CONTEXT.md) の用語と Principles を名前で参照する。Resource リポジトリの仕様は [Resource リポジトリ契約](https://github.com/dsa-uts/dsa-resource-public/blob/main/docs/resource-contract.md)、Resource YAML の仕様は [Resource 定義書](https://github.com/dsa-uts/dsa-resource-public/blob/main/docs/resource.md) を正とする。
+このドキュメントは Conventions と未実装エンドポイントの API 草稿を所有する。実装時に [OpenAPI](../../api/openapi.yaml) へ移す(ADR 0010)。ドメイン規則は [CONTEXT.md](../../CONTEXT.md)、取得・保存は [Resource 取り込み仕様](resource-imports.md)、Resource の形式は [dsa-resource-spec](https://github.com/dsa-uts/dsa-resource-spec) を参照する。
 
-公開 API の語彙では Project と Version を使う。Resource / Resource Version は internal / admin の概念に留める(例外は [Versions](#get-apiprojectsproject_idversions) の `source_ref` を参照)。
+公開 API の語彙では Project と Version を使う。Resource / Resource Version は internal / admin の概念に留める。`version_id` は DB 上の UUID、`version` は表示用の正式版 SemVer (`v1.2.3` など)。
 
 ## Conventions
 
@@ -61,8 +61,8 @@
 
 Role による可視範囲:
 
-- Student: 公開済み(`published_at` ≤ 現在)かつ non-archived な Project のみ。
-- Manager/Admin: 全 Project。未公開・Archived Project(CONTEXT.md)を含む。
+- Student: 公開済み(`published_at` ≤ 現在)の Project のみ。
+- Manager/Admin: 全 Project。未公開を含む。Project の自動アーカイブは行わない。
 
 ```json
 {
@@ -71,20 +71,26 @@ Role による可視範囲:
       "id": "uuid",
       "name": "DSA Basic",
       "latest_version_id": "uuid",
+      "latest_version": "v1.0.0",
       "display_order": 10,
       "published_at": "2026-04-01T00:00:00Z",
       "deadline": "2026-04-15T23:59:59Z",
-      "archived": false,
+      "workflows": [
+        { "id": "basic", "name": "基本課題" },
+        { "id": "applied", "name": "発展課題" }
+      ]
       "my_result": {
         "submission_id": "uuid",
         "uploaded_at": "2026-04-10T12:00:00Z",
         "request": {
           "id": "uuid",
+          "version_id": "uuid",
+          "version": "v1.0.0",
           "state": "completed",
           "status": "WA",
           "workflows": [
             { "id": "basic", "status": "AC" },
-            { "id": "graphs", "status": "WA" }
+            { "id": "applied", "status": "WA" }
           ]
         }
       }
@@ -94,18 +100,12 @@ Role による可視範囲:
 ```
 
 - `published_at` / `deadline` は nullable。`published_at` が `null` は未公開と同義(CONTEXT.md「公開日時」)。
-- `my_result`: 現在のユーザー自身の進捗。Role を問わず、自分の最新 non-archived validation Submission と、その latest Version 上の最新 Request を返す。Submission がなければ `my_result: null`、latest Version 上の Request がなければ `request: null`(未実行。Converge-to-Latest)。
+- `my_result`: 自分の non-archived validation Submission に属する最新 Request とその Submission を返す。Version で絞らない。Request がなければ `my_result: null`。課題更新だけでは変化しない。
 - `my_result.request.workflows`: per-Workflow の Status。進捗セル(「2/3 AC」や status chip)はここからクライアント導出。
 
 ### `GET /api/projects/{project_id}`
 
-Project view を返す。既定では latest Version を解決する。
-
-Query:
-
-| name | role | description |
-| --- | --- | --- |
-| `version_id` | Manager/Admin | 明示的な Version ID。 |
+Project view は常に latest Version を返す。`version_id` による切り替えは受け付けない。過去の実行内容は Request 詳細で参照する。
 
 ```json
 {
@@ -113,6 +113,7 @@ Query:
   "name": "DSA Basic",
   "version": {
     "id": "uuid",
+    "version": "v1.0.0",
     "is_latest": true,
     "registered_at": "2026-04-01T00:00:00Z"
   },
@@ -122,37 +123,37 @@ Query:
       "name": "Judge",
       "description_markdown": "# 課題1 ...",
       "jobs": [
-        { "id": "build", "name": "Build" },
-        { "id": "test-public", "name": "Public Test" }
+        { "id": "build", "name": "コンパイル" },
+        { "id": "test-public", "name": "基本テスト" }
       ]
     }
   ]
 }
 ```
 
-- `description_markdown`: Workflow の `description-path`([Resource 定義書](https://github.com/dsa-uts/dsa-resource-public/blob/main/docs/resource.md) 所有)の Markdown 本文をインラインで埋め込む。宣言がなければ `null`。
-- `jobs`: 現在の Role に可視な Job のみ(Private-by-Default)。Student には public Job のみ、Manager/Admin には全 Job。
-- Errors: `404`(Project 不存在、または未公開・Archived で Student から不可視)、`403 version_not_allowed`(Student が latest 以外の `version_id` を指定)
+- `description_markdown`: Workflow の `description-path`([Resource 定義書](https://github.com/dsa-uts/dsa-resource-spec/blob/v1.1.0/docs/resource.md) 所有)の Markdown 本文をインラインで埋め込む。宣言がなければ空文字。
+- `jobs`: 現在の Role で見れる Job のみ(Private-by-Default)。Student は public Job のみ、Manager/Admin は全 Job 見れる。
+- Errors: `404`(Project 不存在、または未公開で Student から不可視)、`422 version_not_allowed`(`version_id` を指定)
 
 ### `GET /api/projects/{project_id}/versions`
 
-Manager/Admin 専用。diff 表示と手動 rerun のために Version を列挙する。
+Manager/Admin 専用。過去結果の比較・検索のために取り込み済み Version を列挙する。GitHub 上の取り込み候補一覧ではなく、過去 Version の実行指定にも使わない。
 
 ```json
 {
   "versions": [
     {
       "id": "uuid",
+      "version": "v1.0.0",
       "is_latest": true,
-      "registered_at": "2026-04-01T00:00:00Z",
-      "source_ref": "3f2a9c1d..."
+      "registered_at": "2026-04-01T00:00:00Z"
     }
   ]
 }
 ```
 
 - `registered_at` 降順。
-- `source_ref` は git commit SHA の完全形。Version の人間可読な識別に commit SHA しか実用手段がないため、Project / Version 語彙の例外としてここでのみ露出する。クライアントは先頭数文字に切り詰めて表示する。
+- Version は `version` の SemVer を表示する。
 - Errors: `403`(Student)
 
 ### `PATCH /api/projects/{project_id}`
@@ -172,7 +173,7 @@ Manager/Admin 専用。コンソール管理の運用メタデータを部分更
 
 ### `PATCH /api/projects/order`
 
-Admin 専用。表示順を永続化する。初期順序は Resource リポジトリの root manifest から import する。
+Admin 専用。表示順を永続化する。初回取り込みで作成した Project は末尾に追加し、Version 更新では順序を変更しない。
 
 ```json
 {
@@ -230,7 +231,6 @@ Request: `multipart/form-data`
 - Errors:
   - `403`(Student が `kind=evaluation` を指定)
   - `404`(Project 不存在・不可視)
-  - `409 project_archived`(Archived Project への新規 Submission)
   - `422 subject_user_required`(evaluation で `subject_user_id` 欠落)
   - `422 original_submitted_at_required`(evaluation で `original_submitted_at` 欠落)
   - `422 original_submitted_at_not_allowed`(validation で `original_submitted_at` を指定)
@@ -254,7 +254,8 @@ Manager/Admin 専用。Submission を archive し、その Request を通常の�
 | --- | --- |
 | `id` | Request UUID。 |
 | `project_id` | 対象 Project。 |
-| `version_id` | 単一の対象 Version(Single-Version Request)。 |
+| `version_id` | 作成時点の latest に固定した単一の対象 Version(Single-Version Request)。 |
+| `version` | 実行対象 Version の SemVer。 |
 | `submission` | 対象 Submission の要約: `id`、`kind`、`subject_user`(3 点セット)、`uploaded_at`、`content_hash`。 |
 | `requested_by` | actor の User(3 点セット)。System Account を含む。 |
 | `requested_at` | Request 作成時刻。 |
@@ -269,32 +270,31 @@ Request を作成する。Request はその Version の全 Workflow を実行す
 
 ```json
 {
-  "submission_id": "uuid",
-  "version_id": "uuid"
+  "submission_id": "uuid"
 }
 ```
 
-- `version_id` 省略時は latest。
+- サーバーが Request 作成時点の latest を確定する。初回・手動再実行とも同じ規則で、待機中の課題更新でも Version は変更しない。`version_id` は受け付けない。
 - 認可:
   - Student: 自分の non-archived な validation Submission に対してのみ。Version は latest のみ。
-  - Manager/Admin: non-archived な evaluation Submission(任意の Version)と、自分の validation Submission。
+  - Manager/Admin: non-archived な evaluation Submission と、自分の validation Submission。いずれも作成時点の latest。
 - Response: `201` + Request コアオブジェクト(`state` は `pending`)
 - Errors:
   - `404`(Submission が不可視・不存在)
   - `409 submission_archived`
-  - `409 project_archived`(Archived Project への新規 Request)
-  - `403 version_not_allowed`(Student が latest 以外を指定)
+  - `422 version_not_allowed`(`version_id` を指定)
   - `409 duplicate_request`(同一 `(submission_id, version_id)` の Request が `pending` / `queued` / `running` に存在する間。完了後の再実行は許可)
 
 ### `GET /api/requests/{request_id}`
 
-1 つの Request の全結果ツリーを返す。polling の受け口。
+1 つの Request の全結果ツリーを返す。polling の受け口。Version が古くなっても参照可能で、学生は自分の validation Request を閲覧できる。Workflow の構成・実行内容は Request に固定された Version を使う。Project の公開状態・所有者・Submission の archive・Job の可視性による認可は維持する。
 
 ```json
 {
   "id": "uuid",
   "project_id": "uuid",
   "version_id": "uuid",
+  "version": "v1.0.0",
   "submission": {
     "id": "uuid",
     "kind": "validation",
@@ -346,30 +346,28 @@ Request を作成する。Request はその Version の全 Workflow を実行す
 
 - `jobs` は現在の Role に可視なもののみ(Private-by-Default)。
 - Workflow / Request の `status` は可視性に関係なく全 Job から Worst-wins で導出した値。
-- `stdout` / `stderr` はインラインで返す。サイズ上限は Job の `limits`([Resource 定義書](https://github.com/dsa-uts/dsa-resource-public/blob/main/docs/resource.md) 所有)が保証する。
+- `stdout` / `stderr` はインラインで返す。サイズ上限は Job の `limits`([Resource 定義書](https://github.com/dsa-uts/dsa-resource-spec/blob/v1.1.0/docs/resource.md) 所有)が保証する。
 - 未実行の Step の `exit_code` / `status` / `stdout` / `stderr` / `duration_ms` は `null`。
 - `artifacts` の `capture_status`: `captured` / `missing`。Artifact の取得は [Artifacts](#artifacts) を参照。
 - Errors: `404`(不存在・不可視)
 
 ## Results
 
-一覧系の読み取りはビュー専用エンドポイントで返す(汎用の Request 一覧 API は作らない)。教員名簿での「ユーザーごとに最新 Submission の最新 Request」をクライアント join で組むと N+1 になるため、各画面 1 リクエストで完結する形をサーバー側が所有する。共通規則:
+一覧系の読み取りはビュー専用エンドポイントで返す。validation / evaluation とも Request-Based Results に従う。
 
-- archived Submission とその Request は表示しない。
-- `request` は表示対象 Version 上の最新 Request のみ(Converge-to-Latest)。存在しなければ `null`(未実行)。古い Version 上の Request はこれらの API に現れない。
-- `request.workflows` は per-Workflow の `{id, status}`。集約表示(「2/3 AC」、Worst-wins バッジ、遅延強調)はすべてクライアント導出。
+- 1 行 = 1 Request。同じ Submission の再実行も別の行として残す。
+- archived Submission とその Request は通常の結果一覧に表示しない。
+- 過去 Version の Request も返す。課題更新だけで一覧・詳細を置換したり「未実行」の行を作ったりしない。
+- 各行に `version_id` と SemVer の `version` を含める。`request` は必ず存在する。
+- `request.workflows` はその Request の Version の `{id, name, status}`。Workflow 数や進捗は行ごとに導出し、latest の Workflow 構成を流用しない。
+- `requested_at` 降順、同時刻は Request ID 順で全件返す。
 
 ### `GET /api/projects/{project_id}/my-results`
 
-現在のユーザー自身の、この Project における validation 試行履歴(学生の二層目)。全 Role が使える。
+現在のユーザー自身の、この Project における validation Request 履歴。全 Role が使える。
 
 ```json
 {
-  "version_id": "uuid",
-  "workflows": [
-    { "id": "basic", "name": "Basic Test" },
-    { "id": "graphs", "name": "Graph Test" }
-  ],
   "results": [
     {
       "submission": {
@@ -379,13 +377,15 @@ Request を作成する。Request はその Version の全 Workflow を実行す
       },
       "request": {
         "id": "uuid",
+        "version_id": "uuid",
+        "version": "v1.0.0",
         "state": "completed",
         "status": "WA",
         "requested_at": "2026-04-10T12:01:00Z",
-        "requested_by": { "id": "uuid", "userid": "system", "name": "System" },
+        "requested_by": { "id": "uuid", "userid": "student001", "name": "山田 太郎" },
         "workflows": [
-          { "id": "basic", "status": "AC" },
-          { "id": "graphs", "status": "WA" }
+          { "id": "basic", "name": "Basic Test", "status": "AC" },
+          { "id": "graphs", "name": "Graph Test", "status": "WA" }
         ]
       }
     }
@@ -393,27 +393,21 @@ Request を作成する。Request はその Version の全 Workflow を実行す
 }
 ```
 
-- 行 = 自分の non-archived validation Submission。`uploaded_at` 降順、全件。
-- `version_id` / `workflows` は latest Version のもの。全行の分母(Workflow 数)はこれで揃う。
-- `requested_by` で学生自身の Request と Queued Rerun(System Account)を区別できる。
+- 自分の non-archived validation Submission に属する Request を返す。Request がなければ `results: []`。
 - Errors: `404`(Project 不存在・不可視)
 
 ### `GET /api/projects/{project_id}/results`
 
-Manager/Admin 専用。特定 Version 上の全ユーザーの evaluation 結果名簿。
+Manager/Admin 専用。この Project の全ユーザーの evaluation Request 履歴。未提出者を含む名簿ではなく Request 単位の一覧を返す。
 
 Query:
 
 | name | description |
 | --- | --- |
-| `version_id` | 対象 Version。省略時は latest。 |
+| `version_id` | 任意の取り込み済み Version で絞り込む。省略時は全 Version。実行対象の指定ではない。 |
 
 ```json
 {
-  "version": { "id": "uuid", "is_latest": true, "registered_at": "2026-04-01T00:00:00Z" },
-  "workflows": [
-    { "id": "basic", "name": "Basic Test" }
-  ],
   "rows": [
     {
       "user": { "id": "uuid", "userid": "student001", "name": "山田 太郎" },
@@ -426,11 +420,14 @@ Query:
       },
       "request": {
         "id": "uuid",
+        "version_id": "uuid",
+        "version": "v1.0.0",
         "state": "completed",
         "status": "WA",
         "requested_at": "2026-04-16T09:01:00Z",
+        "requested_by": { "id": "uuid", "userid": "manager001", "name": "教員" },
         "workflows": [
-          { "id": "basic", "status": "WA" }
+          { "id": "basic", "name": "Basic Test", "status": "WA" }
         ]
       }
     }
@@ -438,14 +435,13 @@ Query:
 }
 ```
 
-- `rows` は [`PATCH /api/users/order`](../../api/openapi.yaml) のグローバル表示順。System Account を除く全ユーザー(disabled 含む)を、Submission の有無に関わらず全件返す。未提出者の把握も本 API の要件。
-- `submission` = その Project × Subject User の最新 non-archived evaluation Submission。なければ `null`(未提出)。同一ユーザーの過去の Submission はドリルダウン(Submission 単位の参照)で辿る。
+- non-archived evaluation Submission の Request を返す。無効化済みユーザーの結果も含む。Request がなければ `rows: []`。
 - 遅延強調はクライアント導出: Project の `deadline` が設定済み ∧ `original_submitted_at` > `deadline`。
-- Errors: `403`(Student)、`404`(Project / Version 不存在)
+- Errors: `403`(Student)、`404`(Project / Version 不存在、または Version が別 Project に属する)
 
 ## Artifacts
 
-Artifact は Private-by-Default。Resource YAML で `public` 宣言され、かつ生成元の Job がそのクライアントに可視な場合のみ配信する。`artifact_id` は [`GET /api/requests/{request_id}`](#get-apirequestsrequest_id) の `artifacts` 配列で発見する。`content-type` の許可リストは [Resource 定義書](https://github.com/dsa-uts/dsa-resource-public/blob/main/docs/resource.md) が所有する。
+Artifact は Private-by-Default。Resource YAML で `public` 宣言され、かつ生成元の Job がそのクライアントに可視な場合のみ配信する。`artifact_id` は [`GET /api/requests/{request_id}`](#get-apirequestsrequest_id) の `artifacts` 配列で発見する。`content-type` の許可リストは [Resource 定義書](https://github.com/dsa-uts/dsa-resource-spec/blob/v1.1.0/docs/resource.md) が所有する。
 
 ### `GET /api/requests/{request_id}/artifacts/{artifact_id}`
 
@@ -468,45 +464,49 @@ Admin 専用。Student / Manager は `403`。
 
 ### `POST /api/admin/resource-imports`
 
-Manual Resource Import。Adminが指定コミットの全Resourceを手動で取り込む。GitHub Actionsからは呼ばない。登録契約、変更判定、原子的な適用、監査は [Resource リポジトリ契約](https://github.com/dsa-uts/dsa-resource-public/blob/main/docs/resource-contract.md) の「手動インポート」を正とする。
+Manual Resource Import。Admin が課題 ID と Version を指定し、1 課題を同期的に取り込む。取得・検証・保存の規則は [Resource 取り込み仕様](resource-imports.md) を参照する。
 
-- 認証: 通常のAdmin session cookieとCSRF対策。
-- source repositoryはBackend設定で固定。`source_ref` はmain履歴上の40桁commit SHA。
-
-```json
-{
-  "source_ref": "0123456789abcdef0123456789abcdef01234567"
-}
-```
-
-image名・tag・digest、Actions Run IDは対象Gitコミットから読む。クライアントから上書きしない。
-
-- Response: `200`（同期的に全体の取り込みが完了、変更なしも成功）。
+- 認証: 通常の Admin session cookie と CSRF 対策。
+- リポジトリは環境変数で固定。URL・コミット SHA・image の上書きは受け付けない。
 
 ```json
 {
-  "source_ref": "0123456789abcdef0123456789abcdef01234567",
-  "created_versions": [
-    {"project_id": "11111111-1111-4111-8111-111111111111", "version_id": "22222222-2222-4222-8222-222222222222"}
-  ],
-  "unchanged_project_ids": [],
-  "archived_project_ids": []
+  "resource_id": "ex1",
+  "version": "v1.2.3"
 }
 ```
 
-- 新VersionごとにQueued Rerunをenqueueする。対象はProject × ユーザーごとの直近non-archived validation Submission（既定5件）とProject × Subject Userごとの最新non-archived evaluation Submission 1件。System Account名義とする。
-- 同じ実効内容の再取り込みはno-opで、VersionやRequestを重複作成しない。
-- Errors:
-  - `401`（未認証）、`403`（Admin以外）
-  - `422 invalid_source_ref`（対象repositoryのmain履歴にないcommit）
-  - `422 invalid_resource_yaml`（Schema・参照・依存関係などのvalidation失敗）
-  - `422 missing_image_digest`（全image lockが揃っていない）
-  - `422 stale_image_lock`（build入力とlockが一致しない）
-  - `503 resource_source_unavailable`（Git source取得失敗）
+- `version`: `vMAJOR.MINOR.PATCH` 形式の正式版 SemVer。プレリリース・ビルドメタデータ・数値の不要な先頭ゼロは不可。
+- Response: `200`。初回登録・更新・変更なしとも同形。
+
+```json
+{
+  "project_id": "11111111-1111-4111-8111-111111111111",
+  "version_id": "22222222-2222-4222-8222-222222222222",
+  "resource_id": "ex1",
+  "version": "v1.2.3",
+  "changed": true
+}
+```
+
+- 現在と同じ Version は GitHub にアクセスせず、既存 ID と `changed: false` を返す。
+- 古い Version は取り込み済みでも拒否。新Versionでは `changed: true`。
+- 初回は未公開の Project を自動作成。更新時はタイトルを更新し、公開日時・締切・並び順を維持する。
+- validation / evaluation とも自動再採点を行わない。
+- Errors（DB の部分更新はしない）:
+  - `401`（未認証）、`403`（Admin 以外）
+  - `404 resource_version_not_found`（指定課題 ID・Version が index にない）
+  - `409 older_resource_version`（現在より古い Version）
+  - `422 invalid_resource_version`（Version の形式違反）
+  - `422 invalid_resource`（課題 JSON の検証失敗、ID・Version の不一致、index の構造不正）
+  - `422 resource_hash_mismatch`（index とのハッシュ不一致）
+  - `503 resource_source_unavailable`（認証失敗、レート制限、通信障害、index や参照先 JSON の取得失敗）
+- エラーコードで原因を区別し、レスポンスにトークンや upstream のレスポンス本文を含めない。ログ・アラートの詳細は未定。
+- 取り込み候補を列挙する API、取り込みジョブ・進捗 API は設けない。
 
 ## 未定
 
 存在は確定しているが、設計が未決のため本ドキュメントがまだ形を定義しないもの。
 
-- **Status 比較通知**: 新旧 latest Version 間の per-Workflow Status 比較の通知。Queued Rerun の挙動は確定済み([Results](#results) / CONTEXT.md)だが、比較結果の通知チャネルと見せ方が未決。
+- **Status 比較通知**: 手動再実行前後の per-Workflow Status 比較の通知。通知の要否・チャネル・見せ方は未定。
 - **初期セットアップ API**: 初回起動時の Admin パスワード等の設定。

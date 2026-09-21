@@ -1,16 +1,15 @@
-# Latest-Version Result Views with Bounded Queued Reruns
+# Request-Based Result History with Manual Reruns
 
-Requests pin a Resource Version at creation (Single-Version Request), so after a fix-forward push the "latest result" of a Submission can silently describe an outdated grading logic. We resolve this by pinning every default result view to the latest Resource Version and converging it via Queued Reruns (Converge-to-Latest): registering a new Version auto-creates System Account Requests for the most recent non-archived validation Submissions per Project × user (bounded by an operational config, default 5) and the single latest non-archived evaluation Submission per Project × Subject User. Submissions without a Request on the displayed Version render as "not run" — their old-Version results do not appear in list views; only Manager/Admin can see them by explicitly selecting an older Version.
+This decision replaces latest-Version-only result views and automatic queued reruns. Validation and evaluation result lists contain one row per Request, with the executed Version visible. Updating a Resource does not change historical result rows or create new Requests; operators and students rerun explicitly within their existing permissions.
 
 ## Considered Options
 
-- Show each Submission's latest Request regardless of its Version, with a staleness badge when it predates `latest`. Rejected: it leaks the Version axis into the student UI, and mixes rows whose Workflow sets (and therefore denominators like "2/3 AC") differ across Versions in one table.
-- Rerun every non-archived Submission on registration. Rejected: a student may have dozens of validation attempts; rerunning all of them buys nothing pedagogically and scales the queue with attempt count instead of class size.
-- No automatic reruns (manual rerun only). Rejected: after a grading fix, a stale "all green" on a student's dashboard is a lie precisely when correctness matters most.
+- Filtering results to the latest Version and automatically rerunning submissions. Rejected: it hides useful history and couples resource import to potentially large amounts of execution work.
+- Showing only one latest Request per Submission. Rejected: rerunning would replace the visible row and hide earlier attempts from the history.
 
 ## Consequences
 
-- Student views never expose Resource Versions; results converge to `latest` without user action.
-- Validation Submissions older than the rerun depth show "not run" after a Version bump; a student can manually re-request any of their non-archived Submissions (latest Version only) to fill the row back in.
-- Registering a Version enqueues work proportional to class size (× rerun depth), not to total attempt count.
-- A rerun burst follows every push; this is accepted at class scale and bounded by the depth config.
+- Students can view their own validation results from older Versions. Existing ownership, publication, Job visibility, and Submission archive rules still apply.
+- Result details use the Request's pinned Version, including its Workflow definitions. Each row has its own Workflow set; counts cannot be taken from the current Project Version.
+- A Version update does not produce synthetic “not run” result rows. A Request that has not completed uses its normal execution state.
+- Project detail always uses the latest imported Version. New Requests and manual reruns pin that Version at creation, while existing Requests retain their original target.
