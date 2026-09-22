@@ -2,6 +2,7 @@ import { Navigate, Route, Routes } from 'react-router-dom'
 import { Page } from '@/components/Page'
 import { NavigationGuard } from '@/components/navigation-guard'
 import { AdminUsersPage } from '@/features/users/AdminUsersPage'
+import { AdminProjectsPage } from '@/features/projects/AdminProjectsPage'
 import { BulkUsersPage } from '@/features/users/BulkUsersPage'
 import { AuthLayout, ProtectedLayout } from '@/lib/auth'
 import { AuthenticatedLayout } from './layouts/AuthenticatedLayout'
@@ -22,6 +23,7 @@ function App() {
               <Route path="/" element={<Navigate to="/about" replace />} />
               <Route path="/about" element={<AboutPage />} />
               <Route path="/admin/list" element={<AdminPage />} />
+              <Route path="/admin/projects" element={<AdminProjectsPage />} />
               <Route path="/admin/users" element={<AdminUsersPage />} />
               <Route path="/admin/users/bulk" element={<BulkUsersPage />} />
               <Route path="*" element={<NotFoundPage />} />

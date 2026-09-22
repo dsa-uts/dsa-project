@@ -9,6 +9,7 @@ export function AdminPage() {
     <main className="container mx-auto flex-1 px-8 py-6">
       <h1 className="mb-4 text-3xl font-bold">Admin Page</h1>
       <ul className="list-inside list-disc space-y-2 text-xl text-link">
+        <li><Link to="/admin/projects" className="ml-4 hover:underline">Project Management</Link></li>
         <li><Link to="/admin/users" className="ml-4 hover:underline">User Management</Link></li>
         <li><Link to="/admin/users/bulk" className="ml-4 hover:underline">Batch User Registration</Link></li>
       </ul>
