@@ -19,12 +19,12 @@
           findutils
           gnugrep
         ]
-        ++ lib.optionals stdenv.isLinux [
+        ++ lib.optionals stdenv.hostPlatform.isLinux [
           k3d
           playwright-driver.browsers
         ];
     }
-    // pkgs.lib.optionalAttrs pkgs.stdenv.isDarwin {
+    // pkgs.lib.optionalAttrs pkgs.stdenv.hostPlatform.isDarwin {
       # Nix Node's system CA lookup does not include the user's OrbStack root.
       # Export only the public certificate; trust installation stays with OrbStack.
       shellHook = ''
@@ -42,7 +42,7 @@
         fi
       '';
     }
-    // pkgs.lib.optionalAttrs pkgs.stdenv.isLinux {
+    // pkgs.lib.optionalAttrs pkgs.stdenv.hostPlatform.isLinux {
       PLAYWRIGHT_BROWSERS_PATH = "${pkgs.playwright-driver.browsers}";
       PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD = "1";
       PLAYWRIGHT_SKIP_VALIDATE_HOST_REQUIREMENTS = "true";
