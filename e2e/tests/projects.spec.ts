@@ -101,7 +101,7 @@ test('real Resource import, idempotence, publication and atomic bulk saves', asy
   }
 })
 
-test('Admin navigates to Project Management, imports and saves JST schedules', async ({ page }) => {
+test('Admin imports two Projects and saves their order and JST schedules', async ({ page }) => {
   test.setTimeout(120_000)
   await page.goto('/login')
   await page.getByLabel('User ID', { exact: true }).fill('admin')
@@ -113,20 +113,39 @@ test('Admin navigates to Project Management, imports and saves JST schedules', a
   await page.getByLabel('リソースID', { exact: true }).fill('Invalid_ID')
   await page.getByLabel('バージョン', { exact: true }).fill('v1.0.0')
   expect(await page.getByLabel('リソースID', { exact: true }).evaluate((input: HTMLInputElement) => input.validity.patternMismatch)).toBe(true)
-  await page.getByLabel('リソースID', { exact: true }).fill('ex1')
-  await page.getByRole('button', { name: '登録', exact: true }).click()
-  await expect(page.getByRole('status').filter({ hasText: /登録|保存/ })).toContainText(/登録しました|登録済み/, { timeout: 65_000 })
+  for (const resourceId of ['ex1', 'ex2']) {
+    await page.getByLabel('リソースID', { exact: true }).fill(resourceId)
+    await page.getByLabel('バージョン', { exact: true }).fill('v1.0.0')
+    await page.getByRole('button', { name: '登録', exact: true }).click()
+    await expect(page.getByRole('status').filter({ hasText: /登録|保存/ })).toContainText(/登録しました|登録済み/, { timeout: 65_000 })
+    await expect(page.getByRole('cell', { name: resourceId, exact: true })).toBeVisible()
+  }
   const response = await page.request.get('/api/projects')
   expect(response.status()).toBe(200)
-  const original = (await response.json()).projects.map((p: { id: string; published_at: string | null; deadline: string | null }) => ({ id: p.id, published_at: p.published_at, deadline: p.deadline }))
+  const projects = (await response.json()).projects
+  const original = projects.map((p: { id: string; published_at: string | null; deadline: string | null }) => ({ id: p.id, published_at: p.published_at, deadline: p.deadline }))
+  const expectedOrder: string[] = projects.map((p: { resource_id: string }) => p.resource_id)
+  ;[expectedOrder[0], expectedOrder[1]] = [expectedOrder[1], expectedOrder[0]]
+  const resourceCells = page.locator('tbody tr td:nth-child(3)')
   const row = page.getByRole('row').filter({ has: page.getByRole('cell', { name: 'ex1', exact: true }) })
   try {
+    const handles = page.getByRole('button', { name: /を移動$/ })
+    const source = await handles.nth(0).boundingBox()
+    const target = await handles.nth(1).boundingBox()
+    expect(source).not.toBeNull()
+    expect(target).not.toBeNull()
+    await page.mouse.move(source!.x + source!.width / 2, source!.y + source!.height / 2)
+    await page.mouse.down()
+    await page.mouse.move(target!.x + target!.width / 2, target!.y + target!.height / 2, { steps: 10 })
+    await page.mouse.up()
+    await expect(resourceCells).toHaveText(expectedOrder)
     await row.getByLabel(/の公開日時/).fill('2026-09-12T19:59')
     await row.getByLabel(/の締切日時/).fill('2026-09-19T19:59')
     await page.getByRole('button', { name: '変更を保存' }).click()
     await expect(page.getByRole('status').filter({ hasText: /登録|保存/ })).toHaveText('日時・表示順を保存しました。')
     await expect(page.getByRole('button', { name: '変更を保存' })).toBeDisabled()
     await page.reload()
+    await expect(resourceCells).toHaveText(expectedOrder)
     await expect(row.getByLabel(/の公開日時/)).toHaveValue('2026-09-12T19:59')
     await expect(row.getByLabel(/の締切日時/)).toHaveValue('2026-09-19T19:59')
     const saved = (await (await page.request.get('/api/projects')).json()).projects.find((p: { resource_id: string }) => p.resource_id === 'ex1')
