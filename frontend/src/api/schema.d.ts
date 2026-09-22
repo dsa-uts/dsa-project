@@ -215,6 +215,8 @@ export interface components {
             my_result: {
                 /** Format: uuid */
                 submission_id: string;
+                /** @description Full normalized file tree hash (Normalized Submission Identity). Clients abbreviate the digest for display. */
+                content_hash: string;
                 /** Format: date-time */
                 uploaded_at: string;
                 request: {
@@ -228,7 +230,14 @@ export interface components {
                     status: components["schemas"]["NullableStatus"];
                     workflows: {
                         id: string;
+                        /** @description Workflow name from the Request's pinned Version, not the latest Project Version. */
+                        name: string;
                         status: components["schemas"]["NullableStatus"];
+                        /**
+                         * Format: int64
+                         * @description Sum of executed Step durations in this Workflow, including compilation. Unexecuted Steps are excluded. Null until the Request completes or if timing is unavailable.
+                         */
+                        duration_ms: number | null;
                     }[];
                 };
             } | null;

@@ -13,13 +13,16 @@ export function TopBar() {
 
   return (
     <header className="shrink-0 bg-top-bar text-top-bar-foreground">
-      <div className="flex h-16 items-center justify-between gap-4 px-4 sm:px-8">
+      <div className="flex min-h-16 flex-wrap items-center justify-between gap-2 px-4 py-2 sm:h-16 sm:flex-nowrap sm:gap-4 sm:px-8 sm:py-0">
         <Link to="/about" className="rounded-sm px-2 py-1 text-3xl font-bold outline-none transition-opacity hover:bg-top-bar-hover hover:opacity-80 focus-visible:ring-2 focus-visible:ring-top-bar-foreground">
           DSA
         </Link>
-        <div className="flex items-center gap-4">
+        <Link to="/projects" className="mr-auto rounded-sm px-2 py-2 outline-none hover:bg-top-bar-hover focus-visible:ring-2 focus-visible:ring-top-bar-foreground">
+          Dashboard
+        </Link>
+        <div className="flex items-center gap-2 sm:gap-4">
           {user?.role === 'admin' && (
-            <Link to="/admin/list" className="rounded-sm px-4 py-2 outline-none transition-colors hover:bg-top-bar-hover focus-visible:ring-2 focus-visible:ring-top-bar-foreground">
+            <Link to="/admin/list" className="rounded-sm px-2 py-2 outline-none transition-colors hover:bg-top-bar-hover focus-visible:ring-2 focus-visible:ring-top-bar-foreground sm:px-4">
               Admin
             </Link>
           )}
