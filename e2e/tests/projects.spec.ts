@@ -1,6 +1,38 @@
 import { randomUUID } from 'node:crypto'
 import { expect, test, type APIRequestContext, type APIResponse } from '@playwright/test'
 
+test('Dashboard lists actual Projects and filters them without navigation', async ({ page }) => {
+  test.setTimeout(120_000)
+  await page.goto('/login')
+  await page.getByLabel('User ID', { exact: true }).fill('admin')
+  await page.getByLabel('Password', { exact: true }).fill('admin')
+  await page.getByRole('button', { name: 'Log in' }).click()
+  await expect(page.getByRole('link', { name: 'Dashboard' })).toBeVisible()
+  for (const resource_id of ['ex1', 'ex2']) {
+    const response = await page.request.post('/api/admin/resource-imports', { data: { resource_id, version: 'v1.0.0' } })
+    expect(response.status(), await response.text()).toBe(200)
+  }
+  const response = await page.request.get('/api/projects')
+  expect(response.status()).toBe(200)
+  const { projects } = await response.json()
+  await page.getByRole('link', { name: 'Dashboard' }).click()
+  await expect(page.getByRole('heading', { name: 'Problem List' })).toBeVisible()
+  await expect(page.getByRole('heading', { level: 2 })).toHaveText(projects.map((project: { name: string }) => project.name))
+  await expect(page.getByText('実行結果なし', { exact: true })).toHaveCount(projects.length)
+  await page.getByRole('tab', { name: projects[0].name, exact: true }).click()
+  await expect(page).toHaveURL(/\/projects$/)
+  await expect(page.getByRole('heading', { level: 2 })).toHaveText([projects[0].name])
+  await expect(page.getByRole('tabpanel').getByRole('listitem')).toHaveText(projects[0].workflows.map((workflow: { name: string }) => workflow.name))
+  await page.getByRole('tab', { name: 'All', exact: true }).click()
+  await expect(page.getByRole('heading', { level: 2 })).toHaveCount(projects.length)
+  await page.setViewportSize({ width: 1584, height: 992 })
+  await page.screenshot({ path: 'test-results/problem-list.png', fullPage: true })
+  await page.setViewportSize({ width: 390, height: 844 })
+  await expect(page.getByRole('link', { name: 'Dashboard' })).toBeInViewport()
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
+  await page.screenshot({ path: 'test-results/problem-list-mobile.png', fullPage: true })
+})
+
 async function cookie(request: APIRequestContext, role = 'admin') {
   const response = await request.post('/api/session', { data: { userid: role, password: 'admin' } })
   expect(response.status()).toBe(200)

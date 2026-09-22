@@ -340,9 +340,13 @@ components:
         my_result:
           type: [object, "null"]
           description: Latest own validation Request and its Submission, across Versions. Currently null until Submission/Request APIs are implemented.
-          required: [submission_id, uploaded_at, request]
+          required: [submission_id, content_hash, uploaded_at, request]
           properties:
             submission_id: { type: string, format: uuid }
+            content_hash:
+              type: string
+              pattern: '^sha256:[0-9a-f]{64}$'
+              description: Full normalized file tree hash (Normalized Submission Identity). Clients abbreviate the digest for display.
             uploaded_at: { type: string, format: date-time }
             request:
               type: object
@@ -357,10 +361,18 @@ components:
                   type: array
                   items:
                     type: object
-                    required: [id, status]
+                    required: [id, name, status, duration_ms]
                     properties:
                       id: { type: string }
+                      name:
+                        type: string
+                        description: Workflow name from the Request's pinned Version, not the latest Project Version.
                       status: { $ref: "#/components/schemas/NullableStatus" }
+                      duration_ms:
+                        type: [integer, "null"]
+                        format: int64
+                        minimum: 0
+                        description: Sum of executed Step durations in this Workflow, including compilation. Unexecuted Steps are excluded. Null until the Request completes or if timing is unavailable.
     CreateSessionRequest:
       type: object
       additionalProperties: false
