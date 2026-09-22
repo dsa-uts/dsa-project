@@ -32,7 +32,7 @@ function SortableUserRow({ row, busy }: { row: Row<typeof features, User>; busy:
       {cell.column.id === 'move' ? <Button
         ref={setActivatorNodeRef}
         type="button" variant="ghost" size="icon" disabled={busy}
-        className="touch-none cursor-grab active:cursor-grabbing"
+        className="touch-none cursor-grab text-muted-foreground active:cursor-grabbing"
         {...attributes} {...listeners}
         aria-label={`${row.original.userid} を移動`}>
         <GripVertical aria-hidden="true" />
@@ -81,7 +81,7 @@ export function UserOrderEditor({ users, onCancel, onSaved, onMismatch }: { user
     <p role="status">並び順を編集中・変更は未保存です。全ユーザー（無効化済みを含む）を表示しています。</p>
     <p className="text-sm text-muted-foreground">左端のハンドルをドラッグして移動できます。キーボードではハンドルにフォーカスし、Space で持ち上げ、上下キーで移動、Space で確定します。Escape で移動を取り消せます。</p>
     {error && <p role="alert" className="text-destructive">{error}</p>}
-    <div className="flex gap-2"><Button disabled={busy || dragging} onClick={() => void save()}>{busy ? '保存中…' : '保存'}</Button><Button variant="outline" disabled={busy || dragging} onClick={onCancel}>キャンセル</Button></div>
+    <div className="flex gap-2"><Button className="bg-top-bar text-top-bar-foreground hover:bg-top-bar-hover" disabled={busy || dragging} onClick={() => void save()}>{busy ? '保存中…' : '保存'}</Button><Button variant="outline" disabled={busy || dragging} onClick={onCancel}>キャンセル</Button></div>
     <DndContext sensors={sensors} collisionDetection={closestCenter} modifiers={[restrictToVerticalAxis]}
       onDragStart={() => setDragging(true)} onDragEnd={finishDrag} onDragCancel={() => setDragging(false)}
       accessibility={{ screenReaderInstructions, announcements: {
@@ -90,7 +90,7 @@ export function UserOrderEditor({ users, onCancel, onSaved, onMismatch }: { user
         onDragEnd: ({ active, over }) => over ? `${order.find((user) => user.id === active.id)?.userid ?? ''}を ${ids.indexOf(String(over.id)) + 1} 行目に移動しました。` : '移動を取り消しました。',
         onDragCancel: () => '移動を取り消しました。',
       } }}>
-      <div className="overflow-x-auto rounded-lg border"><table className="w-full text-left text-sm">
+      <div className="overflow-x-auto rounded-md border"><table className="w-full text-left text-sm">
         <thead className="bg-muted">{table.getHeaderGroups().map((group) => <tr key={group.id}>
           {group.headers.map((header) => <th key={header.id} scope="col" className="p-3">{flexRender(header.column.columnDef.header, header.getContext())}</th>)}
         </tr>)}</thead>

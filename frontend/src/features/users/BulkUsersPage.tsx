@@ -90,11 +90,11 @@ function BulkUsersScreen() {
     setError(imported.length ? '' : '取り込む行がありません。')
     setNotice('')
   }
-  return <main className="flex-1 bg-background p-6 text-foreground">
-    <div className="mx-auto flex max-w-6xl flex-col gap-5">
-      <Link to="/admin/users" className="underline">User Accounts</Link>
-      <h1 className="text-2xl font-semibold">ユーザー作成（一括）</h1>
-      <div className="flex flex-wrap items-center gap-2">
+  return <main className="container mx-auto flex-1 space-y-8 px-4 py-6 sm:px-8">
+    <div><nav aria-label="パンくず" className="mb-4 text-sm text-muted-foreground"><Link to="/admin/list" className="hover:underline">Admin Page</Link> / <span aria-current="page">Batch User Registration</span></nav><h1 className="text-3xl font-bold">Batch User Registration</h1></div>
+    <section aria-labelledby="bulk-users-heading" className="space-y-4">
+      <div className="flex flex-wrap items-center justify-between gap-4"><h2 id="bulk-users-heading" className="text-2xl font-bold">ユーザー作成（一括）</h2><Link to="/admin/users" className="text-sm text-link hover:underline">User Management</Link></div>
+      <div className="flex flex-wrap items-center gap-3 rounded-md border p-6">
         <Button variant="outline" disabled={busy} onClick={() => changeRows([...rows, ...Array.from({ length: Math.max(10, rows.length + 1) - rows.length }, emptyUser)])}>＋ 行を追加</Button>
         <Button variant="outline" disabled={busy || !history.current.past.length} onClick={() => travel('past')}>元に戻す</Button>
         <Button variant="outline" disabled={busy || !history.current.future.length} onClick={() => travel('future')}>やり直す</Button>
@@ -108,15 +108,15 @@ function BulkUsersScreen() {
         }} />
       </div>
       {error && <p role="alert" className="text-destructive">{error}</p>}
-      {notice && <p role="status">{notice}</p>}
+      {notice && <p role="status" className="text-success">{notice}</p>}
       <UserGrid rows={rows} busy={busy} onChange={changeRows} onError={setError} undo={() => travel('past')} redo={() => travel('future')} />
-      <div className="flex gap-2">
-        <Button disabled={busy || !rows.some((row) => hasUserData(row) && !row.created)} onClick={() => void apply()}>{busy ? '処理中…' : 'Apply'}</Button>
+      <div className="flex flex-wrap justify-end gap-3">
+        <Button className="bg-top-bar text-top-bar-foreground hover:bg-top-bar-hover" disabled={busy || !rows.some((row) => hasUserData(row) && !row.created)} onClick={() => void apply()}>{busy ? '処理中…' : 'Apply'}</Button>
         <Button variant="outline" disabled={busy || !rows.some((row) => row.created)} onClick={() => {
           try { downloadCSV(rows.filter(hasUserData)) } catch { setError('CSV をダウンロードできませんでした。') }
         }}>CSV をダウンロード</Button>
       </div>
-    </div>
+    </section>
   </main>
 }
 

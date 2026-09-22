@@ -64,7 +64,7 @@ export function UserGrid({ rows, busy, onChange, onError, undo, redo }: {
   }
   return <>
     <ContextMenu.Root onOpenChange={(open) => { if (open) setEditing(false) }}>
-    <div ref={root} className="overflow-x-auto rounded-lg border bg-card" tabIndex={-1} aria-label="一括作成の表にセルを貼り付け"
+    <div ref={root} className="overflow-x-auto rounded-md border bg-background" tabIndex={-1} aria-label="一括作成の表にセルを貼り付け"
       onPaste={(event) => {
         if (busy) { event.preventDefault(); return }
         const text = event.clipboardData.getData('text')
