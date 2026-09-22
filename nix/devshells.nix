@@ -7,7 +7,7 @@
         with pkgs;
         [
           nodejs_24
-          go
+          go_1_27
           gopls
           nushell
           go-task

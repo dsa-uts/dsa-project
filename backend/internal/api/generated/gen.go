@@ -14,6 +14,7 @@ import (
 	"net/url"
 	"path"
 	"strings"
+	"time"
 
 	"github.com/getkin/kin-openapi/openapi3"
 	"github.com/labstack/echo/v4"
@@ -54,6 +55,30 @@ func (e CurrentUserRole) Valid() bool {
 	case CurrentUserRoleManager:
 		return true
 	case CurrentUserRoleStudent:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ProjectMyResultRequestState.
+const (
+	Completed ProjectMyResultRequestState = "completed"
+	Pending   ProjectMyResultRequestState = "pending"
+	Queued    ProjectMyResultRequestState = "queued"
+	Running   ProjectMyResultRequestState = "running"
+)
+
+// Valid indicates whether the value is a known member of the ProjectMyResultRequestState enum.
+func (e ProjectMyResultRequestState) Valid() bool {
+	switch e {
+	case Completed:
+		return true
+	case Pending:
+		return true
+	case Queued:
+		return true
+	case Running:
 		return true
 	default:
 		return false
@@ -130,6 +155,58 @@ type Error struct {
 // NewPassword Unicode characters, without trimming, normalization, or character-class rules; confirmation is frontend-only
 type NewPassword = string
 
+// NullableTimestamp RFC 3339 UTC or null
+type NullableTimestamp = time.Time
+
+// Project defines model for Project.
+type Project struct {
+	// Deadline RFC 3339 UTC or null
+	Deadline        *NullableTimestamp `json:"deadline"`
+	DisplayOrder    int64              `json:"display_order"`
+	Id              openapi_types.UUID `json:"id"`
+	LatestVersion   string             `json:"latest_version"`
+	LatestVersionId openapi_types.UUID `json:"latest_version_id"`
+
+	// MyResult Latest own validation Request and its Submission, across Versions. Currently null until Submission/Request APIs are implemented.
+	MyResult *struct {
+		Request struct {
+			Id        openapi_types.UUID          `json:"id"`
+			State     ProjectMyResultRequestState `json:"state"`
+			Status    *string                     `json:"status"`
+			Version   string                      `json:"version"`
+			VersionId openapi_types.UUID          `json:"version_id"`
+			Workflows []struct {
+				Id     string  `json:"id"`
+				Status *string `json:"status"`
+			} `json:"workflows"`
+		} `json:"request"`
+		SubmissionId openapi_types.UUID `json:"submission_id"`
+		UploadedAt   time.Time          `json:"uploaded_at"`
+	} `json:"my_result"`
+	Name string `json:"name"`
+
+	// PublishedAt RFC 3339 UTC or null
+	PublishedAt *NullableTimestamp `json:"published_at"`
+	ResourceId  string             `json:"resource_id"`
+	Workflows   []struct {
+		Id   string `json:"id"`
+		Name string `json:"name"`
+	} `json:"workflows"`
+}
+
+// ProjectMyResultRequestState defines model for Project.MyResult.Request.State.
+type ProjectMyResultRequestState string
+
+// ProjectUpdate defines model for ProjectUpdate.
+type ProjectUpdate struct {
+	// Deadline RFC 3339 UTC or null
+	Deadline *NullableTimestamp `json:"deadline"`
+	Id       openapi_types.UUID `json:"id"`
+
+	// PublishedAt RFC 3339 UTC or null
+	PublishedAt *NullableTimestamp `json:"published_at"`
+}
+
 // UpdateUserAccountRequest defines model for UpdateUserAccountRequest.
 type UpdateUserAccountRequest struct {
 	Disabled *bool `json:"disabled,omitempty"`
@@ -183,6 +260,19 @@ type UserConflict = Error
 // ValidationError defines model for ValidationError.
 type ValidationError = Error
 
+// UpdateProjectsJSONBody defines parameters for UpdateProjects.
+type UpdateProjectsJSONBody struct {
+	Projects []ProjectUpdate `json:"projects"`
+}
+
+// ImportResourceJSONBody defines parameters for ImportResource.
+type ImportResourceJSONBody struct {
+	ResourceId string `json:"resource_id"`
+
+	// Version Formal vMAJOR.MINOR.PATCH only; validated by the handler to return invalid_resource_version
+	Version string `json:"version"`
+}
+
 // DeleteSessionParams defines parameters for DeleteSession.
 type DeleteSessionParams struct {
 	SessionToken *SessionToken `form:"__Host-dsa_session,omitempty" json:"__Host-dsa_session,omitempty"`
@@ -192,6 +282,12 @@ type DeleteSessionParams struct {
 type ReorderUserAccountsJSONBody struct {
 	UserIds []openapi_types.UUID `json:"user_ids"`
 }
+
+// UpdateProjectsJSONRequestBody defines body for UpdateProjects for application/json ContentType.
+type UpdateProjectsJSONRequestBody UpdateProjectsJSONBody
+
+// ImportResourceJSONRequestBody defines body for ImportResource for application/json ContentType.
+type ImportResourceJSONRequestBody ImportResourceJSONBody
 
 // CreateUserAccountJSONRequestBody defines body for CreateUserAccount for application/json ContentType.
 type CreateUserAccountJSONRequestBody = CreateUserAccountRequest
@@ -207,6 +303,12 @@ type ReorderUserAccountsJSONRequestBody ReorderUserAccountsJSONBody
 
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
+	// UpdateProjects Save all Project schedules and display order
+	// (PATCH /api/admin/projects)
+	UpdateProjects(ctx echo.Context) error
+	// ImportResource Import a Resource Version from the configured GitHub repository
+	// (POST /api/admin/resource-imports)
+	ImportResource(ctx echo.Context) error
 	// ListUserAccounts List all non-System User Accounts, including disabled accounts, in persisted display order
 	// (GET /api/admin/users)
 	ListUserAccounts(ctx echo.Context) error
@@ -219,6 +321,9 @@ type ServerInterface interface {
 	// GetCurrentUser 現在の User Account を返す
 	// (GET /api/me)
 	GetCurrentUser(ctx echo.Context) error
+	// ListProjects List Projects in display order
+	// (GET /api/projects)
+	ListProjects(ctx echo.Context) error
 	// DeleteSession 現在のセッションからログアウトする
 	// (DELETE /api/session)
 	DeleteSession(ctx echo.Context, params DeleteSessionParams) error
@@ -233,6 +338,24 @@ type ServerInterface interface {
 // ServerInterfaceWrapper converts echo contexts to parameters.
 type ServerInterfaceWrapper struct {
 	Handler ServerInterface
+}
+
+// UpdateProjects converts echo context to params.
+func (w *ServerInterfaceWrapper) UpdateProjects(ctx echo.Context) error {
+	var err error
+
+	// Invoke the callback with all the unmarshaled arguments
+	err = w.Handler.UpdateProjects(ctx)
+	return err
+}
+
+// ImportResource converts echo context to params.
+func (w *ServerInterfaceWrapper) ImportResource(ctx echo.Context) error {
+	var err error
+
+	// Invoke the callback with all the unmarshaled arguments
+	err = w.Handler.ImportResource(ctx)
+	return err
 }
 
 // ListUserAccounts converts echo context to params.
@@ -275,6 +398,15 @@ func (w *ServerInterfaceWrapper) GetCurrentUser(ctx echo.Context) error {
 
 	// Invoke the callback with all the unmarshaled arguments
 	err = w.Handler.GetCurrentUser(ctx)
+	return err
+}
+
+// ListProjects converts echo context to params.
+func (w *ServerInterfaceWrapper) ListProjects(ctx echo.Context) error {
+	var err error
+
+	// Invoke the callback with all the unmarshaled arguments
+	err = w.Handler.ListProjects(ctx)
 	return err
 }
 
@@ -373,6 +505,9 @@ func RegisterHandlersWithOptions(router EchoRouter, si ServerInterface, options 
 	router.POST(options.BaseURL+"/api/admin/users", wrapper.CreateUserAccount, options.OperationMiddlewares["createUserAccount"]...)
 	router.PATCH(options.BaseURL+"/api/admin/users/:user_id", wrapper.UpdateUserAccount, options.OperationMiddlewares["updateUserAccount"]...)
 	router.PATCH(options.BaseURL+"/api/users/order", wrapper.ReorderUserAccounts, options.OperationMiddlewares["reorderUserAccounts"]...)
+	router.GET(options.BaseURL+"/api/projects", wrapper.ListProjects, options.OperationMiddlewares["listProjects"]...)
+	router.PATCH(options.BaseURL+"/api/admin/projects", wrapper.UpdateProjects, options.OperationMiddlewares["updateProjects"]...)
+	router.POST(options.BaseURL+"/api/admin/resource-imports", wrapper.ImportResource, options.OperationMiddlewares["importResource"]...)
 
 }
 
@@ -396,6 +531,210 @@ type UnauthorizedJSONResponse struct {
 type UserConflictJSONResponse Error
 
 type ValidationErrorJSONResponse Error
+
+type UpdateProjectsRequestObject struct {
+	Body *UpdateProjectsJSONRequestBody
+}
+
+type UpdateProjectsResponseObject interface {
+	VisitUpdateProjectsResponse(w http.ResponseWriter) error
+}
+
+type UpdateProjects204Response struct {
+}
+
+func (response UpdateProjects204Response) VisitUpdateProjectsResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type UpdateProjects401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response UpdateProjects401JSONResponse) VisitUpdateProjectsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.SetCookie != nil {
+		w.Header().Set("Set-Cookie", fmt.Sprint(*response.Headers.SetCookie))
+	}
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateProjects403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response UpdateProjects403JSONResponse) VisitUpdateProjectsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateProjects422JSONResponse Error
+
+func (response UpdateProjects422JSONResponse) VisitUpdateProjectsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(422)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateProjects500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response UpdateProjects500JSONResponse) VisitUpdateProjectsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ImportResourceRequestObject struct {
+	Body *ImportResourceJSONRequestBody
+}
+
+type ImportResourceResponseObject interface {
+	VisitImportResourceResponse(w http.ResponseWriter) error
+}
+
+type ImportResource200JSONResponse struct {
+	Changed    bool               `json:"changed"`
+	ProjectId  openapi_types.UUID `json:"project_id"`
+	ResourceId string             `json:"resource_id"`
+	Version    string             `json:"version"`
+	VersionId  openapi_types.UUID `json:"version_id"`
+}
+
+func (response ImportResource200JSONResponse) VisitImportResourceResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ImportResource401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response ImportResource401JSONResponse) VisitImportResourceResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.SetCookie != nil {
+		w.Header().Set("Set-Cookie", fmt.Sprint(*response.Headers.SetCookie))
+	}
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ImportResource403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response ImportResource403JSONResponse) VisitImportResourceResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ImportResource404JSONResponse Error
+
+func (response ImportResource404JSONResponse) VisitImportResourceResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ImportResource409JSONResponse Error
+
+func (response ImportResource409JSONResponse) VisitImportResourceResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ImportResource422JSONResponse Error
+
+func (response ImportResource422JSONResponse) VisitImportResourceResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(422)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ImportResource500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response ImportResource500JSONResponse) VisitImportResourceResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ImportResource503JSONResponse Error
+
+func (response ImportResource503JSONResponse) VisitImportResourceResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(503)
+	_, err := buf.WriteTo(w)
+	return err
+}
 
 type ListUserAccountsRequestObject struct {
 }
@@ -722,6 +1061,74 @@ func (response GetCurrentUser500JSONResponse) VisitGetCurrentUserResponse(w http
 	return err
 }
 
+type ListProjectsRequestObject struct {
+}
+
+type ListProjectsResponseObject interface {
+	VisitListProjectsResponse(w http.ResponseWriter) error
+}
+
+type ListProjects200JSONResponse struct {
+	Projects []Project `json:"projects"`
+}
+
+func (response ListProjects200JSONResponse) VisitListProjectsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListProjects401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response ListProjects401JSONResponse) VisitListProjectsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.SetCookie != nil {
+		w.Header().Set("Set-Cookie", fmt.Sprint(*response.Headers.SetCookie))
+	}
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListProjects403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response ListProjects403JSONResponse) VisitListProjectsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListProjects500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response ListProjects500JSONResponse) VisitListProjectsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type DeleteSessionRequestObject struct {
 	Params DeleteSessionParams
 }
@@ -911,6 +1318,12 @@ func (response ReorderUserAccounts500JSONResponse) VisitReorderUserAccountsRespo
 
 // StrictServerInterface represents all server handlers.
 type StrictServerInterface interface {
+	// UpdateProjects Save all Project schedules and display order
+	// (PATCH /api/admin/projects)
+	UpdateProjects(ctx context.Context, request UpdateProjectsRequestObject) (UpdateProjectsResponseObject, error)
+	// ImportResource Import a Resource Version from the configured GitHub repository
+	// (POST /api/admin/resource-imports)
+	ImportResource(ctx context.Context, request ImportResourceRequestObject) (ImportResourceResponseObject, error)
 	// ListUserAccounts List all non-System User Accounts, including disabled accounts, in persisted display order
 	// (GET /api/admin/users)
 	ListUserAccounts(ctx context.Context, request ListUserAccountsRequestObject) (ListUserAccountsResponseObject, error)
@@ -923,6 +1336,9 @@ type StrictServerInterface interface {
 	// GetCurrentUser 現在の User Account を返す
 	// (GET /api/me)
 	GetCurrentUser(ctx context.Context, request GetCurrentUserRequestObject) (GetCurrentUserResponseObject, error)
+	// ListProjects List Projects in display order
+	// (GET /api/projects)
+	ListProjects(ctx context.Context, request ListProjectsRequestObject) (ListProjectsResponseObject, error)
 	// DeleteSession 現在のセッションからログアウトする
 	// (DELETE /api/session)
 	DeleteSession(ctx context.Context, request DeleteSessionRequestObject) (DeleteSessionResponseObject, error)
@@ -944,6 +1360,84 @@ func NewStrictHandler(ssi StrictServerInterface, middlewares []StrictMiddlewareF
 type strictHandler struct {
 	ssi         StrictServerInterface
 	middlewares []StrictMiddlewareFunc
+}
+
+// UpdateProjects operation middleware
+func (sh *strictHandler) UpdateProjects(ctx echo.Context) error {
+	var request UpdateProjectsRequestObject
+
+	var body UpdateProjectsJSONRequestBody
+	var err error
+	if binder, ok := ctx.Echo().Binder.(*echo.DefaultBinder); ok {
+		// Bind only the request body, so that path and query parameters
+		// are not also bound into the body struct.
+		err = binder.BindBody(ctx, &body)
+	} else {
+		// A custom binder is installed on the Echo instance; defer to it
+		// entirely, since echo.Binder does not expose body-only binding.
+		err = ctx.Bind(&body)
+	}
+	if err != nil {
+		return err
+	}
+	request.Body = &body
+
+	handler := func(ctx echo.Context, request interface{}) (interface{}, error) {
+		return sh.ssi.UpdateProjects(ctx.Request().Context(), request.(UpdateProjectsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "UpdateProjects")
+	}
+
+	response, err := handler(ctx, request)
+
+	if err != nil {
+		return err
+	} else if validResponse, ok := response.(UpdateProjectsResponseObject); ok {
+		return validResponse.VisitUpdateProjectsResponse(ctx.Response())
+	} else if response != nil {
+		return fmt.Errorf("unexpected response type: %T", response)
+	}
+	return nil
+}
+
+// ImportResource operation middleware
+func (sh *strictHandler) ImportResource(ctx echo.Context) error {
+	var request ImportResourceRequestObject
+
+	var body ImportResourceJSONRequestBody
+	var err error
+	if binder, ok := ctx.Echo().Binder.(*echo.DefaultBinder); ok {
+		// Bind only the request body, so that path and query parameters
+		// are not also bound into the body struct.
+		err = binder.BindBody(ctx, &body)
+	} else {
+		// A custom binder is installed on the Echo instance; defer to it
+		// entirely, since echo.Binder does not expose body-only binding.
+		err = ctx.Bind(&body)
+	}
+	if err != nil {
+		return err
+	}
+	request.Body = &body
+
+	handler := func(ctx echo.Context, request interface{}) (interface{}, error) {
+		return sh.ssi.ImportResource(ctx.Request().Context(), request.(ImportResourceRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ImportResource")
+	}
+
+	response, err := handler(ctx, request)
+
+	if err != nil {
+		return err
+	} else if validResponse, ok := response.(ImportResourceResponseObject); ok {
+		return validResponse.VisitImportResourceResponse(ctx.Response())
+	} else if response != nil {
+		return fmt.Errorf("unexpected response type: %T", response)
+	}
+	return nil
 }
 
 // ListUserAccounts operation middleware
@@ -1072,6 +1566,29 @@ func (sh *strictHandler) GetCurrentUser(ctx echo.Context) error {
 	return nil
 }
 
+// ListProjects operation middleware
+func (sh *strictHandler) ListProjects(ctx echo.Context) error {
+	var request ListProjectsRequestObject
+
+	handler := func(ctx echo.Context, request interface{}) (interface{}, error) {
+		return sh.ssi.ListProjects(ctx.Request().Context(), request.(ListProjectsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListProjects")
+	}
+
+	response, err := handler(ctx, request)
+
+	if err != nil {
+		return err
+	} else if validResponse, ok := response.(ListProjectsResponseObject); ok {
+		return validResponse.VisitListProjectsResponse(ctx.Response())
+	} else if response != nil {
+		return fmt.Errorf("unexpected response type: %T", response)
+	}
+	return nil
+}
+
 // DeleteSession operation middleware
 func (sh *strictHandler) DeleteSession(ctx echo.Context, params DeleteSessionParams) error {
 	var request DeleteSessionRequestObject
@@ -1180,44 +1697,64 @@ func (sh *strictHandler) ReorderUserAccounts(ctx echo.Context) error {
 // const string: with thousands of chunks the chained `+` fold is several
 // times slower for the Go compiler than parsing a slice literal.
 var swaggerSpec = []string{
-	"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",
-	"dtGM53zAKCl65x11/jcAAP//",
+	"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",
 }
 
 // decodeSpec returns the embedded OpenAPI spec as raw JSON bytes,

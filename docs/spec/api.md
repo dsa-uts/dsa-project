@@ -55,55 +55,7 @@
 
 ## Projects
 
-### `GET /api/projects`
-
-全 Project を `display_order` 昇順で返す。クライアントの Project 一覧ページ(学生の一層目: 進捗列付き)と管理者の Project Management ページの受け口。
-
-Role による可視範囲:
-
-- Student: 公開済み(`published_at` ≤ 現在)の Project のみ。
-- Manager/Admin: 全 Project。未公開を含む。Project の自動アーカイブは行わない。
-
-```json
-{
-  "projects": [
-    {
-      "id": "uuid",
-      "resource_id": "ex1",
-      "name": "DSA Basic",
-      "latest_version_id": "uuid",
-      "latest_version": "v1.0.0",
-      "display_order": 10,
-      "published_at": "2026-04-01T00:00:00Z",
-      "deadline": "2026-04-15T23:59:59Z",
-      "workflows": [
-        { "id": "basic", "name": "基本課題" },
-        { "id": "applied", "name": "発展課題" }
-      ],
-      "my_result": {
-        "submission_id": "uuid",
-        "uploaded_at": "2026-04-10T12:00:00Z",
-        "request": {
-          "id": "uuid",
-          "version_id": "uuid",
-          "version": "v1.0.0",
-          "state": "completed",
-          "status": "WA",
-          "workflows": [
-            { "id": "basic", "status": "AC" },
-            { "id": "applied", "status": "WA" }
-          ]
-        }
-      }
-    }
-  ]
-}
-```
-
-- `resource_id`: 対応する Resource の識別子。Project の UUID とは別で、全 Role に返す。
-- `published_at` / `deadline` は nullable。`published_at` が `null` は未公開と同義(CONTEXT.md「公開日時」)。
-- `my_result`: 自分の validation Submission に属する最新 Request とその Submission を返す。Version で絞らない。Request がなければ `my_result: null`。課題更新だけでは変化しない。
-- `my_result.request.workflows`: per-Workflow の Status。進捗セル(「2/3 AC」や status chip)はここからクライアント導出。
+一覧APIは [OpenAPI](../../api/openapi.yaml) の `GET /api/projects` を参照。
 
 ### `GET /api/projects/{project_id}`
 
@@ -158,7 +110,7 @@ Manager/Admin 専用。過去結果の比較・検索のために取り込み済
 - Version は `version` の SemVer を表示する。
 - Errors: `403`(Student)
 
-Project の公開日時・締切・表示順の更新は Admin 専用の [`PATCH /api/admin/projects`](#patch-apiadminprojects) に統一する。個別更新 API と並び順専用 API は設けない。初回取り込みで作成した Project は末尾に追加し、Version 更新では順序を変更しない。
+Project の公開日時・締切・表示順の更新は Admin 専用の `PATCH /api/admin/projects` ([OpenAPI](../../api/openapi.yaml)) に統一する。個別更新 API と並び順専用 API は設けない。初回取り込みで作成した Project は末尾に追加し、Version 更新では順序を変更しない。
 
 ## Submissions
 
@@ -437,82 +389,7 @@ private Artifact にはクライアント向けダウンロード API がない�
 
 Admin 専用。Student / Manager は `403`。
 
-### `PATCH /api/admin/projects`
-
-全 Project の公開日時・締切・表示順を一括更新する(Git-for-Logic, Console-for-Operations)。Project Management ページの「変更を保存」の受け口。
-
-- 認証: 通常の Admin session cookie と CSRF 対策。
-
-```json
-{
-  "projects": [
-    {
-      "id": "uuid-1",
-      "published_at": "2026-09-12T10:59:00Z",
-      "deadline": "2026-09-19T10:59:00Z"
-    },
-    {
-      "id": "uuid-2",
-      "published_at": null,
-      "deadline": null
-    }
-  ]
-}
-```
-
-- `projects` は必須。全 Project の ID を過不足なく含むこと。欠落・重複・未知の ID は拒否する。Project が存在しない場合は空配列を許可する。
-- 各要素の `id` / `published_at` / `deadline` は必須。日時は RFC 3339 UTC 文字列または `null`。`null` は未設定を表し、フィールド省略による部分更新は許可しない。
-- 両日時が設定されている場合は `published_at <= deadline` を必須とする。同時刻、および片方・両方が `null` の設定は許可する。
-- 配列順を `display_order` に反映する。更新対象は公開日時・締切・表示順のみで、名前・Resource・Version は変更しない。
-- 検証と全 Project の更新を1トランザクションで行う。不備があれば何も更新しない。
-- リビジョン等による同時編集の競合検知は設けない。後から保存した日時・表示順で上書きする。ただし、全 ID の過不足チェックは保存時に行う。
-- Response: `204 No Content`。クライアントは保存後に [`GET /api/projects`](#get-apiprojects) を再取得する。
-- Errors:
-  - `401`(未認証)、`403`(Admin 以外)
-  - `422 project_ids_mismatch`(ID の欠落・重複・未知の ID)
-  - `422`(必須フィールドの欠落、日時の形式違反、締切が公開日時より前)
-
-### `POST /api/admin/resource-imports`
-
-Manual Resource Import。Admin が課題 ID と Version を指定し、1 課題を同期的に取り込む。取得・検証・保存の規則は [Resource 取り込み仕様](resource-imports.md) を参照する。
-
-- 認証: 通常の Admin session cookie と CSRF 対策。
-- リポジトリは環境変数で固定。URL・コミット SHA・image の上書きは受け付けない。
-
-```json
-{
-  "resource_id": "ex1",
-  "version": "v1.2.3"
-}
-```
-
-- `version`: `vMAJOR.MINOR.PATCH` 形式の正式版 SemVer。プレリリース・ビルドメタデータ・数値の不要な先頭ゼロは不可。
-- Response: `200`。初回登録・更新・変更なしとも同形。
-
-```json
-{
-  "project_id": "11111111-1111-4111-8111-111111111111",
-  "version_id": "22222222-2222-4222-8222-222222222222",
-  "resource_id": "ex1",
-  "version": "v1.2.3",
-  "changed": true
-}
-```
-
-- 現在と同じ Version は GitHub にアクセスせず、既存 ID と `changed: false` を返す。
-- 古い Version は取り込み済みでも拒否。新Versionでは `changed: true`。
-- 初回は未公開の Project を自動作成。更新時はタイトルを更新し、公開日時・締切・並び順を維持する。
-- validation / evaluation とも自動再採点を行わない。
-- Errors（DB の部分更新はしない）:
-  - `401`（未認証）、`403`（Admin 以外）
-  - `404 resource_version_not_found`（指定課題 ID・Version が index にない）
-  - `409 older_resource_version`（現在より古い Version）
-  - `422 invalid_resource_version`（Version の形式違反）
-  - `422 invalid_resource`（課題 JSON の検証失敗、ID・Version の不一致、index の構造不正）
-  - `422 resource_hash_mismatch`（index とのハッシュ不一致）
-  - `503 resource_source_unavailable`（認証失敗、レート制限、通信障害、index や参照先 JSON の取得失敗）
-- エラーコードで原因を区別し、レスポンスにトークンや upstream のレスポンス本文を含めない。ログ・アラートの詳細は未定。
-- 取り込み候補を列挙する API、取り込みジョブ・進捗 API は設けない。
+実装済みの `PATCH /api/admin/projects` と `POST /api/admin/resource-imports` は [OpenAPI](../../api/openapi.yaml) を参照。取り込みのドメイン規則は [Resource取り込み仕様](resource-imports.md) を参照。
 
 ## 未定
 

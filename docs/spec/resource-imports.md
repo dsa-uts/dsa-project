@@ -1,6 +1,6 @@
 # Resource の取得・保存
 
-Admin が課題 ID と Version を指定し、GitHub 上の公開済み課題 JSON を取得・検証して DB に保存する。保存完了と最新版への切り替えを一体の同期操作にする。API の形は [api.md](api.md#post-apiadminresource-imports)、用語は [CONTEXT.md](../../CONTEXT.md) を参照する。
+Admin が課題 ID と Version を指定し、GitHub 上の公開済み課題 JSON を取得・検証して DB に保存する。保存完了と最新版への切り替えを一体の同期操作にする。API の形は [OpenAPI](../../api/openapi.yaml)、用語は [CONTEXT.md](../../CONTEXT.md) を参照する。
 
 ## 取得元と認証
 
@@ -10,7 +10,8 @@ Admin が課題 ID と Version を指定し、GitHub 上の公開済み課題 JS
 - index の `source-commit` は JSON の生成元コミットであり、JSON の取得 ref には使わない。取得元コミットへの固定は読み取りの整合性のために行い、監査記録の保存は要求しない。
 - private リポジトリ用と private GHCR 用の認証情報は別々に設定する。public リポジトリ・public イメージでは省略可能。
 - リポジトリ取得には対象リポジトリの Contents 読み取り権限を持つ fine-grained PAT、GHCR の pull には `read:packages` を持つ classic PAT を利用できる。各トークンの所有者にも対象へのアクセス権が必要。認証情報は取得を担当する側にのみ渡す。
-- production manifest、デプロイ先、認証情報の保存・注入方式、環境変数名は未定。Kubernetes Secret など特定の方式をこの仕様では必須にしない。
+- Backend の `RESOURCE_REPOSITORY_URL` に HTTPS の GitHub リポジトリ URL を設定する（必須）。private リポジトリでは `RESOURCE_GITHUB_TOKEN_FILE` にトークンファイルのパスを指定する（任意）。GHCR の認証情報とは共有しない。
+- 外部取得は全体60秒、各HTTPリクエスト30秒、各レスポンス64 MiBまで。上限超過は `resource_source_unavailable` とする。
 
 認証方式の根拠: [GitHub Contents API](https://docs.github.com/en/rest/repos/contents)、[GHCR authentication](https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-container-registry)。
 
