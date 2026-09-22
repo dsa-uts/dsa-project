@@ -309,6 +309,13 @@ components:
       format: date-time
       pattern: 'Z$'
       description: RFC 3339 UTC or null
+    Status:
+      type: string
+      enum: [AC, WA, TLE, MLE, RE, OLE, IE]
+    NullableStatus:
+      anyOf:
+        - $ref: "#/components/schemas/Status"
+        - type: "null"
     Project:
       type: object
       additionalProperties: false
@@ -345,7 +352,7 @@ components:
                 version_id: { type: string, format: uuid }
                 version: { type: string }
                 state: { type: string, enum: [pending, queued, running, completed] }
-                status: { type: [string, "null"] }
+                status: { $ref: "#/components/schemas/NullableStatus" }
                 workflows:
                   type: array
                   items:
@@ -353,7 +360,7 @@ components:
                     required: [id, status]
                     properties:
                       id: { type: string }
-                      status: { type: [string, "null"] }
+                      status: { $ref: "#/components/schemas/NullableStatus" }
     CreateSessionRequest:
       type: object
       additionalProperties: false

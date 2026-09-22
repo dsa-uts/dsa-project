@@ -192,6 +192,9 @@ export interface components {
          * @description RFC 3339 UTC or null
          */
         NullableTimestamp: string | null;
+        /** @enum {string} */
+        Status: "AC" | "WA" | "TLE" | "MLE" | "RE" | "OLE" | "IE";
+        NullableStatus: components["schemas"]["Status"] | null;
         Project: {
             /** Format: uuid */
             id: string;
@@ -222,10 +225,10 @@ export interface components {
                     version: string;
                     /** @enum {string} */
                     state: "pending" | "queued" | "running" | "completed";
-                    status: string | null;
+                    status: components["schemas"]["NullableStatus"];
                     workflows: {
                         id: string;
-                        status: string | null;
+                        status: components["schemas"]["NullableStatus"];
                     }[];
                 };
             } | null;
