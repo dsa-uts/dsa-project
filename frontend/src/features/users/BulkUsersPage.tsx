@@ -45,7 +45,7 @@ function BulkUsersScreen() {
   const queryClient = useQueryClient()
   const { setGuard } = useNavigationGuard()
   useEffect(() => {
-    setGuard({ active: rows.some(hasUserData) || busy, busy })
+    setGuard({ active: rows.some(hasUserData) || busy, busy, message: '一覧とパスワードは保存されません。このページを離れますか？' })
     return () => setGuard({ active: false, busy: false })
   }, [rows, busy, setGuard])
 
