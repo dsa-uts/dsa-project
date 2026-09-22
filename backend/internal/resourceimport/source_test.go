@@ -41,6 +41,7 @@ func TestSourceValidation(t *testing.T) {
 
 func TestPinnedFetchAndFailures(t *testing.T) {
 	r := resource.Resource{Metadata: resource.Metadata{ID: "ex1", Name: "Example", Version: "v1.0.0"},
+		RequiredFiles: []string{"main.c", "*.h", "レポート.pdf（任意）"},
 		Workflows: map[string]resource.Workflow{"judge": {Name: "Judge", Jobs: map[string]resource.Job{"test": {
 			Visibility: "private", SandboxImage: "ghcr.io/example/judge@sha256:" + strings.Repeat("a", 64),
 			Limits: resource.Limits{CPU: 1, PIDs: 1, Memory: 1, StdoutSize: 1, StderrSize: 1, WorkspaceSize: 1, ArtifactSize: 1},
@@ -110,6 +111,9 @@ func TestPinnedFetchAndFailures(t *testing.T) {
 			}
 			if tc.want == nil && (got.Metadata.Name != "Example" || calls != 3) {
 				t.Fatalf("unexpected import: %v, calls %d", got, calls)
+			}
+			if tc.want == nil && strings.Join(got.RequiredFiles, "|") != strings.Join(r.RequiredFiles, "|") {
+				t.Fatalf("required-files changed during import: %v", got.RequiredFiles)
 			}
 		})
 	}

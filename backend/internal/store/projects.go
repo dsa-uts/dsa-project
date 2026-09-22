@@ -51,6 +51,25 @@ func (s *ProjectStore) ListProjects(ctx context.Context, publishedOnly bool) ([]
 	return projects, err
 }
 
+// GetProject applies the same publication boundary as ListProjects.
+func (s *ProjectStore) GetProject(ctx context.Context, id uuid.UUID, publishedOnly bool) (*ProjectLatest, error) {
+	project := new(ProjectLatest)
+	query := s.db.NewSelect().TableExpr("projects AS p").
+		ColumnExpr("p.*, v.version, v.resource_json").
+		Join("JOIN project_versions AS v ON v.id = p.latest_version_id").
+		Where("p.id = ?", id)
+	if publishedOnly {
+		query = query.Where("p.published_at <= CURRENT_TIMESTAMP")
+	}
+	if err := query.Scan(ctx, project); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return project, nil
+}
+
 func (s *ProjectStore) CurrentVersion(ctx context.Context, resourceID string) (*ProjectLatest, error) {
 	project := new(ProjectLatest)
 	err := s.db.NewSelect().TableExpr("projects AS p").ColumnExpr("p.*, v.version").

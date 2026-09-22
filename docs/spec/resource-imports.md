@@ -20,7 +20,7 @@ Admin が課題 ID と Version を指定し、GitHub 上の公開済み課題 JS
 1. 認証・認可と課題 ID・Version の入力を検証する。Version は `vMAJOR.MINOR.PATCH` の正式版のみ。大小は数値の SemVer 順で比較し、文字列順では比較しない。
 2. DB の現在の Version と同じなら外部アクセスせず変更なしで成功する。古ければ、取り込み済みであっても拒否する。Version の内容は不変として扱う。
 3. 固定した Git コミットの index から指定課題 ID・Version を探し、対象 JSON を取得する。
-4. `github.com/dsa-uts/dsa-resource-spec` を **v1.1.0 に固定**し、`resource.DecodeResource` で読み込み・検証する。Backend は指定 ID・Version との一致も確認する。
+4. `github.com/dsa-uts/dsa-resource-spec` を **v1.3.0 に固定**し、`resource.DecodeResource` で読み込み・検証する。Backend は指定 ID・Version との一致も確認する。
 5. `Resource.Hash()` と index の `resource-hash` を照合する。受信バイト列の SHA-256 ではなく、復元した Resource の JSON エンコードに対するハッシュを使う。
 6. 検証済み Resource の JSON と Version を DB に保存し、Project の最新版とタイトルを同じトランザクションで更新する。初回なら Project も作成する。
 
@@ -32,6 +32,7 @@ Admin が課題 ID と Version を指定し、GitHub 上の公開済み課題 JS
 
 - 課題 ID ごとに Project を対応付け、Version ごとに immutable な課題 JSON を DB に保存する。SQL のテーブル・カラム定義は実装時の migration が所有する。
 - JSON は説明文・Preset File・標準入力・期待出力を含む自己完結したデータ。教材用の別ファイル保存先は設けず、取り込み後の表示・採点には保存済みデータを使う。
+- `required-files` は表示用の案内として保存する。旧 Version の保存済み JSON にない場合、課題詳細 API は空配列を返す。同じ Version の再取り込みでは保存済み JSON を更新しない。
 - private Job や期待出力を含むため、保存 JSON をそのまま一般ユーザーに配信しない。API は既存の Job / Artifact の可視性規則に従って必要な表示内容を返す。
 - 初回の Project はタイトルを Resource から設定し、公開日時・締切は未設定、表示順は末尾にする。更新時はタイトルだけを追従させ、公開日時・締切・表示順を維持する。
 - イメージは JSON の digest 参照を保持する。取り込み時にはレジストリへアクセスせず、イメージ本体の保存・存在確認・認証確認をしない。採点時に取得し、失敗時は既存のインフラエラー規則に従う。
@@ -42,6 +43,6 @@ Admin が課題 ID と Version を指定し、GitHub 上の公開済み課題 JS
 
 ## E2E
 
-public の `dsa-uts/dsa-resource-spec` と、その課題 JSON が参照する public GHCR イメージを使う。課題 ID・Version はテストコードで固定し（初期対象: `ex1` / `v1.0.0`）、リポジトリ上の最新版へ自動追従しない。ライブラリの固定 Version `v1.1.0` と課題 Version は別物。
+public の `dsa-uts/dsa-resource-spec` と、その課題 JSON が参照する public GHCR イメージを使う。課題 ID・Version はテストコードで固定し（初期対象: `ex1` / `v1.0.0`）、リポジトリ上の最新版へ自動追従しない。ライブラリの固定 Version `v1.3.0` と課題 Version は別物。
 
 実装時には実際の取り込み・保存データによる実行に加え、同Version再送の no-op、古いVersionの拒否、検証失敗時の未更新を確認する。private 認証は Dev / Prod の設定として扱う。

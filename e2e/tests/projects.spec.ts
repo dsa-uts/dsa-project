@@ -53,6 +53,7 @@ test('Project authorization precedes input validation', async ({ request }) => {
     ]) await error(response, role ? 403 : 401, role ? 'forbidden' : 'unauthorized')
   }
   await error(await request.get('/api/projects', { headers: { Cookie: '' } }), 401, 'unauthorized')
+  await error(await request.get('/api/projects/invalid?version_id=old', { headers: { Cookie: '' } }), 401, 'unauthorized')
 })
 
 test('real Resource import, idempotence, publication and atomic bulk saves', async ({ request }) => {
@@ -78,6 +79,24 @@ test('real Resource import, idempotence, publication and atomic bulk saves', asy
   expect(result).toMatchObject({ ...data, project_id: expect.any(String), version_id: expect.any(String), changed: !before.some((p: { resource_id: string }) => p.resource_id === 'ex1') })
   const after = await list()
   const project = after.find((p: { id: string }) => p.id === result.project_id)
+  const detailURL = `/api/projects/${result.project_id}`
+  const detailResponse = await request.get(detailURL, { headers })
+  expect(detailResponse.status()).toBe(200)
+  const detail = await detailResponse.json()
+  expect(detail).toMatchObject(project)
+  expect(Object.keys(detail).sort()).toEqual([...Object.keys(project), 'required_files'].sort())
+  expect(Array.isArray(detail.required_files)).toBe(true)
+  expect(detail.workflows.map((w: { id: string }) => w.id)).toEqual(project.workflows.map((w: { id: string }) => w.id))
+  for (const workflow of detail.workflows) {
+    expect(Object.keys(workflow).sort()).toEqual(['description_markdown', 'id', 'name'])
+    expect(workflow.description_markdown).toEqual(expect.any(String))
+    expect(workflow.description_markdown.length).toBeGreaterThan(0)
+  }
+  await error(await request.get('/api/projects/invalid', { headers }), 422, 'validation_failed')
+  await error(await request.get(`/api/projects/${randomUUID()}`, { headers }), 404, 'not_found')
+  for (const query of ['?version_id=old', '?version_id=']) {
+    await error(await request.get(detailURL + query, { headers }), 422, 'version_not_allowed')
+  }
   expect(project).toMatchObject({ resource_id: 'ex1', latest_version_id: result.version_id, latest_version: 'v1.0.0', my_result: null })
   expect(Object.keys(project).sort()).toEqual(['id','resource_id','name','latest_version_id','latest_version','display_order','published_at','deadline','workflows','my_result'].sort())
   expect(project.workflows.length).toBeGreaterThan(0)
@@ -106,6 +125,9 @@ test('real Resource import, idempotence, publication and atomic bulk saves', asy
     const saved = await list()
     expect(saved.map((p: { id: string }) => p.id)).toEqual(updates.map((p: { id: string }) => p.id))
     expect((await list(student)).map((p: { id: string }) => p.id)).toEqual(updates.map((p: { id: string }) => p.id))
+    const studentDetail = await request.get(detailURL, { headers: student })
+    expect(studentDetail.status()).toBe(200)
+    expect(await studentDetail.json()).toMatchObject({ id: result.project_id, workflows: detail.workflows, required_files: detail.required_files, my_result: null })
     for (const projects of [updates.slice(1), [...updates, updates[0]], [{ ...updates[0], id: randomUUID() }, ...updates.slice(1)]]) {
       await error(await save(projects), 422, 'project_ids_mismatch')
       expect(await list()).toEqual(saved)
@@ -123,8 +145,13 @@ test('real Resource import, idempotence, publication and atomic bulk saves', asy
     expect((await save(updates.map((p: { id: string }) => ({ ...p, published_at: null })))).status()).toBe(204)
     expect(await list(student)).toEqual([])
     expect(await list(manager)).toHaveLength(updates.length)
+    await error(await request.get(detailURL, { headers: student }), 404, 'not_found')
+    await error(await request.get(detailURL + '?version_id=old', { headers: student }), 404, 'not_found')
+    expect((await request.get(detailURL, { headers: manager })).status()).toBe(200)
     expect((await save(updates.map((p: { id: string }) => ({ ...p, published_at: '2999-01-01T00:00:00Z', deadline: null })))).status()).toBe(204)
     expect(await list(student)).toEqual([])
+    await error(await request.get(detailURL, { headers: student }), 404, 'not_found')
+    expect((await request.get(detailURL, { headers })).status()).toBe(200)
     const scheduled = await list()
     expect((await request.post('/api/admin/resource-imports', { headers, data })).status()).toBe(200)
     expect(await list()).toEqual(scheduled)
