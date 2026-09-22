@@ -29,7 +29,7 @@
           inherit backend frontend e2e;
           kustomize-build = import ./nix/kustomize-check.nix { inherit pkgs; };
         }
-        // lib.optionalAttrs pkgs.stdenv.isLinux {
+        // lib.optionalAttrs pkgs.stdenv.hostPlatform.isLinux {
           backend-image = import ./nix/backend-image.nix { inherit pkgs backend; };
           frontend-image = import ./nix/frontend-image.nix { inherit pkgs frontend; };
         }

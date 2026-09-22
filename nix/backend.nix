@@ -4,7 +4,7 @@
   pkgs,
   vendorHash ? import ./backend-vendor-hash.nix,
 }:
-pkgs.buildGoModule {
+(pkgs.buildGoModule.override { go = pkgs.go_1_27; }) {
   pname = "dsa-backend";
   version = "0.1.0";
   src = ../backend;

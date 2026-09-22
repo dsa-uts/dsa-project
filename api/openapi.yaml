@@ -166,6 +166,122 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
         "500": { $ref: "#/components/responses/InternalError" }
+  /api/projects:
+    get:
+      operationId: listProjects
+      security: [{ sessionAuth: [student] }]
+      summary: List Projects in display order
+      description: Students see only published Projects; Managers and Admins see all. Workflow summaries come from the latest Version. No private Job or Resource data is exposed.
+      responses:
+        "200":
+          description: All visible Projects, without pagination
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [projects]
+                properties:
+                  projects:
+                    type: array
+                    items: { $ref: "#/components/schemas/Project" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "500": { $ref: "#/components/responses/InternalError" }
+  /api/admin/projects:
+    patch:
+      operationId: updateProjects
+      security: [{ sessionAuth: [admin] }]
+      summary: Save all Project schedules and display order
+      description: |
+        Supply every Project ID exactly once. The array order becomes the display
+        order. Both nullable timestamps are required; if set, published_at must
+        not exceed deadline. All changes commit atomically. Last save wins.
+        Missing, duplicate, or unknown IDs return project_ids_mismatch.
+        An empty array is accepted only when no Projects exist.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [projects]
+              properties:
+                projects:
+                  type: array
+                  items: { $ref: "#/components/schemas/ProjectUpdate" }
+      responses:
+        "204": { description: Schedules and order saved; reload GET /api/projects }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "422":
+          description: project_ids_mismatch or validation_failed; nothing is changed
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "500": { $ref: "#/components/responses/InternalError" }
+  /api/admin/resource-imports:
+    post:
+      operationId: importResource
+      security: [{ sessionAuth: [admin] }]
+      summary: Import a Resource Version from the configured GitHub repository
+      description: |
+        Synchronously fetch and validate a Resource, then atomically save its
+        immutable Version and update the Project title and latest Version.
+        First import creates an unpublished Project with no deadline at the end
+        of the list. Updates preserve schedule and order. Equal Versions return
+        changed=false without accessing GitHub; older Versions are rejected.
+        Repository, commit and image overrides are not accepted. No rejudging occurs.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [resource_id, version]
+              properties:
+                resource_id: { type: string, pattern: '^[a-z][a-z0-9-]*$' }
+                version:
+                  type: string
+                  description: Formal vMAJOR.MINOR.PATCH only; validated by the handler to return invalid_resource_version
+      responses:
+        "200":
+          description: Committed import or unchanged current Version
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [project_id, version_id, resource_id, version, changed]
+                properties:
+                  project_id: { type: string, format: uuid }
+                  version_id: { type: string, format: uuid }
+                  resource_id: { type: string }
+                  version: { type: string }
+                  changed: { type: boolean }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404":
+          description: resource_version_not_found (not in index)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "409":
+          description: older_resource_version
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422":
+          description: invalid_resource_version, invalid_resource, resource_hash_mismatch, or validation_failed
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "503":
+          description: resource_source_unavailable (including authentication, rate limit, and download failures); upstream bodies and credentials are never returned
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "500": { $ref: "#/components/responses/InternalError" }
 components:
   securitySchemes:
     sessionAuth:
@@ -180,6 +296,71 @@ components:
       required: false
       schema: { type: string }
   schemas:
+    ProjectUpdate:
+      type: object
+      additionalProperties: false
+      required: [id, published_at, deadline]
+      properties:
+        id: { type: string, format: uuid }
+        published_at: { $ref: "#/components/schemas/NullableTimestamp" }
+        deadline: { $ref: "#/components/schemas/NullableTimestamp" }
+    NullableTimestamp:
+      type: [string, "null"]
+      format: date-time
+      pattern: 'Z$'
+      description: RFC 3339 UTC or null
+    Status:
+      type: string
+      enum: [AC, WA, TLE, MLE, RE, OLE, IE]
+    NullableStatus:
+      anyOf:
+        - $ref: "#/components/schemas/Status"
+        - type: "null"
+    Project:
+      type: object
+      additionalProperties: false
+      required: [id, resource_id, name, latest_version_id, latest_version, display_order, published_at, deadline, workflows, my_result]
+      properties:
+        id: { type: string, format: uuid }
+        resource_id: { type: string }
+        name: { type: string }
+        latest_version_id: { type: string, format: uuid }
+        latest_version: { type: string }
+        display_order: { type: integer, format: int64 }
+        published_at: { $ref: "#/components/schemas/NullableTimestamp" }
+        deadline: { $ref: "#/components/schemas/NullableTimestamp" }
+        workflows:
+          type: array
+          items:
+            type: object
+            required: [id, name]
+            properties:
+              id: { type: string }
+              name: { type: string }
+        my_result:
+          type: [object, "null"]
+          description: Latest own validation Request and its Submission, across Versions. Currently null until Submission/Request APIs are implemented.
+          required: [submission_id, uploaded_at, request]
+          properties:
+            submission_id: { type: string, format: uuid }
+            uploaded_at: { type: string, format: date-time }
+            request:
+              type: object
+              required: [id, version_id, version, state, status, workflows]
+              properties:
+                id: { type: string, format: uuid }
+                version_id: { type: string, format: uuid }
+                version: { type: string }
+                state: { type: string, enum: [pending, queued, running, completed] }
+                status: { $ref: "#/components/schemas/NullableStatus" }
+                workflows:
+                  type: array
+                  items:
+                    type: object
+                    required: [id, status]
+                    properties:
+                      id: { type: string }
+                      status: { $ref: "#/components/schemas/NullableStatus" }
     CreateSessionRequest:
       type: object
       additionalProperties: false

@@ -15,11 +15,12 @@ func TestLoad(t *testing.T) {
 	}
 
 	for name, value := range map[string]string{
-		"DATABASE_HOST":          "dsa-postgresql",
-		"DATABASE_PORT":          "5432",
-		"DATABASE_USER":          "dsa user",
-		"DATABASE_NAME":          "dsa/database",
-		"DATABASE_PASSWORD_FILE": databasePasswordPath,
+		"RESOURCE_REPOSITORY_URL": "https://github.com/dsa-uts/dsa-resource-spec",
+		"DATABASE_HOST":           "dsa-postgresql",
+		"DATABASE_PORT":           "5432",
+		"DATABASE_USER":           "dsa user",
+		"DATABASE_NAME":           "dsa/database",
+		"DATABASE_PASSWORD_FILE":  databasePasswordPath,
 	} {
 		t.Setenv(name, value)
 	}

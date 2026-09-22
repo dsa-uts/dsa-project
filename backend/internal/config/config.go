@@ -15,19 +15,23 @@ import (
 // Configuration is the process configuration loaded when this package is
 // initialized. Use Get to obtain the initialized value and any loading error.
 type Configuration struct {
-	Port            string
-	DatabaseURL     string
-	DevelopmentSeed bool
+	Port                  string
+	DatabaseURL           string
+	ResourceRepositoryURL string
+	ResourceGitHubToken   string
+	DevelopmentSeed       bool
 }
 
 type specification struct {
-	Port                 string     `envconfig:"PORT" default:"8080"`
-	DatabaseHost         string     `envconfig:"DATABASE_HOST" required:"true"`
-	DatabasePort         string     `envconfig:"DATABASE_PORT" required:"true"`
-	DatabaseUser         string     `envconfig:"DATABASE_USER" required:"true"`
-	DatabaseName         string     `envconfig:"DATABASE_NAME" required:"true"`
-	DatabasePasswordFile secretFile `envconfig:"DATABASE_PASSWORD_FILE" required:"true"`
-	DevelopmentSeed      bool       `envconfig:"DEVELOPMENT_SEED" default:"false"`
+	ResourceRepositoryURL   string     `envconfig:"RESOURCE_REPOSITORY_URL" required:"true"`
+	ResourceGitHubTokenFile secretFile `envconfig:"RESOURCE_GITHUB_TOKEN_FILE"`
+	Port                    string     `envconfig:"PORT" default:"8080"`
+	DatabaseHost            string     `envconfig:"DATABASE_HOST" required:"true"`
+	DatabasePort            string     `envconfig:"DATABASE_PORT" required:"true"`
+	DatabaseUser            string     `envconfig:"DATABASE_USER" required:"true"`
+	DatabaseName            string     `envconfig:"DATABASE_NAME" required:"true"`
+	DatabasePasswordFile    secretFile `envconfig:"DATABASE_PASSWORD_FILE" required:"true"`
+	DevelopmentSeed         bool       `envconfig:"DEVELOPMENT_SEED" default:"false"`
 }
 
 type secretFile string
@@ -75,8 +79,10 @@ func load() (Configuration, error) {
 		RawQuery: "sslmode=disable",
 	}).String()
 	return Configuration{
-		Port:            spec.Port,
-		DatabaseURL:     databaseURL,
-		DevelopmentSeed: spec.DevelopmentSeed,
+		Port:                  spec.Port,
+		ResourceRepositoryURL: spec.ResourceRepositoryURL,
+		ResourceGitHubToken:   string(spec.ResourceGitHubTokenFile),
+		DatabaseURL:           databaseURL,
+		DevelopmentSeed:       spec.DevelopmentSeed,
 	}, nil
 }

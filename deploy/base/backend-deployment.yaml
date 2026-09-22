@@ -24,6 +24,8 @@ spec:
             - name: http
               containerPort: 8080
           env:
+            - name: RESOURCE_REPOSITORY_URL
+              value: https://github.com/dsa-uts/dsa-resource-spec
             - name: DATABASE_HOST
               value: dsa-postgresql
             - name: DATABASE_PORT

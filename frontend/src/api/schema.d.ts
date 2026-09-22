@@ -108,10 +108,131 @@ export interface paths {
         patch: operations["reorderUserAccounts"];
         trace?: never;
     };
+    "/api/projects": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Projects in display order
+         * @description Students see only published Projects; Managers and Admins see all. Workflow summaries come from the latest Version. No private Job or Resource data is exposed.
+         */
+        get: operations["listProjects"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/projects": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Save all Project schedules and display order
+         * @description Supply every Project ID exactly once. The array order becomes the display
+         *     order. Both nullable timestamps are required; if set, published_at must
+         *     not exceed deadline. All changes commit atomically. Last save wins.
+         *     Missing, duplicate, or unknown IDs return project_ids_mismatch.
+         *     An empty array is accepted only when no Projects exist.
+         */
+        patch: operations["updateProjects"];
+        trace?: never;
+    };
+    "/api/admin/resource-imports": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Import a Resource Version from the configured GitHub repository
+         * @description Synchronously fetch and validate a Resource, then atomically save its
+         *     immutable Version and update the Project title and latest Version.
+         *     First import creates an unpublished Project with no deadline at the end
+         *     of the list. Updates preserve schedule and order. Equal Versions return
+         *     changed=false without accessing GitHub; older Versions are rejected.
+         *     Repository, commit and image overrides are not accepted. No rejudging occurs.
+         */
+        post: operations["importResource"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        ProjectUpdate: {
+            /** Format: uuid */
+            id: string;
+            published_at: components["schemas"]["NullableTimestamp"];
+            deadline: components["schemas"]["NullableTimestamp"];
+        };
+        /**
+         * Format: date-time
+         * @description RFC 3339 UTC or null
+         */
+        NullableTimestamp: string | null;
+        /** @enum {string} */
+        Status: "AC" | "WA" | "TLE" | "MLE" | "RE" | "OLE" | "IE";
+        NullableStatus: components["schemas"]["Status"] | null;
+        Project: {
+            /** Format: uuid */
+            id: string;
+            resource_id: string;
+            name: string;
+            /** Format: uuid */
+            latest_version_id: string;
+            latest_version: string;
+            /** Format: int64 */
+            display_order: number;
+            published_at: components["schemas"]["NullableTimestamp"];
+            deadline: components["schemas"]["NullableTimestamp"];
+            workflows: {
+                id: string;
+                name: string;
+            }[];
+            /** @description Latest own validation Request and its Submission, across Versions. Currently null until Submission/Request APIs are implemented. */
+            my_result: {
+                /** Format: uuid */
+                submission_id: string;
+                /** Format: date-time */
+                uploaded_at: string;
+                request: {
+                    /** Format: uuid */
+                    id: string;
+                    /** Format: uuid */
+                    version_id: string;
+                    version: string;
+                    /** @enum {string} */
+                    state: "pending" | "queued" | "running" | "completed";
+                    status: components["schemas"]["NullableStatus"];
+                    workflows: {
+                        id: string;
+                        status: components["schemas"]["NullableStatus"];
+                    }[];
+                };
+            } | null;
+        };
         CreateSessionRequest: {
             userid: string;
             password: string;
@@ -431,6 +552,142 @@ export interface operations {
                 };
             };
             500: components["responses"]["InternalError"];
+        };
+    };
+    listProjects: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description All visible Projects, without pagination */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        projects: components["schemas"]["Project"][];
+                    };
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    updateProjects: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    projects: components["schemas"]["ProjectUpdate"][];
+                };
+            };
+        };
+        responses: {
+            /** @description Schedules and order saved; reload GET /api/projects */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            /** @description project_ids_mismatch or validation_failed; nothing is changed */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            500: components["responses"]["InternalError"];
+        };
+    };
+    importResource: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    resource_id: string;
+                    /** @description Formal vMAJOR.MINOR.PATCH only; validated by the handler to return invalid_resource_version */
+                    version: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Committed import or unchanged current Version */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** Format: uuid */
+                        project_id: string;
+                        /** Format: uuid */
+                        version_id: string;
+                        resource_id: string;
+                        version: string;
+                        changed: boolean;
+                    };
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            /** @description resource_version_not_found (not in index) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description older_resource_version */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description invalid_resource_version, invalid_resource, resource_hash_mismatch, or validation_failed */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            500: components["responses"]["InternalError"];
+            /** @description resource_source_unavailable (including authentication, rate limit, and download failures); upstream bodies and credentials are never returned */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
         };
     };
 }

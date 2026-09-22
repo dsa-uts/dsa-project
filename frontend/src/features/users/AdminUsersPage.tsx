@@ -73,7 +73,7 @@ function UserDialog({ user, onClose, onSaved }: { user: User | null; onClose: ()
         </select>
       </Field>}
       {apiError && <p role="alert" className="text-sm text-destructive">{apiError}</p>}
-      <div className="flex justify-end gap-2"><Button type="button" variant="outline" disabled={busy} onClick={onClose}>Cancel</Button><Button type="submit" disabled={busy}>{busy ? 'Saving…' : user ? 'Save' : 'Create'}</Button></div>
+      <div className="flex justify-end gap-2"><Button type="button" variant="outline" disabled={busy} onClick={onClose}>Cancel</Button><Button type="submit" className="bg-top-bar text-top-bar-foreground hover:bg-top-bar-hover" disabled={busy}>{busy ? 'Saving…' : user ? 'Save' : 'Create'}</Button></div>
     </form>
   </Dialog>
 }
@@ -107,10 +107,10 @@ function UsersScreen() {
   }
   const query = search.trim().toLowerCase()
   const visible = users.data?.users.filter((user) => (state === 'all' || user.disabled === (state === 'disabled')) && (user.userid.toLowerCase().includes(query) || user.name.toLowerCase().includes(query))) ?? []
-  return <main className="flex-1 bg-background p-6 text-foreground">
-    <div className="mx-auto flex max-w-5xl flex-col gap-5">
-      <Link to="/" className="underline">Home</Link>
-      <div className="flex items-center justify-between gap-4"><h1 className="text-2xl font-semibold">User Accounts</h1><div className="flex items-center gap-3">{!ordering && <><Link to="/admin/users/bulk" className="underline">一括作成</Link><Button variant="outline" disabled={!users.data} onClick={() => { setSearch(''); setState('all'); setMutationError(''); setNotification(''); setOrdering(true) }}>並び順を編集</Button><Button onClick={() => setEditing({ user: null })}>Create user</Button></>}</div></div>
+  return <main className="container mx-auto flex-1 space-y-8 px-4 py-6 sm:px-8">
+    <div><nav aria-label="パンくず" className="mb-4 text-sm text-muted-foreground"><Link to="/admin/list" className="hover:underline">Admin Page</Link> / <span aria-current="page">User Management</span></nav><h1 className="text-3xl font-bold">User Management</h1></div>
+    <section aria-labelledby="users-heading" className="space-y-4">
+      <div className="flex flex-wrap items-center justify-between gap-4"><h2 id="users-heading" className="text-2xl font-bold">User Accounts</h2><div className="flex flex-wrap items-center gap-3">{!ordering && <><Link to="/admin/users/bulk" className="text-sm text-link hover:underline">一括作成</Link><Button variant="outline" disabled={!users.data} onClick={() => { setSearch(''); setState('all'); setMutationError(''); setNotification(''); setOrdering(true) }}>並び順を編集</Button><Button className="bg-top-bar text-top-bar-foreground hover:bg-top-bar-hover" onClick={() => setEditing({ user: null })}>Create user</Button></>}</div></div>
       {notification && <p role="status" className="text-success">{notification}</p>}
       {mutationError && !disabling && <p role="alert" className="text-destructive">{mutationError}</p>}
       {ordering && users.data ? <UserOrderEditor users={users.data.users} onCancel={() => setOrdering(false)} onSaved={async () => { await saved('並び順を保存しました。'); setOrdering(false) }} onMismatch={async () => {
@@ -118,11 +118,11 @@ function UsersScreen() {
         await users.refetch()
         setOrdering(false)
       }} /> : <>
-      <div className="flex flex-wrap gap-4">
+      <div className="flex flex-wrap items-end gap-6 rounded-md border p-6">
         <Field name="search" label="Search users"><input id="search" className={inputClass} value={search} onChange={(event) => setSearch(event.target.value)} /></Field>
         <Field name="state" label="State"><select id="state" className={inputClass} value={state} onChange={(event) => setState(event.target.value)}><option value="all">All</option><option value="active">Active</option><option value="disabled">Disabled</option></select></Field>
       </div>
-      {users.isPending ? <p>Loading…</p> : users.isError ? <div role="alert"><p className="text-destructive">Unable to load User Accounts.</p><Button variant="outline" onClick={() => void users.refetch()}>Retry</Button></div> : <div className="overflow-x-auto rounded-lg border"><table className="w-full text-left text-sm">
+      {users.isPending ? <p>Loading…</p> : users.isError ? <div role="alert"><p className="text-destructive">Unable to load User Accounts.</p><Button variant="outline" onClick={() => void users.refetch()}>Retry</Button></div> : <div className="overflow-x-auto rounded-md border"><table className="w-full min-w-2xl text-left text-sm">
         <thead className="bg-muted"><tr>{['User ID', 'Display name', 'Role', 'State', 'Actions'].map((title) => <th key={title} className="p-3">{title}</th>)}</tr></thead>
         <tbody>{visible.map((user) => <tr key={user.id} className="border-t">
           <td className="p-3">{user.userid}</td><td className="p-3">{user.name}</td><td className="p-3">{user.role}</td><td className="p-3">{user.disabled ? 'Disabled' : 'Active'}</td>
@@ -139,7 +139,7 @@ function UsersScreen() {
         {mutationError && <p role="alert" className="text-destructive">{mutationError}</p>}
         <div className="flex justify-end gap-2"><Button variant="outline" disabled={busy} onClick={() => setDisabling(null)}>Cancel</Button><Button variant="destructive" disabled={busy} onClick={() => void changeState(disabling, { disabled: true })}>Disable account</Button></div>
       </Dialog>}
-    </div>
+    </section>
   </main>
 }
 
