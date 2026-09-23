@@ -34,10 +34,10 @@ func (h *Handler) CreateSession(ctx context.Context, req generated.CreateSession
 		slog.ErrorContext(ctx, "find user for login", "error", err)
 		return generated.CreateSession500JSONResponse{InternalErrorJSONResponse: generated.InternalErrorJSONResponse(httpresponse.NewError("internal", "Failed to create session."))}, nil
 	}
-	loginCapable := err == nil && user.DisabledAt == nil && !user.IsSystem && user.PasswordHash != nil
+	loginCapable := err == nil && user.DisabledAt == nil
 	hash := dummyPasswordHash
 	if loginCapable {
-		hash = *user.PasswordHash
+		hash = user.PasswordHash
 	}
 	passwordOK := auth.VerifyPassword(hash, req.Body.Password)
 	if !loginCapable || !passwordOK {

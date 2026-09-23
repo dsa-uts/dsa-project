@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto'
 import { expect, test, type APIRequestContext, type APIResponse } from '@playwright/test'
 import { baseURL } from '../environment.js'
 
-const systemID = '00000000-0000-0000-0000-000000000097' // SeedDevelopment fixture
+const unknownID = randomUUID()
 const uniqueUserid = () => `u-${randomUUID().slice(0, 20)}`
 const valid = () => ({ userid: uniqueUserid(), name: '山田 🔑', role: 'student', password: 'initial-password' })
 async function cookie(request: APIRequestContext, userid = 'admin', password = 'admin') {
@@ -23,21 +23,20 @@ test('every Admin user endpoint requires authentication and Admin Role, before v
     for (const response of [
       await request.get('/api/admin/users', { headers }),
       await request.post('/api/admin/users', { headers, data: valid() }),
-      await request.patch(`/api/admin/users/${systemID}`, { headers, data: { name: 'changed' } }),
+      await request.patch(`/api/admin/users/${unknownID}`, { headers, data: { name: 'changed' } }),
       await request.post('/api/admin/users', { headers, data: {} }),
-      await request.patch(`/api/admin/users/${systemID}`, { headers, data: {} }),
+      await request.patch(`/api/admin/users/${unknownID}`, { headers, data: {} }),
       await request.patch('/api/admin/users/not-a-uuid', { headers, data: { name: 'changed' } }),
       await request.patch('/api/admin/users/not-a-uuid', { headers: { ...headers, 'Content-Type': 'application/json' }, data: '{' }),
     ]) await error(response, role ? 403 : 401, role ? 'forbidden' : 'unauthorized')
   }
 })
 
-test('creation appends, excludes the System Account, and validates immutable case-sensitive Userids and Unicode inputs', async ({ request }) => {
+test('creation appends and validates immutable case-sensitive Userids and Unicode inputs', async ({ request }) => {
   const headers = await cookie(request)
   await error(await request.patch('/api/admin/users/not-a-uuid', { headers, data: { name: 'changed' } }), 422, 'validation_failed')
   await error(await request.post('/api/admin/users', { data: '{', headers: { ...headers, 'Content-Type': 'application/json' } }), 422, 'validation_failed')
   const before = (await (await request.get('/api/admin/users', { headers })).json()).users
-  expect(before.some((u: { id: string }) => u.id === systemID)).toBe(false)
   expect(before.find((u: { userid: string }) => u.userid === 'disabled')).toMatchObject({ disabled: true })
   const data = { ...valid(), name: ' 🔑'.repeat(32), password: '🔑'.repeat(256) }
   const created = await request.post('/api/admin/users', { headers, data })
@@ -52,7 +51,7 @@ test('creation appends, excludes the System Account, and validates immutable cas
   for (const invalid of [
     { userid: '' }, { userid: 'a'.repeat(31) }, { userid: ' leading' }, { userid: '_leading' }, { userid: 'trailing\n' }, { userid: '日本語' },
     { name: '' }, { name: '🔑'.repeat(65) }, { name: ' \t\u3000' }, { name: 'a\u0085b' }, { name: 'a\nb' },
-    { password: '🔑'.repeat(7) }, { password: '🔑'.repeat(257) }, { role: 'system' }, { confirmation: 'extra' },
+    { password: undefined }, { password: null }, { password: '🔑'.repeat(7) }, { password: '🔑'.repeat(257) }, { role: 'system' }, { confirmation: 'extra' },
   ]) await error(await request.post('/api/admin/users', { headers, data: { ...valid(), ...invalid } }), 422, 'validation_failed')
   for (const patch of [{}, { userid: 'replacement' }, { password: '' }, { name: null }, { disabled: null }, { name: '\u3000' }, { role: 'invalid' }]) {
     await error(await request.patch(`/api/admin/users/${user.id}`, { headers, data: patch }), 422, 'validation_failed')
@@ -109,7 +108,7 @@ test('partial updates preserve order, disable/reset revoke all sessions, and re-
   await cookie(request, data.userid, 'replacement-password')
 })
 
-test('System Account and self-protection conflicts are atomic', async ({ request }) => {
+test('self-protection conflicts are atomic', async ({ request }) => {
   const headers = await cookie(request)
   const own = headers
   const user = await (await request.get('/api/me', { headers })).json()
@@ -118,8 +117,6 @@ test('System Account and self-protection conflicts are atomic', async ({ request
   }
   expect(await (await request.get('/api/me', { headers: own })).json()).toMatchObject({ name: user.name, role: 'admin' })
   expect((await request.patch(`/api/admin/users/${user.id}`, { headers: own, data: { name: user.name } })).status()).toBe(200)
-  await error(await request.patch(`/api/admin/users/${systemID}`, { headers, data: { name: 'Changed', password: 'replacement-password', disabled: false } }), 409, 'cannot_modify_system_account')
-
 })
 
 test('browser Admin creates, filters, edits, confirms disable, and re-enables User Accounts', async ({ page }) => {
@@ -200,7 +197,7 @@ for (const role of ['student', 'manager']) {
   })
 }
 
-test('global order is Admin-only, requires every non-System ID once and preserves order on mismatch', async ({ request }) => {
+test('global order is Admin-only, requires every User Account ID once and preserves order on mismatch', async ({ request }) => {
   for (const role of [null, 'student', 'manager']) {
     const headers = role ? await cookie(request, role) : { Cookie: '' }
     await error(await request.patch('/api/users/order', { headers, data: { user_ids: [] } }), role ? 403 : 401, role ? 'forbidden' : 'unauthorized')
@@ -211,7 +208,7 @@ test('global order is Admin-only, requires every non-System ID once and preserve
   const reversed = [...original].reverse()
   expect((await request.patch('/api/users/order', { headers, data: { user_ids: reversed } })).status()).toBe(204)
   expect(await list()).toEqual(reversed)
-  for (const ids of [[], reversed.slice(1), [...reversed, reversed[0]], [...reversed, systemID], [...reversed.slice(1), randomUUID()]]) {
+  for (const ids of [[], reversed.slice(1), [...reversed, reversed[0]], [...reversed, unknownID], [...reversed.slice(1), randomUUID()]]) {
     await error(await request.patch('/api/users/order', { headers, data: { user_ids: ids } }), 422, 'user_ids_mismatch')
     expect(await list()).toEqual(reversed)
   }

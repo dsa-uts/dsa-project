@@ -46,7 +46,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List all non-System User Accounts, including disabled accounts, in persisted display order */
+        /** List all User Accounts, including disabled accounts, in persisted display order */
         get: operations["listUserAccounts"];
         put?: never;
         /** Create a User Account at the end of the global display order */
@@ -75,7 +75,6 @@ export interface paths {
         /**
          * Atomically update supplied fields of a User Account
          * @description Userid is immutable. Last-write-wins; supplying existing values succeeds.
-         *     System Accounts cannot be modified (cannot_modify_system_account).
          *     An Admin cannot change their own Role or disable themselves (cannot_modify_self).
          *     Password replacement and transitions to disabled delete all affected sessions
          *     in the same transaction. Other changes retain sessions. Repeated disabling
@@ -100,8 +99,8 @@ export interface paths {
         head?: never;
         /**
          * Save the global User Account display order (Admin only)
-         * @description Supply every non-System User Account ID exactly once, including disabled
-         *     accounts. Missing, duplicate, unknown, or System Account IDs return
+         * @description Supply every User Account ID exactly once, including disabled
+         *     accounts. Missing, duplicate, or unknown IDs return
          *     422 user_ids_mismatch without changing the order.
          *     The saved order drives the Admin list and future roster views.
          */
@@ -396,7 +395,7 @@ export interface components {
                 "application/json": components["schemas"]["Error"];
             };
         };
-        /** @description userid_taken (exact duplicate), cannot_modify_self, or cannot_modify_system_account */
+        /** @description userid_taken (exact duplicate) or cannot_modify_self */
         UserConflict: {
             headers: {
                 [name: string]: unknown;

@@ -32,10 +32,6 @@ _Avoid_: Admin account, Manager account
 User Account に一つ割り当てる権限レベルで、Admin > Manager > Student の順に下位 Role の権限をすべて継承する。操作に必要な最低 Role を満たしていても、所有者・公開状態による認可や自己無効化禁止などの業務制約は別に適用される。
 _Avoid_: Account type, user type
 
-**System Account**:
-システムが自動作成する Request の actor として使う予約 User Account。
-_Avoid_: Null user, background actor
-
 **Disabled User Account**:
 soft delete された User Account。ログイン不可だがレコードは保持され、過去の Submission / Request から引き続き参照される。User Account の物理削除はドメイン操作として存在しない。
 _Avoid_: Deleted user, removed user

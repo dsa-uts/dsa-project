@@ -40,7 +40,7 @@ func (h *Handler) CreateUserAccount(ctx context.Context, req generated.CreateUse
 	if err != nil {
 		return nil, err
 	}
-	user := &store.UserAccount{Userid: req.Body.Userid, Name: req.Body.Name, Role: string(req.Body.Role), PasswordHash: new(hash)}
+	user := &store.UserAccount{Userid: req.Body.Userid, Name: req.Body.Name, Role: string(req.Body.Role), PasswordHash: hash}
 	if err := h.auth.CreateUser(ctx, user); errors.Is(err, store.ErrUseridTaken) {
 		return generated.CreateUserAccount409JSONResponse{UserConflictJSONResponse: generated.UserConflictJSONResponse(httpresponse.NewError("userid_taken", "This User ID is already taken."))}, nil
 	} else if err != nil {
@@ -67,7 +67,7 @@ func (h *Handler) UpdateUserAccount(ctx context.Context, req generated.UpdateUse
 	switch {
 	case errors.Is(err, store.ErrNotFound):
 		return generated.UpdateUserAccount404JSONResponse{NotFoundJSONResponse: generated.NotFoundJSONResponse(httpresponse.NewError("not_found", "User Account not found."))}, nil
-	case errors.Is(err, store.ErrCannotModifySelf), errors.Is(err, store.ErrCannotModifySystemAccount):
+	case errors.Is(err, store.ErrCannotModifySelf):
 		return generated.UpdateUserAccount409JSONResponse{UserConflictJSONResponse: generated.UserConflictJSONResponse(httpresponse.NewError(err.Error(), "This User Account cannot be modified in that way."))}, nil
 	case err != nil:
 		slog.ErrorContext(ctx, "update User Account", "error", err)

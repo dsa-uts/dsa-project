@@ -21,10 +21,9 @@ type UserAccount struct {
 	Userid       string     `bun:"userid,notnull"`
 	Name         string     `bun:"name,notnull"`
 	Role         string     `bun:"role,notnull"`
-	PasswordHash *string    `bun:"password_hash"`
+	PasswordHash string     `bun:"password_hash,notnull"`
 	DisabledAt   *time.Time `bun:"disabled_at"`
 	DisplayOrder int64      `bun:"display_order,autoincrement"`
-	IsSystem     bool       `bun:"is_system,notnull"`
 }
 
 type Session struct {
@@ -62,7 +61,7 @@ func (s *AuthStore) CreateSession(ctx context.Context, verifiedUser *UserAccount
 			Where("id = ?", verifiedUser.ID).For("UPDATE").Scan(ctx); err != nil {
 			return err
 		}
-		if lockedUser.IsSystem || lockedUser.DisabledAt != nil || lockedUser.PasswordHash == nil || verifiedUser.PasswordHash == nil || *lockedUser.PasswordHash != *verifiedUser.PasswordHash {
+		if lockedUser.DisabledAt != nil || lockedUser.PasswordHash != verifiedUser.PasswordHash {
 			return ErrNotFound
 		}
 		lockedUserID := lockedUser.ID

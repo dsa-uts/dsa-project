@@ -49,7 +49,7 @@ func Authenticate(authStore *store.AuthStore) openapi3filter.AuthenticationFunc 
 		// kin-openapi passes the required Roles through its Scopes field.
 		// Startup validation permits at most one minimum Role.
 		for _, role := range input.Scopes {
-			if user.IsSystem || !auth.AllowsRole(user.Role, role) {
+			if !auth.AllowsRole(user.Role, role) {
 				label := role
 				if role == "admin" {
 					label = "Admin"

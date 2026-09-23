@@ -12,15 +12,14 @@ import (
 )
 
 var (
-	ErrUserIDsMismatch           = errors.New("user_ids_mismatch")
-	ErrUseridTaken               = errors.New("userid_taken")
-	ErrCannotModifySelf          = errors.New("cannot_modify_self")
-	ErrCannotModifySystemAccount = errors.New("cannot_modify_system_account")
+	ErrUserIDsMismatch  = errors.New("user_ids_mismatch")
+	ErrUseridTaken      = errors.New("userid_taken")
+	ErrCannotModifySelf = errors.New("cannot_modify_self")
 )
 
 func (s *AuthStore) ListUsers(ctx context.Context) ([]UserAccount, error) {
 	users := []UserAccount{}
-	err := s.db.NewSelect().Model(&users).Where("is_system = false").OrderExpr("display_order ASC").Scan(ctx)
+	err := s.db.NewSelect().Model(&users).OrderExpr("display_order ASC").Scan(ctx)
 	return users, err
 }
 
@@ -51,9 +50,6 @@ func (s *AuthStore) UpdateUser(ctx context.Context, actorID, userID uuid.UUID, u
 		if err != nil {
 			return err
 		}
-		if user.IsSystem {
-			return ErrCannotModifySystemAccount
-		}
 		if actorID == userID && ((update.Role != nil && *update.Role != user.Role) || (update.Disabled != nil && *update.Disabled)) {
 			return ErrCannotModifySelf
 		}
@@ -68,7 +64,7 @@ func (s *AuthStore) UpdateUser(ctx context.Context, actorID, userID uuid.UUID, u
 		}
 		invalidate := update.PasswordHash != nil
 		if update.PasswordHash != nil {
-			user.PasswordHash = update.PasswordHash
+			user.PasswordHash = *update.PasswordHash
 			columns = append(columns, "password_hash")
 		}
 		if update.Disabled != nil {
@@ -105,7 +101,7 @@ func (s *AuthStore) ReorderUsers(ctx context.Context, ids []uuid.UUID) error {
 			return err
 		}
 		users := []UserAccount{}
-		if err := tx.NewSelect().Model(&users).Where("is_system = false").OrderExpr("display_order ASC").Scan(ctx); err != nil {
+		if err := tx.NewSelect().Model(&users).OrderExpr("display_order ASC").Scan(ctx); err != nil {
 			return err
 		}
 		if len(ids) != len(users) {

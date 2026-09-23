@@ -51,7 +51,6 @@
 | Student | 自分の validation Submission と Request を作成・参照する。 |
 | Manager | evaluation の Submission / Request を管理し、全ユーザーの結果を参照する。 |
 | Admin | ユーザー、Project の公開日時・締切・表示順、Resource の手動インポートを管理する。 |
-| System Account | システムが自動作成する Request の actor。ログイン不可。 |
 
 ## Projects
 
@@ -160,7 +159,7 @@ Manager/Admin 専用。evaluation Submission を archive し、所属するす�
 | `version_id` | 作成時点の latest に固定した単一の対象 Version(Single-Version Request)。 |
 | `version` | 実行対象 Version の SemVer。 |
 | `submission` | 対象 Submission の要約: `id`、`kind`、`subject_user`(3 点セット)、`uploaded_at`、`content_hash`。 |
-| `requested_by` | actor の User(3 点セット)。System Account を含む。 |
+| `requested_by` | actor の User(3 点セット)。 |
 | `requested_at` | Request 作成時刻。 |
 | `state` | `pending` / `queued` / `running` / `completed`。 |
 | `status` | `completed` まで `null`。完了後は Status(Worst-wins で集約)。 |

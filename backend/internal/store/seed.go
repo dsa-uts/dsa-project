@@ -23,22 +23,15 @@ func SeedDevelopment(ctx context.Context, db *bun.DB) error {
 		VALUES ('admin', 'Development Admin', 'admin', ?)
 		ON CONFLICT (userid) DO UPDATE
 		SET name = EXCLUDED.name, role = EXCLUDED.role, password_hash = EXCLUDED.password_hash,
-		    disabled_at = NULL, is_system = false
+		    disabled_at = NULL
 	`, string(passwordHash)).Exec(ctx); err != nil {
 		return err
 	}
 	if _, err := db.NewRaw(`
 		INSERT INTO user_accounts (userid, name, role, password_hash, disabled_at)
 		VALUES ('disabled', 'Disabled Development User', 'student', ?, now())
-		ON CONFLICT (userid) DO UPDATE SET disabled_at = now(), is_system = false
+		ON CONFLICT (userid) DO UPDATE SET disabled_at = now()
 	`, string(passwordHash)).Exec(ctx); err != nil {
-		return err
-	}
-	if _, err := db.NewRaw(`
-		INSERT INTO user_accounts (id, userid, name, role, password_hash, is_system)
-		VALUES ('00000000-0000-0000-0000-000000000097', 'system', 'Development System Account', 'admin', NULL, true)
-		ON CONFLICT (userid) DO UPDATE SET password_hash = NULL, disabled_at = NULL, is_system = true
-	`).Exec(ctx); err != nil {
 		return err
 	}
 	// Login-capable development-only fixtures for authorization coverage.

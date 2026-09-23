@@ -58,7 +58,6 @@ test('login validates input and makes authentication failures indistinguishable'
     { userid: 'missing', password: 'admin' },
     { userid: 'admin', password: 'wrong' },
     { userid: 'disabled', password: 'admin' },
-    { userid: 'system', password: 'admin' },
   ]
   const bodies = []
   for (const data of attempts) {
