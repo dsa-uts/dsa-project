@@ -63,6 +63,10 @@ test('Dashboard lists actual Projects and filters them without navigation', asyn
 
   const linkedListProject = projects.find((item: { resource_id: string }) => item.resource_id === 'ex2')
   await page.goto(`/projects/${linkedListProject.id}/ex2-1`)
+  const examples = outline.getByRole('listitem').filter({ has: page.getByRole('link', { name: '具体例', exact: true }) }).last()
+  await expect(examples.getByRole('list').getByRole('link')).toHaveText(['入力1', '出力1', '入力2', '出力2'])
+  await expect(outline.getByRole('list').first().locator(':scope > li > ul > li > a')).toHaveText(['テストファイル test_linked_list.c', '制約', '出力', '具体例', '提出方法'])
+  await outline.screenshot({ path: 'test-results/problem-outline.png' })
   const inputFormat = page.locator('article blockquote').first()
   await expect(inputFormat.locator('.katex')).toHaveCount(5)
   await expect(inputFormat.locator('br')).toHaveCount(4)
@@ -71,6 +75,7 @@ test('Dashboard lists actual Projects and filters them without navigation', asyn
   await inputFormat.scrollIntoViewIfNeeded()
   await inputFormat.screenshot({ path: 'test-results/problem-input-format.png' })
   await page.setViewportSize({ width: 390, height: 844 })
+  await outline.screenshot({ path: 'test-results/problem-outline-mobile.png' })
   await inputFormat.scrollIntoViewIfNeeded()
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
   await inputFormat.screenshot({ path: 'test-results/problem-input-format-mobile.png' })

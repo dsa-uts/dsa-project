@@ -96,6 +96,27 @@ test('outline omits raw HTML blocks while retaining heading links', async () => 
   expect(outline.textContent).not.toContain('</div>')
 })
 
+test('outline nests headings under the nearest shallower heading without empty levels', async () => {
+  setup('/projects/project-1', async () => Response.json({ ...project, workflows: [{
+    id: 'ex1-1', name: '基本課題',
+    description_markdown: '# 基本課題\n\n## 最初の節\n\n# 課題\n\n#### テスト `main.c`\n\n#### 具体例\n\n##### 入力\n\n###### 詳細\n\n##### 出力\n\n## [提出方法](https://example.com)\n\n# 次の課題',
+  }] }))
+  await screen.findByRole('heading', { level: 1, name: '基本課題' })
+  const outline = screen.getByRole('navigation', { name: '課題の目次' })
+  const lists = within(outline).getAllByRole('list')
+  const labels = (list: HTMLElement) => Array.from(list.children).map(item => item.firstElementChild?.textContent)
+  expect(lists.map(labels)).toEqual([
+    ['最初の節', '課題', '次の課題'],
+    ['テスト main.c', '具体例', '提出方法'],
+    ['入力', '出力'],
+    ['詳細'],
+  ])
+  expect(outline.querySelector('a a')).toBeNull()
+  for (const link of outline.querySelectorAll('a[href^="#section-"]')) {
+    expect(document.querySelector(link.getAttribute('href')!)?.textContent).toBe(link.textContent)
+  }
+})
+
 test('detail uses the shared historical result popover', async () => {
   setup('/projects/project-1', async () => Response.json({ ...project, my_result: {
     submission_id: 'submission-1', content_hash: `sha256:${'a'.repeat(64)}`, uploaded_at: '2026-09-22T00:00:00Z',

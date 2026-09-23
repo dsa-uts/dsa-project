@@ -2,6 +2,7 @@ import { createElement, useEffect } from 'react'
 import { Link, useLocation, useParams } from 'react-router-dom'
 import Markdown, { type Components } from 'react-markdown'
 import remarkGfm from 'remark-gfm'
+import type { Element, Root } from 'hast'
 import { Accordion, Tooltip } from 'radix-ui'
 import { ChevronRight, Upload } from 'lucide-react'
 import { $api } from '@/api/client'
@@ -10,7 +11,33 @@ import { MarkdownContent } from '@/components/MarkdownContent'
 import { SubmissionSummary } from './SubmissionSummary'
 
 const heading: Components['h2'] = ({ children, node }) => createElement(node?.tagName === 'h1' ? 'h2' : node?.tagName ?? 'h2', { id: `section-${node?.position?.start.offset}`, className: 'scroll-mt-6', tabIndex: -1 }, children)
-const outlineHeading: Components['h2'] = ({ children, node }) => <li><a href={`#section-${node?.position?.start.offset}`} className="block rounded-sm py-1.5 hover:text-link focus-visible:ring-2 focus-visible:ring-ring">{children}</a></li>
+const outlineHeading: Components['h2'] = ({ children, node }) => <a href={`#section-${node?.position?.start.offset}`} className="block rounded-sm py-1.5 hover:text-link focus-visible:ring-2 focus-visible:ring-ring">{children}</a>
+
+function rehypeOutline() {
+  return (tree: Root) => {
+    const list: Element = { type: 'element', tagName: 'ul', properties: {}, children: [] }
+    const parents = [{ depth: 0, item: list }]
+    for (const node of tree.children) {
+      if (node.type !== 'element' || !/^h[1-6]$/.test(node.tagName)) continue
+      const depth = Number(node.tagName[1])
+      while (parents[parents.length - 1].depth >= depth) parents.pop()
+      const parent = parents[parents.length - 1].item
+      let siblings = parent
+      if (parent.tagName === 'li') {
+        const last = parent.children.at(-1)
+        if (last?.type === 'element' && last.tagName === 'ul') siblings = last
+        else {
+          siblings = { type: 'element', tagName: 'ul', properties: {}, children: [] }
+          parent.children.push(siblings)
+        }
+      }
+      const item: Element = { type: 'element', tagName: 'li', properties: {}, children: [node] }
+      siblings.children.push(item)
+      parents.push({ depth, item })
+    }
+    tree.children = list.children.length ? [list] : []
+  }
+}
 
 export function ProblemDetailPage() {
   const { projectId = '', workflowId } = useParams()
@@ -51,9 +78,9 @@ export function ProblemDetailPage() {
             <ChevronRight className="size-5 shrink-0 group-data-[state=open]:rotate-90" aria-hidden="true" /><span className="min-w-0 break-words">{item.name}</span>
           </Link>
           </Accordion.Trigger></Accordion.Header>
-          <Accordion.Content>{item.id === workflow?.id && <ul className="my-2 ml-6 border-l pl-4 text-sm">
-            <Markdown skipHtml remarkPlugins={[remarkGfm]} allowedElements={['h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'code', 'em', 'strong', 'del', 'a']} components={{ h1: outlineHeading, h2: outlineHeading, h3: outlineHeading, h4: outlineHeading, h5: outlineHeading, h6: outlineHeading, a: ({ children }) => <>{children}</>, code: ({ children }) => <>{children}</> }}>{description}</Markdown>
-          </ul>}</Accordion.Content>
+          <Accordion.Content>{item.id === workflow?.id && <div className="my-2 ml-3 text-sm break-words">
+            <Markdown skipHtml remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeOutline]} allowedElements={['ul', 'li', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'code', 'em', 'strong', 'del', 'a']} components={{ ul: ({ children }) => <ul className="ml-3 border-l pl-3">{children}</ul>, h1: outlineHeading, h2: outlineHeading, h3: outlineHeading, h4: outlineHeading, h5: outlineHeading, h6: outlineHeading, a: ({ children }) => <>{children}</>, code: ({ children }) => <>{children}</> }}>{description}</Markdown>
+          </div>}</Accordion.Content>
         </Accordion.Item>)}
         </Accordion.Root>
       </nav>
