@@ -83,6 +83,19 @@ test('not-found and server failures are recoverable without showing stale conten
   expect(screen.queryByRole('list', { name: '提出が求められているファイル' })).toBeNull()
 })
 
+test('outline omits raw HTML blocks while retaining heading links', async () => {
+  setup('/projects/project-1', async () => Response.json({ ...project, workflows: [{
+    id: 'ex1-1', name: '基本課題',
+    description_markdown: '# 基本課題\n\n## 入力\n\n<div style="background-color: #f0f0f0;">\n\n本文<br>\n\n</div>\n\n## 制約\n条件',
+  }] }))
+  await screen.findByRole('heading', { level: 1, name: '基本課題' })
+  const outline = screen.getByRole('navigation', { name: '課題の目次' })
+  expect(within(outline).getByRole('link', { name: '入力' })).toBeDefined()
+  expect(within(outline).getByRole('link', { name: '制約' })).toBeDefined()
+  expect(outline.textContent).not.toContain('<div')
+  expect(outline.textContent).not.toContain('</div>')
+})
+
 test('detail uses the shared historical result popover', async () => {
   setup('/projects/project-1', async () => Response.json({ ...project, my_result: {
     submission_id: 'submission-1', content_hash: `sha256:${'a'.repeat(64)}`, uploaded_at: '2026-09-22T00:00:00Z',

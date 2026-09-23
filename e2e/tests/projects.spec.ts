@@ -60,6 +60,20 @@ test('Dashboard lists actual Projects and filters them without navigation', asyn
   }
   await outline.getByRole('link', { name: workflow.name, exact: true }).click()
   await page.screenshot({ path: 'test-results/problem-detail.png', fullPage: true })
+
+  const linkedListProject = projects.find((item: { resource_id: string }) => item.resource_id === 'ex2')
+  await page.goto(`/projects/${linkedListProject.id}/ex2-1`)
+  const inputFormat = page.locator('article blockquote').first()
+  await expect(inputFormat.locator('.katex')).toHaveCount(5)
+  await expect(inputFormat.locator('br')).toHaveCount(4)
+  await expect(inputFormat).not.toContainText('<div')
+  await expect(inputFormat).toHaveCSS('border-top-style', 'solid')
+  await inputFormat.scrollIntoViewIfNeeded()
+  await inputFormat.screenshot({ path: 'test-results/problem-input-format.png' })
+  await page.setViewportSize({ width: 390, height: 844 })
+  await inputFormat.scrollIntoViewIfNeeded()
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
+  await inputFormat.screenshot({ path: 'test-results/problem-input-format-mobile.png' })
 })
 
 async function cookie(request: APIRequestContext, role = 'admin') {

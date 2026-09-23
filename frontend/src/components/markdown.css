@@ -42,6 +42,19 @@
 .markdown-content li { margin-block: 0.5rem; }
 .markdown-content strong { font-weight: 600; }
 
+.markdown-content blockquote {
+  margin-block: 1.5rem;
+  padding: 1rem 1.25rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--muted);
+  overflow-x: auto;
+  overflow-wrap: normal;
+  white-space: nowrap;
+}
+
+.markdown-content blockquote > :last-child { margin-bottom: 0; }
+
 .markdown-content a {
   color: var(--top-bar);
   text-decoration: underline;

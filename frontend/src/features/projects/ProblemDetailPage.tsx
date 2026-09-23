@@ -52,7 +52,7 @@ export function ProblemDetailPage() {
           </Link>
           </Accordion.Trigger></Accordion.Header>
           <Accordion.Content>{item.id === workflow?.id && <ul className="my-2 ml-6 border-l pl-4 text-sm">
-            <Markdown remarkPlugins={[remarkGfm]} allowedElements={['h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'code', 'em', 'strong', 'del', 'a']} components={{ h1: outlineHeading, h2: outlineHeading, h3: outlineHeading, h4: outlineHeading, h5: outlineHeading, h6: outlineHeading, a: ({ children }) => <>{children}</>, code: ({ children }) => <>{children}</> }}>{description}</Markdown>
+            <Markdown skipHtml remarkPlugins={[remarkGfm]} allowedElements={['h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'code', 'em', 'strong', 'del', 'a']} components={{ h1: outlineHeading, h2: outlineHeading, h3: outlineHeading, h4: outlineHeading, h5: outlineHeading, h6: outlineHeading, a: ({ children }) => <>{children}</>, code: ({ children }) => <>{children}</> }}>{description}</Markdown>
           </ul>}</Accordion.Content>
         </Accordion.Item>)}
         </Accordion.Root>
