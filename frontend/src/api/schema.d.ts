@@ -636,10 +636,7 @@ export interface operations {
     };
     getProject: {
         parameters: {
-            query?: {
-                /** @description Not accepted; any supplied value returns version_not_allowed. */
-                version_id?: string;
-            };
+            query?: never;
             header?: never;
             path: {
                 project_id: string;
@@ -668,7 +665,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description version_not_allowed or validation_failed */
+            /** @description validation_failed */
             422: {
                 headers: {
                     [name: string]: unknown;

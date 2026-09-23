@@ -202,11 +202,6 @@ paths:
           in: path
           required: true
           schema: { type: string, format: uuid }
-        - name: version_id
-          in: query
-          description: Not accepted; any supplied value returns version_not_allowed.
-          schema: { type: string }
-          allowEmptyValue: true
       responses:
         "200":
           description: Latest visible Project
@@ -221,7 +216,7 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
         "422":
-          description: version_not_allowed or validation_failed
+          description: validation_failed
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }

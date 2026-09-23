@@ -67,9 +67,6 @@ func (h *Handler) GetProject(ctx context.Context, req generated.GetProjectReques
 	if p == nil {
 		return generated.GetProject404JSONResponse(httpresponse.NewError("not_found", "Project not found.")), nil
 	}
-	if req.Params.VersionId != nil {
-		return generated.GetProject422JSONResponse(httpresponse.NewError("version_not_allowed", "Project views always use the latest Version.")), nil
-	}
 	detail, err := projectDetail(p)
 	return generated.GetProject200JSONResponse(detail), err
 }

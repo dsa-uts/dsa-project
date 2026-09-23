@@ -59,7 +59,7 @@
 
 課題詳細APIは [OpenAPI](../../api/openapi.yaml) の `GET /api/projects/{project_id}` を参照。
 
-- 常に最新の取り込み済み Version を返す。`version_id` 指定は `422 version_not_allowed`。
+- 全ロールで常に最新の取り込み済み Version を返す。Version を指定するリクエストパラメータは設けない。
 - 一覧の各 Project と同じフィールドに、課題全体の `required_files` と各 Workflow の `description_markdown` を追加する。Workflow は ID の辞書順。Job は返さない。
 - `required_files` は Resource の表示用案内を記載順・内容そのままで返す。未指定は `[]`。提出可否の判定には使わない。
 - 説明は保存済み Markdown 本文。未指定は空文字。Markdown のファイル添付機能は持たず、添付ファイル配信や URL 書き換えは行わない。

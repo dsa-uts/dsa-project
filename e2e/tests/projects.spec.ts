@@ -31,6 +31,35 @@ test('Dashboard lists actual Projects and filters them without navigation', asyn
   await expect(page.getByRole('link', { name: 'Dashboard' })).toBeInViewport()
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
   await page.screenshot({ path: 'test-results/problem-list-mobile.png', fullPage: true })
+
+  const project = projects[0]
+  const workflow = project.workflows[0]
+  await page.getByRole('tabpanel').getByRole('link', { name: workflow.name, exact: true }).first().click()
+  await expect(page).toHaveURL(new RegExp(`/projects/${project.id}/${workflow.id}$`))
+  await expect(page.getByRole('heading', { level: 1, name: workflow.name, exact: true })).toBeVisible()
+  await expect(page.getByRole('button', { name: '提出する', exact: true })).toBeDisabled()
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
+  await page.screenshot({ path: 'test-results/problem-detail-mobile.png', fullPage: true })
+  await page.setViewportSize({ width: 1448, height: 1086 })
+  const outline = page.getByRole('navigation', { name: '課題の目次' })
+  const sectionLink = outline.locator('a[href^="#"]').first()
+  const anchor = await sectionLink.getAttribute('href')
+  await sectionLink.click()
+  await expect(page.locator(anchor!)).toBeInViewport()
+  await page.reload()
+  await expect(page.locator(anchor!)).toBeInViewport()
+  const detailResponse = await page.request.get(`/api/projects/${project.id}`)
+  expect(detailResponse.status()).toBe(200)
+  const detail = await detailResponse.json()
+  if (detail.required_files.length) {
+    await expect(page.getByRole('list', { name: '提出が求められているファイル' }).getByRole('listitem')).toHaveText(detail.required_files)
+  }
+  if (project.workflows.length > 1) {
+    await outline.getByRole('link', { name: project.workflows[1].name, exact: true }).click()
+    await expect(page.getByRole('heading', { level: 1, name: project.workflows[1].name, exact: true })).toBeVisible()
+  }
+  await outline.getByRole('link', { name: workflow.name, exact: true }).click()
+  await page.screenshot({ path: 'test-results/problem-detail.png', fullPage: true })
 })
 
 async function cookie(request: APIRequestContext, role = 'admin') {
@@ -53,7 +82,7 @@ test('Project authorization precedes input validation', async ({ request }) => {
     ]) await error(response, role ? 403 : 401, role ? 'forbidden' : 'unauthorized')
   }
   await error(await request.get('/api/projects', { headers: { Cookie: '' } }), 401, 'unauthorized')
-  await error(await request.get('/api/projects/invalid?version_id=old', { headers: { Cookie: '' } }), 401, 'unauthorized')
+  await error(await request.get('/api/projects/invalid', { headers: { Cookie: '' } }), 401, 'unauthorized')
 })
 
 test('real Resource import, idempotence, publication and atomic bulk saves', async ({ request }) => {
@@ -94,9 +123,6 @@ test('real Resource import, idempotence, publication and atomic bulk saves', asy
   }
   await error(await request.get('/api/projects/invalid', { headers }), 422, 'validation_failed')
   await error(await request.get(`/api/projects/${randomUUID()}`, { headers }), 404, 'not_found')
-  for (const query of ['?version_id=old', '?version_id=']) {
-    await error(await request.get(detailURL + query, { headers }), 422, 'version_not_allowed')
-  }
   expect(project).toMatchObject({ resource_id: 'ex1', latest_version_id: result.version_id, latest_version: 'v1.0.0', my_result: null })
   expect(Object.keys(project).sort()).toEqual(['id','resource_id','name','latest_version_id','latest_version','display_order','published_at','deadline','workflows','my_result'].sort())
   expect(project.workflows.length).toBeGreaterThan(0)
@@ -146,7 +172,6 @@ test('real Resource import, idempotence, publication and atomic bulk saves', asy
     expect(await list(student)).toEqual([])
     expect(await list(manager)).toHaveLength(updates.length)
     await error(await request.get(detailURL, { headers: student }), 404, 'not_found')
-    await error(await request.get(detailURL + '?version_id=old', { headers: student }), 404, 'not_found')
     expect((await request.get(detailURL, { headers: manager })).status()).toBe(200)
     expect((await save(updates.map((p: { id: string }) => ({ ...p, published_at: '2999-01-01T00:00:00Z', deadline: null })))).status()).toBe(204)
     expect(await list(student)).toEqual([])
