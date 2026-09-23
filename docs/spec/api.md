@@ -57,37 +57,13 @@
 
 一覧APIは [OpenAPI](../../api/openapi.yaml) の `GET /api/projects` を参照。
 
-### `GET /api/projects/{project_id}`
+課題詳細APIは [OpenAPI](../../api/openapi.yaml) の `GET /api/projects/{project_id}` を参照。
 
-Project view は常に latest Version を返す。`version_id` による切り替えは受け付けない。過去の実行内容は Request 詳細で参照する。
-
-```json
-{
-  "id": "uuid",
-  "name": "DSA Basic",
-  "version": {
-    "id": "uuid",
-    "version": "v1.0.0",
-    "is_latest": true,
-    "registered_at": "2026-04-01T00:00:00Z"
-  },
-  "workflows": [
-    {
-      "id": "judge",
-      "name": "Judge",
-      "description_markdown": "# 課題1 ...",
-      "jobs": [
-        { "id": "build", "name": "コンパイル" },
-        { "id": "test-public", "name": "基本テスト" }
-      ]
-    }
-  ]
-}
-```
-
-- `description_markdown`: Workflow の `description-path`([Resource 定義書](https://github.com/dsa-uts/dsa-resource-spec/blob/v1.1.0/docs/resource.md) 所有)の Markdown 本文をインラインで埋め込む。宣言がなければ空文字。
-- `jobs`: 現在の Role で見れる Job のみ(Private-by-Default)。Student は public Job のみ、Manager/Admin は全 Job 見れる。
-- Errors: `404`(Project 不存在、または未公開で Student から不可視)、`422 version_not_allowed`(`version_id` を指定)
+- 全ロールで常に最新の取り込み済み Version を返す。Version を指定するリクエストパラメータは設けない。
+- 一覧の各 Project と同じフィールドに、課題全体の `required_files` と各 Workflow の `description_markdown` を追加する。Workflow は ID の辞書順。Job は返さない。
+- `required_files` は Resource の表示用案内を記載順・内容そのままで返す。未指定は `[]`。提出可否の判定には使わない。
+- 説明は保存済み Markdown 本文。未指定は空文字。Markdown のファイル添付機能は持たず、添付ファイル配信や URL 書き換えは行わない。
+- `my_result` は結果取得実装まで `null`。Student から不可視の課題と不存在の課題はともに `404`。
 
 ### `GET /api/projects/{project_id}/versions`
 

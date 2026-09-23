@@ -3,6 +3,7 @@ import { Page } from '@/components/Page'
 import { NavigationGuard } from '@/components/navigation-guard'
 import { AdminUsersPage } from '@/features/users/AdminUsersPage'
 import { AdminProjectsPage } from '@/features/projects/AdminProjectsPage'
+import { ProblemDetailPage } from '@/features/projects/ProblemDetailPage'
 import { ProblemListPage } from '@/features/projects/ProblemListPage'
 import { BulkUsersPage } from '@/features/users/BulkUsersPage'
 import { AuthLayout, ProtectedLayout } from '@/lib/auth'
@@ -24,6 +25,7 @@ function App() {
               <Route path="/" element={<Navigate to="/about" replace />} />
               <Route path="/about" element={<AboutPage />} />
               <Route path="/projects" element={<ProblemListPage />} />
+              <Route path="/projects/:projectId/:workflowId?" element={<ProblemDetailPage />} />
               <Route path="/admin/list" element={<AdminPage />} />
               <Route path="/admin/projects" element={<AdminProjectsPage />} />
               <Route path="/admin/users" element={<AdminUsersPage />} />

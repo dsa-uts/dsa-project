@@ -187,6 +187,40 @@ paths:
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "500": { $ref: "#/components/responses/InternalError" }
+  /api/projects/{project_id}:
+    get:
+      operationId: getProject
+      security: [{ sessionAuth: [student] }]
+      summary: Get the latest Project with all Workflow descriptions
+      description: |
+        Students see only published Projects; Managers and Admins see all.
+        Always returns the latest imported Version. Workflows are sorted by ID
+        lexicographically. No Jobs, presets or expected outputs are exposed.
+        Markdown attachments are not supported.
+      parameters:
+        - name: project_id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Latest visible Project
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ProjectDetail" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404":
+          description: Project not found or not visible
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422":
+          description: validation_failed
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "500": { $ref: "#/components/responses/InternalError" }
   /api/admin/projects:
     patch:
       operationId: updateProjects
@@ -337,42 +371,73 @@ components:
             properties:
               id: { type: string }
               name: { type: string }
-        my_result:
-          type: [object, "null"]
-          description: Latest own validation Request and its Submission, across Versions. Currently null until Submission/Request APIs are implemented.
-          required: [submission_id, content_hash, uploaded_at, request]
+        my_result: { $ref: "#/components/schemas/MyResult" }
+    MyResult:
+      type: [object, "null"]
+      description: Latest own validation Request and its Submission, across Versions. Currently null until Submission/Request APIs are implemented.
+      required: [submission_id, content_hash, uploaded_at, request]
+      properties:
+        submission_id: { type: string, format: uuid }
+        content_hash:
+          type: string
+          pattern: '^sha256:[0-9a-f]{64}$'
+          description: Full normalized file tree hash (Normalized Submission Identity). Clients abbreviate the digest for display.
+        uploaded_at: { type: string, format: date-time }
+        request:
+          type: object
+          required: [id, version_id, version, state, status, workflows]
           properties:
-            submission_id: { type: string, format: uuid }
-            content_hash:
-              type: string
-              pattern: '^sha256:[0-9a-f]{64}$'
-              description: Full normalized file tree hash (Normalized Submission Identity). Clients abbreviate the digest for display.
-            uploaded_at: { type: string, format: date-time }
-            request:
-              type: object
-              required: [id, version_id, version, state, status, workflows]
-              properties:
-                id: { type: string, format: uuid }
-                version_id: { type: string, format: uuid }
-                version: { type: string }
-                state: { type: string, enum: [pending, queued, running, completed] }
-                status: { $ref: "#/components/schemas/NullableStatus" }
-                workflows:
-                  type: array
-                  items:
-                    type: object
-                    required: [id, name, status, duration_ms]
-                    properties:
-                      id: { type: string }
-                      name:
-                        type: string
-                        description: Workflow name from the Request's pinned Version, not the latest Project Version.
-                      status: { $ref: "#/components/schemas/NullableStatus" }
-                      duration_ms:
-                        type: [integer, "null"]
-                        format: int64
-                        minimum: 0
-                        description: Sum of executed Step durations in this Workflow, including compilation. Unexecuted Steps are excluded. Null until the Request completes or if timing is unavailable.
+            id: { type: string, format: uuid }
+            version_id: { type: string, format: uuid }
+            version: { type: string }
+            state: { type: string, enum: [pending, queued, running, completed] }
+            status: { $ref: "#/components/schemas/NullableStatus" }
+            workflows:
+              type: array
+              items:
+                type: object
+                required: [id, name, status, duration_ms]
+                properties:
+                  id: { type: string }
+                  name:
+                    type: string
+                    description: Workflow name from the Request's pinned Version, not the latest Project Version.
+                  status: { $ref: "#/components/schemas/NullableStatus" }
+                  duration_ms:
+                    type: [integer, "null"]
+                    format: int64
+                    minimum: 0
+                    description: Sum of executed Step durations in this Workflow, including compilation. Unexecuted Steps are excluded. Null until the Request completes or if timing is unavailable.
+    ProjectDetail:
+      type: object
+      additionalProperties: false
+      required: [id, resource_id, name, latest_version_id, latest_version, display_order, published_at, deadline, workflows, my_result, required_files]
+      properties:
+        id: { type: string, format: uuid }
+        resource_id: { type: string }
+        name: { type: string }
+        latest_version_id: { type: string, format: uuid }
+        latest_version: { type: string }
+        display_order: { type: integer, format: int64 }
+        published_at: { $ref: "#/components/schemas/NullableTimestamp" }
+        deadline: { $ref: "#/components/schemas/NullableTimestamp" }
+        required_files:
+          type: array
+          description: Display-only guidance preserving Resource text and order. Empty when unspecified; not used to validate submissions.
+          items: { type: string }
+        workflows:
+          type: array
+          items:
+            type: object
+            required: [id, name, description_markdown]
+            properties:
+              id: { type: string }
+              name: { type: string }
+              description_markdown:
+                type: string
+                description: Inline Markdown from the snapshot; empty when unspecified. No attachment serving or URL rewriting.
+        my_result:
+          $ref: "#/components/schemas/MyResult"
     CreateSessionRequest:
       type: object
       additionalProperties: false

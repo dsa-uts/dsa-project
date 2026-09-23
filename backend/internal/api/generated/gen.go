@@ -61,16 +61,16 @@ func (e CurrentUserRole) Valid() bool {
 	}
 }
 
-// Defines values for ProjectMyResultRequestState.
+// Defines values for MyResultRequestState.
 const (
-	Completed ProjectMyResultRequestState = "completed"
-	Pending   ProjectMyResultRequestState = "pending"
-	Queued    ProjectMyResultRequestState = "queued"
-	Running   ProjectMyResultRequestState = "running"
+	Completed MyResultRequestState = "completed"
+	Pending   MyResultRequestState = "pending"
+	Queued    MyResultRequestState = "queued"
+	Running   MyResultRequestState = "running"
 )
 
-// Valid indicates whether the value is a known member of the ProjectMyResultRequestState enum.
-func (e ProjectMyResultRequestState) Valid() bool {
+// Valid indicates whether the value is a known member of the MyResultRequestState enum.
+func (e MyResultRequestState) Valid() bool {
 	switch e {
 	case Completed:
 		return true
@@ -185,6 +185,33 @@ type Error struct {
 	} `json:"error"`
 }
 
+// MyResult Latest own validation Request and its Submission, across Versions. Currently null until Submission/Request APIs are implemented.
+type MyResult struct {
+	// ContentHash Full normalized file tree hash (Normalized Submission Identity). Clients abbreviate the digest for display.
+	ContentHash string `json:"content_hash"`
+	Request     struct {
+		Id        openapi_types.UUID   `json:"id"`
+		State     MyResultRequestState `json:"state"`
+		Status    *NullableStatus      `json:"status"`
+		Version   string               `json:"version"`
+		VersionId openapi_types.UUID   `json:"version_id"`
+		Workflows []struct {
+			// DurationMs Sum of executed Step durations in this Workflow, including compilation. Unexecuted Steps are excluded. Null until the Request completes or if timing is unavailable.
+			DurationMs *int64 `json:"duration_ms"`
+			Id         string `json:"id"`
+
+			// Name Workflow name from the Request's pinned Version, not the latest Project Version.
+			Name   string          `json:"name"`
+			Status *NullableStatus `json:"status"`
+		} `json:"workflows"`
+	} `json:"request"`
+	SubmissionId openapi_types.UUID `json:"submission_id"`
+	UploadedAt   time.Time          `json:"uploaded_at"`
+}
+
+// MyResultRequestState defines model for MyResult.Request.State.
+type MyResultRequestState string
+
 // NewPassword Unicode characters, without trimming, normalization, or character-class rules; confirmation is frontend-only
 type NewPassword = string
 
@@ -204,29 +231,8 @@ type Project struct {
 	LatestVersionId openapi_types.UUID `json:"latest_version_id"`
 
 	// MyResult Latest own validation Request and its Submission, across Versions. Currently null until Submission/Request APIs are implemented.
-	MyResult *struct {
-		// ContentHash Full normalized file tree hash (Normalized Submission Identity). Clients abbreviate the digest for display.
-		ContentHash string `json:"content_hash"`
-		Request     struct {
-			Id        openapi_types.UUID          `json:"id"`
-			State     ProjectMyResultRequestState `json:"state"`
-			Status    *NullableStatus             `json:"status"`
-			Version   string                      `json:"version"`
-			VersionId openapi_types.UUID          `json:"version_id"`
-			Workflows []struct {
-				// DurationMs Sum of executed Step durations in this Workflow, including compilation. Unexecuted Steps are excluded. Null until the Request completes or if timing is unavailable.
-				DurationMs *int64 `json:"duration_ms"`
-				Id         string `json:"id"`
-
-				// Name Workflow name from the Request's pinned Version, not the latest Project Version.
-				Name   string          `json:"name"`
-				Status *NullableStatus `json:"status"`
-			} `json:"workflows"`
-		} `json:"request"`
-		SubmissionId openapi_types.UUID `json:"submission_id"`
-		UploadedAt   time.Time          `json:"uploaded_at"`
-	} `json:"my_result"`
-	Name string `json:"name"`
+	MyResult *MyResult `json:"my_result"`
+	Name     string    `json:"name"`
 
 	// PublishedAt RFC 3339 UTC or null
 	PublishedAt *NullableTimestamp `json:"published_at"`
@@ -237,8 +243,32 @@ type Project struct {
 	} `json:"workflows"`
 }
 
-// ProjectMyResultRequestState defines model for Project.MyResult.Request.State.
-type ProjectMyResultRequestState string
+// ProjectDetail defines model for ProjectDetail.
+type ProjectDetail struct {
+	// Deadline RFC 3339 UTC or null
+	Deadline        *NullableTimestamp `json:"deadline"`
+	DisplayOrder    int64              `json:"display_order"`
+	Id              openapi_types.UUID `json:"id"`
+	LatestVersion   string             `json:"latest_version"`
+	LatestVersionId openapi_types.UUID `json:"latest_version_id"`
+
+	// MyResult Latest own validation Request and its Submission, across Versions. Currently null until Submission/Request APIs are implemented.
+	MyResult *MyResult `json:"my_result"`
+	Name     string    `json:"name"`
+
+	// PublishedAt RFC 3339 UTC or null
+	PublishedAt *NullableTimestamp `json:"published_at"`
+
+	// RequiredFiles Display-only guidance preserving Resource text and order. Empty when unspecified; not used to validate submissions.
+	RequiredFiles []string `json:"required_files"`
+	ResourceId    string   `json:"resource_id"`
+	Workflows     []struct {
+		// DescriptionMarkdown Inline Markdown from the snapshot; empty when unspecified. No attachment serving or URL rewriting.
+		DescriptionMarkdown string `json:"description_markdown"`
+		Id                  string `json:"id"`
+		Name                string `json:"name"`
+	} `json:"workflows"`
+}
 
 // ProjectUpdate defines model for ProjectUpdate.
 type ProjectUpdate struct {
@@ -370,6 +400,9 @@ type ServerInterface interface {
 	// ListProjects List Projects in display order
 	// (GET /api/projects)
 	ListProjects(ctx echo.Context) error
+	// GetProject Get the latest Project with all Workflow descriptions
+	// (GET /api/projects/{project_id})
+	GetProject(ctx echo.Context, projectId openapi_types.UUID) error
 	// DeleteSession 現在のセッションからログアウトする
 	// (DELETE /api/session)
 	DeleteSession(ctx echo.Context, params DeleteSessionParams) error
@@ -453,6 +486,22 @@ func (w *ServerInterfaceWrapper) ListProjects(ctx echo.Context) error {
 
 	// Invoke the callback with all the unmarshaled arguments
 	err = w.Handler.ListProjects(ctx)
+	return err
+}
+
+// GetProject converts echo context to params.
+func (w *ServerInterfaceWrapper) GetProject(ctx echo.Context) error {
+	var err error
+	// ------------- Path parameter "project_id" -------------
+	var projectId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "project_id", ctx.Param("project_id"), &projectId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: ctx.Request().URL.RawPath == ""})
+	if err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Invalid format for parameter project_id: %s", err))
+	}
+
+	// Invoke the callback with all the unmarshaled arguments
+	err = w.Handler.GetProject(ctx, projectId)
 	return err
 }
 
@@ -552,6 +601,7 @@ func RegisterHandlersWithOptions(router EchoRouter, si ServerInterface, options 
 	router.PATCH(options.BaseURL+"/api/admin/users/:user_id", wrapper.UpdateUserAccount, options.OperationMiddlewares["updateUserAccount"]...)
 	router.PATCH(options.BaseURL+"/api/users/order", wrapper.ReorderUserAccounts, options.OperationMiddlewares["reorderUserAccounts"]...)
 	router.GET(options.BaseURL+"/api/projects", wrapper.ListProjects, options.OperationMiddlewares["listProjects"]...)
+	router.GET(options.BaseURL+"/api/projects/:project_id", wrapper.GetProject, options.OperationMiddlewares["getProject"]...)
 	router.PATCH(options.BaseURL+"/api/admin/projects", wrapper.UpdateProjects, options.OperationMiddlewares["updateProjects"]...)
 	router.POST(options.BaseURL+"/api/admin/resource-imports", wrapper.ImportResource, options.OperationMiddlewares["importResource"]...)
 
@@ -1175,6 +1225,101 @@ func (response ListProjects500JSONResponse) VisitListProjectsResponse(w http.Res
 	return err
 }
 
+type GetProjectRequestObject struct {
+	ProjectId openapi_types.UUID `json:"project_id"`
+}
+
+type GetProjectResponseObject interface {
+	VisitGetProjectResponse(w http.ResponseWriter) error
+}
+
+type GetProject200JSONResponse ProjectDetail
+
+func (response GetProject200JSONResponse) VisitGetProjectResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetProject401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response GetProject401JSONResponse) VisitGetProjectResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.SetCookie != nil {
+		w.Header().Set("Set-Cookie", fmt.Sprint(*response.Headers.SetCookie))
+	}
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetProject403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response GetProject403JSONResponse) VisitGetProjectResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetProject404JSONResponse Error
+
+func (response GetProject404JSONResponse) VisitGetProjectResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetProject422JSONResponse Error
+
+func (response GetProject422JSONResponse) VisitGetProjectResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(422)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetProject500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response GetProject500JSONResponse) VisitGetProjectResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type DeleteSessionRequestObject struct {
 	Params DeleteSessionParams
 }
@@ -1385,6 +1530,9 @@ type StrictServerInterface interface {
 	// ListProjects List Projects in display order
 	// (GET /api/projects)
 	ListProjects(ctx context.Context, request ListProjectsRequestObject) (ListProjectsResponseObject, error)
+	// GetProject Get the latest Project with all Workflow descriptions
+	// (GET /api/projects/{project_id})
+	GetProject(ctx context.Context, request GetProjectRequestObject) (GetProjectResponseObject, error)
 	// DeleteSession 現在のセッションからログアウトする
 	// (DELETE /api/session)
 	DeleteSession(ctx context.Context, request DeleteSessionRequestObject) (DeleteSessionResponseObject, error)
@@ -1635,6 +1783,31 @@ func (sh *strictHandler) ListProjects(ctx echo.Context) error {
 	return nil
 }
 
+// GetProject operation middleware
+func (sh *strictHandler) GetProject(ctx echo.Context, projectId openapi_types.UUID) error {
+	var request GetProjectRequestObject
+
+	request.ProjectId = projectId
+
+	handler := func(ctx echo.Context, request interface{}) (interface{}, error) {
+		return sh.ssi.GetProject(ctx.Request().Context(), request.(GetProjectRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetProject")
+	}
+
+	response, err := handler(ctx, request)
+
+	if err != nil {
+		return err
+	} else if validResponse, ok := response.(GetProjectResponseObject); ok {
+		return validResponse.VisitGetProjectResponse(ctx.Response())
+	} else if response != nil {
+		return fmt.Errorf("unexpected response type: %T", response)
+	}
+	return nil
+}
+
 // DeleteSession operation middleware
 func (sh *strictHandler) DeleteSession(ctx echo.Context, params DeleteSessionParams) error {
 	var request DeleteSessionRequestObject
@@ -1743,69 +1916,75 @@ func (sh *strictHandler) ReorderUserAccounts(ctx echo.Context) error {
 // const string: with thousands of chunks the chained `+` fold is several
 // times slower for the Go compiler than parsing a slice literal.
 var swaggerSpec = []string{
-	"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",
+	"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",
+	"UiXRXNPsOhuvOYWhAOO6hc7/HQA=",
 }
 
 // decodeSpec returns the embedded OpenAPI spec as raw JSON bytes,

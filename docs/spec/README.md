@@ -4,7 +4,7 @@
 
 ## 仕様ファイル
 
-- Resource の形式・公開手順・実行規則は [dsa-resource-spec v1.1.0](https://github.com/dsa-uts/dsa-resource-spec/tree/v1.1.0/docs) を参照する。形式の定義は複製しない
+- Resource の形式・公開手順・実行規則は [dsa-resource-spec v1.3.0](https://github.com/dsa-uts/dsa-resource-spec/tree/v1.3.0/docs) を参照する。形式の定義は複製しない
 - [Resource 取り込み仕様](resource-imports.md) — GitHub からの取得・検証・DB 保存・認証設定・E2E 方針
 - [REST API 仕様](../../api/openapi.yaml) — クライアント向け REST API の形(single source of truth、ADR 0010)。[api.md](./api.md) は Conventions と未実装エンドポイントの草稿
 - DB スキーマは [backend/internal/store/migrations/](../../backend/internal/store/migrations/) の SQL ファイルが正(Markdown の複製は持たない)
@@ -57,9 +57,9 @@
 ### 非機能要件
 - セキュリティ
   - ログイン認証時に、ロール毎に異なる権限を設定
-  - Resource の取り込みは Admin のみ許可する。`dsa-resource-spec v1.1.0` の関数で JSON を検証し、指定 ID・Version と index のハッシュを照合する
+  - Resource の取り込みは Admin のみ許可する。`dsa-resource-spec v1.3.0` の関数で JSON を検証し、指定 ID・Version と index のハッシュを照合する
   - リポジトリと GHCR の認証情報は別設定とし、public では省略可能。保存・注入方式は未定
-  - sandbox 上での任意のコード実行は resource limit と platform 固定 hardening で隔離する([Resource 定義書](https://github.com/dsa-uts/dsa-resource-spec/blob/v1.1.0/docs/resource.md) 参照)
+  - sandbox 上での任意のコード実行は resource limit と platform 固定 hardening で隔離する([Resource 定義書](https://github.com/dsa-uts/dsa-resource-spec/blob/v1.3.0/docs/resource.md) 参照)
 - 可用性
   - 24時間稼働
 - 可搬性
@@ -140,7 +140,7 @@ flowchart LR
   - ValidatingAdmissionPolicy で sandbox Pod の image を GHCR の特定 org 配下かつ digest 指定必須に制限し (Digest Pinning の強制層)、hostPath volume を禁止する
   - Sandbox Workspace / Preset Directory の受け渡しと Artifact 回収は pods/exec loader 方式。詳細は ADR 0009 が所有する
   - Isolated Job Workspace / Explicit Artifact Handoff / Private-by-Default に従う
-  - resource limit と platform 固定 hardening(network deny、capabilities drop 等)の詳細は [Resource 定義書](https://github.com/dsa-uts/dsa-resource-spec/blob/v1.1.0/docs/resource.md) が所有する
+  - resource limit と platform 固定 hardening(network deny、capabilities drop 等)の詳細は [Resource 定義書](https://github.com/dsa-uts/dsa-resource-spec/blob/v1.3.0/docs/resource.md) が所有する
 
 ### 技術選定
 - コンテナ基盤: k3s (containerd 内蔵、gVisor RuntimeClass)

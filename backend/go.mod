@@ -3,7 +3,7 @@ module github.com/dsa-uts/dsa-project/backend
 go 1.27.0
 
 require (
-	github.com/dsa-uts/dsa-resource-spec v1.1.0
+	github.com/dsa-uts/dsa-resource-spec v1.3.0
 	github.com/getkin/kin-openapi v0.149.0
 	github.com/google/uuid v1.6.0
 	github.com/kelseyhightower/envconfig v1.4.0

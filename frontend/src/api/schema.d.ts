@@ -128,6 +128,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/projects/{project_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get the latest Project with all Workflow descriptions
+         * @description Students see only published Projects; Managers and Admins see all.
+         *     Always returns the latest imported Version. Workflows are sorted by ID
+         *     lexicographically. No Jobs, presets or expected outputs are exposed.
+         *     Markdown attachments are not supported.
+         */
+        get: operations["getProject"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/admin/projects": {
         parameters: {
             query?: never;
@@ -211,36 +234,59 @@ export interface components {
                 id: string;
                 name: string;
             }[];
-            /** @description Latest own validation Request and its Submission, across Versions. Currently null until Submission/Request APIs are implemented. */
-            my_result: {
+            my_result: components["schemas"]["MyResult"];
+        };
+        /** @description Latest own validation Request and its Submission, across Versions. Currently null until Submission/Request APIs are implemented. */
+        MyResult: {
+            /** Format: uuid */
+            submission_id: string;
+            /** @description Full normalized file tree hash (Normalized Submission Identity). Clients abbreviate the digest for display. */
+            content_hash: string;
+            /** Format: date-time */
+            uploaded_at: string;
+            request: {
                 /** Format: uuid */
-                submission_id: string;
-                /** @description Full normalized file tree hash (Normalized Submission Identity). Clients abbreviate the digest for display. */
-                content_hash: string;
-                /** Format: date-time */
-                uploaded_at: string;
-                request: {
-                    /** Format: uuid */
+                id: string;
+                /** Format: uuid */
+                version_id: string;
+                version: string;
+                /** @enum {string} */
+                state: "pending" | "queued" | "running" | "completed";
+                status: components["schemas"]["NullableStatus"];
+                workflows: {
                     id: string;
-                    /** Format: uuid */
-                    version_id: string;
-                    version: string;
-                    /** @enum {string} */
-                    state: "pending" | "queued" | "running" | "completed";
+                    /** @description Workflow name from the Request's pinned Version, not the latest Project Version. */
+                    name: string;
                     status: components["schemas"]["NullableStatus"];
-                    workflows: {
-                        id: string;
-                        /** @description Workflow name from the Request's pinned Version, not the latest Project Version. */
-                        name: string;
-                        status: components["schemas"]["NullableStatus"];
-                        /**
-                         * Format: int64
-                         * @description Sum of executed Step durations in this Workflow, including compilation. Unexecuted Steps are excluded. Null until the Request completes or if timing is unavailable.
-                         */
-                        duration_ms: number | null;
-                    }[];
-                };
-            } | null;
+                    /**
+                     * Format: int64
+                     * @description Sum of executed Step durations in this Workflow, including compilation. Unexecuted Steps are excluded. Null until the Request completes or if timing is unavailable.
+                     */
+                    duration_ms: number | null;
+                }[];
+            };
+        } | null;
+        ProjectDetail: {
+            /** Format: uuid */
+            id: string;
+            resource_id: string;
+            name: string;
+            /** Format: uuid */
+            latest_version_id: string;
+            latest_version: string;
+            /** Format: int64 */
+            display_order: number;
+            published_at: components["schemas"]["NullableTimestamp"];
+            deadline: components["schemas"]["NullableTimestamp"];
+            /** @description Display-only guidance preserving Resource text and order. Empty when unspecified; not used to validate submissions. */
+            required_files: string[];
+            workflows: {
+                id: string;
+                name: string;
+                /** @description Inline Markdown from the snapshot; empty when unspecified. No attachment serving or URL rewriting. */
+                description_markdown: string;
+            }[];
+            my_result: components["schemas"]["MyResult"];
         };
         CreateSessionRequest: {
             userid: string;
@@ -585,6 +631,49 @@ export interface operations {
             };
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    getProject: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Latest visible Project */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectDetail"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            /** @description Project not found or not visible */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description validation_failed */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
             500: components["responses"]["InternalError"];
         };
     };

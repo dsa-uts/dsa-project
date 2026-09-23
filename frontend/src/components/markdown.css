@@ -1,56 +1,69 @@
-.about-markdown {
+.markdown-content {
   line-height: 1.8;
   overflow-wrap: anywhere;
 }
 
-.about-markdown h1 {
+.markdown-content h1 {
   margin: 2rem 0 1.5rem;
   font-size: 1.875rem;
   font-weight: 700;
 }
 
-.about-markdown h2 {
+.markdown-content h2 {
   margin: 1.5rem 0 1rem;
   font-size: 1.5rem;
   font-weight: 600;
 }
 
-.about-markdown h3 {
+.markdown-content h3 {
   margin: 1rem 0 0.75rem;
   font-size: 1.25rem;
   font-weight: 600;
 }
 
-.about-markdown > :first-child {
+.markdown-content > :first-child {
   margin-top: 0;
 }
 
-.about-markdown p,
-.about-markdown ul,
-.about-markdown ol,
-.about-markdown pre {
+.markdown-content p,
+.markdown-content ul,
+.markdown-content ol,
+.markdown-content pre {
   margin-bottom: 1rem;
 }
 
-.about-markdown ul,
-.about-markdown ol {
+.markdown-content ul,
+.markdown-content ol {
   padding-left: 1.5rem;
 }
 
-.about-markdown ul { list-style-type: disc; }
-.about-markdown ol { list-style-type: decimal; }
-.about-markdown li { margin-block: 0.5rem; }
-.about-markdown strong { font-weight: 600; }
+.markdown-content ul { list-style-type: disc; }
+.markdown-content ol { list-style-type: decimal; }
+.markdown-content li { margin-block: 0.5rem; }
+.markdown-content strong { font-weight: 600; }
 
-.about-markdown a {
+.markdown-content blockquote {
+  margin-block: 1.5rem;
+  padding: 1rem 1.25rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--muted);
+  overflow-x: auto;
+  overflow-wrap: normal;
+  white-space: nowrap;
+}
+
+.markdown-content blockquote > :last-child { margin-bottom: 0; }
+
+.markdown-content a {
   color: var(--top-bar);
   text-decoration: underline;
   text-underline-offset: 0.2em;
 }
 
-.about-markdown a:hover { color: var(--foreground); }
+.markdown-content a:hover { color: var(--foreground); }
 
-.about-markdown code {
+.markdown-content code {
   border-radius: 0.25rem;
   background: var(--inline-code-background);
   color: var(--inline-code);
@@ -67,14 +80,14 @@
   color: var(--code-foreground);
 }
 
-.about-markdown .markdown-code-block pre {
+.markdown-content .markdown-code-block pre {
   overflow-x: auto;
   margin: 0;
   padding: 3.5rem 1.5rem 1.5rem;
   line-height: 1.7;
 }
 
-.about-markdown pre code {
+.markdown-content pre code {
   padding: 0;
   background: transparent;
   color: inherit;
@@ -125,22 +138,22 @@
 .markdown-code-block .hljs-strong { font-weight: 700; }
 
 @media (min-width: 640px) {
-  .about-markdown .markdown-code-block pre {
+  .markdown-content .markdown-code-block pre {
     padding: 3rem 2rem;
   }
 }
 
-.about-markdown table {
+.markdown-content table {
   width: 100%;
   font-size: 0.875rem;
 }
 
-.about-markdown th,
-.about-markdown td {
+.markdown-content th,
+.markdown-content td {
   border: 1px solid var(--border);
   padding: 0.5rem 0.75rem;
   text-align: left;
   vertical-align: top;
 }
 
-.about-markdown th { background: var(--muted); }
+.markdown-content th { background: var(--muted); }

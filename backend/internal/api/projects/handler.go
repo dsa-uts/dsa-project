@@ -59,6 +59,51 @@ func (h *Handler) ListProjects(ctx context.Context, req generated.ListProjectsRe
 	return generated.ListProjects200JSONResponse{Projects: result}, nil
 }
 
+func (h *Handler) GetProject(ctx context.Context, req generated.GetProjectRequestObject) (generated.GetProjectResponseObject, error) {
+	p, err := h.projects.GetProject(ctx, req.ProjectId, httpauth.Actor(ctx).Role == "student")
+	if err != nil {
+		return nil, err
+	}
+	if p == nil {
+		return generated.GetProject404JSONResponse(httpresponse.NewError("not_found", "Project not found.")), nil
+	}
+	detail, err := projectDetail(p)
+	return generated.GetProject200JSONResponse(detail), err
+}
+
+func projectDetail(p *store.ProjectLatest) (generated.ProjectDetail, error) {
+	// Select display fields only; never serialize the full trusted snapshot.
+	var snapshot struct {
+		RequiredFiles []string `json:"required-files"`
+		Workflows     map[string]struct {
+			Name        string `json:"name"`
+			Description string `json:"description"`
+		} `json:"workflows"`
+	}
+	if err := json.Unmarshal(p.ResourceJSON, &snapshot); err != nil {
+		return generated.ProjectDetail{}, err
+	}
+	detail := generated.ProjectDetail{Id: p.ID, ResourceId: p.ResourceID, Name: p.Name,
+		LatestVersionId: p.LatestVersionID, LatestVersion: p.Version, DisplayOrder: p.DisplayOrder,
+		PublishedAt: p.PublishedAt, Deadline: p.Deadline,
+		RequiredFiles: append([]string{}, snapshot.RequiredFiles...),
+		Workflows: make([]struct {
+			DescriptionMarkdown string `json:"description_markdown"`
+			Id                  string `json:"id"`
+			Name                string `json:"name"`
+		}, 0, len(snapshot.Workflows)),
+	}
+	for id, workflow := range snapshot.Workflows {
+		detail.Workflows = append(detail.Workflows, struct {
+			DescriptionMarkdown string `json:"description_markdown"`
+			Id                  string `json:"id"`
+			Name                string `json:"name"`
+		}{workflow.Description, id, workflow.Name})
+	}
+	sort.Slice(detail.Workflows, func(i, j int) bool { return detail.Workflows[i].Id < detail.Workflows[j].Id })
+	return detail, nil
+}
+
 func (h *Handler) UpdateProjects(ctx context.Context, req generated.UpdateProjectsRequestObject) (generated.UpdateProjectsResponseObject, error) {
 	updates := make([]store.ProjectUpdate, 0, len(req.Body.Projects))
 	for _, p := range req.Body.Projects {
