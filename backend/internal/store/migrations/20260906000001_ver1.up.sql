@@ -54,3 +54,63 @@ CREATE TABLE project_versions (
 ALTER TABLE projects ADD CONSTRAINT projects_latest_version_fkey
     FOREIGN KEY (id, latest_version_id) REFERENCES project_versions(project_id, id)
     DEFERRABLE INITIALLY DEFERRED;
+
+CREATE TABLE submissions (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    project_id uuid NOT NULL REFERENCES projects(id),
+    kind text NOT NULL CHECK (kind IN ('validation', 'evaluation')),
+    subject_user_id uuid NOT NULL REFERENCES user_accounts(id),
+    content_hash text NOT NULL,
+    original_submitted_at timestamptz,
+    created_at timestamptz NOT NULL DEFAULT now(),
+    CONSTRAINT submissions_original_submitted_at_check CHECK (
+        (kind = 'validation' AND original_submitted_at IS NULL)
+        OR (kind = 'evaluation' AND original_submitted_at IS NOT NULL)
+    ),
+    UNIQUE (project_id, kind, subject_user_id, content_hash),
+    UNIQUE (project_id, id)
+);
+
+CREATE TABLE submission_files (
+    submission_id uuid NOT NULL REFERENCES submissions(id) ON DELETE CASCADE,
+    path text NOT NULL,
+    content bytea NOT NULL,
+    PRIMARY KEY (submission_id, path)
+);
+
+CREATE TABLE requests (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    -- Composite foreign keys keep the Submission and Version in one Project.
+    project_id uuid NOT NULL,
+    submission_id uuid NOT NULL,
+    version_id uuid NOT NULL,
+    requested_by uuid NOT NULL REFERENCES user_accounts(id),
+    requested_at timestamptz NOT NULL DEFAULT now(),
+    idempotency_key text NOT NULL,
+    state text NOT NULL DEFAULT 'pending'
+        CHECK (state IN ('pending', 'running', 'retrying', 'completed')),
+    status text CHECK (status IN ('IE', 'CE', 'OLE', 'MLE', 'TLE', 'RE', 'WA', 'SKIP', 'AC')),
+    result jsonb,
+    lease_owner uuid,
+    lease_expires_at timestamptz,
+    -- Increment on each attempt; also serves as the execution generation.
+    attempt_count integer NOT NULL DEFAULT 0 CHECK (attempt_count BETWEEN 0 AND 3),
+    CONSTRAINT requests_completed_status_check CHECK ((state = 'completed') = (status IS NOT NULL)),
+    CONSTRAINT requests_lease_check CHECK (
+        (state = 'running' AND lease_owner IS NOT NULL AND lease_expires_at IS NOT NULL)
+        OR (state <> 'running' AND lease_owner IS NULL AND lease_expires_at IS NULL)
+    ),
+    CONSTRAINT requests_state_attempt_count_check CHECK (
+        (state = 'pending' AND attempt_count = 0)
+        OR (state <> 'pending' AND attempt_count > 0)
+    ),
+    FOREIGN KEY (project_id, submission_id) REFERENCES submissions(project_id, id) ON DELETE CASCADE,
+    FOREIGN KEY (project_id, version_id) REFERENCES project_versions(project_id, id),
+    UNIQUE (requested_by, idempotency_key)
+);
+
+CREATE INDEX requests_submission_id_idx ON requests (submission_id);
+CREATE INDEX requests_waiting_idx ON requests (requested_at, id)
+    WHERE state IN ('pending', 'retrying');
+CREATE INDEX requests_lease_expires_at_idx ON requests (lease_expires_at, id)
+    WHERE state = 'running';
