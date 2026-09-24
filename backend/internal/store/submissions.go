@@ -10,7 +10,7 @@ import (
 type Submission struct {
 	bun.BaseModel `bun:"table:submissions"`
 
-	ID                  uuid.UUID  `bun:"id,pk,default:gen_random_uuid()"`
+	ID                  uuid.UUID  `bun:"id,pk,default:uuidv7()"`
 	ProjectID           uuid.UUID  `bun:"project_id,notnull"`
 	Kind                string     `bun:"kind,notnull"`
 	SubjectUserID       uuid.UUID  `bun:"subject_user_id,notnull"`

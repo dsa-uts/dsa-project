@@ -11,7 +11,7 @@ import (
 type Request struct {
 	bun.BaseModel `bun:"table:requests"`
 
-	ID             uuid.UUID       `bun:"id,pk,default:gen_random_uuid()"`
+	ID             uuid.UUID       `bun:"id,pk,default:uuidv7()"`
 	ProjectID      uuid.UUID       `bun:"project_id,notnull"`
 	SubmissionID   uuid.UUID       `bun:"submission_id,notnull"`
 	VersionID      uuid.UUID       `bun:"version_id,notnull"`

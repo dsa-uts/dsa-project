@@ -315,6 +315,94 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
         "500": { $ref: "#/components/responses/InternalError" }
+  /api/projects/{project_id}/validation:
+    post:
+      operationId: createValidation
+      summary: Create a Validation Request
+      description: |
+        Creates a Request for the authenticated user against the latest Resource Version.
+        Multipart uploads reuse a Submission with the same normalized file tree.
+        JSON reruns an existing own validation Submission in this Project.
+        A new key always creates a new Request, including when another run is incomplete.
+        Replaying a key returns the current Request without comparing input contents.
+        Keys are scoped to the user across Projects and kinds; mismatches return 409.
+        Maximum HTTP body size is 21,000,000 bytes, including multipart overhead.
+      security: [{ sessionAuth: [] }]
+      parameters:
+        - name: project_id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - name: Idempotency-Key
+          in: header
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [submission_id]
+              properties:
+                submission_id: { type: string, format: uuid }
+          multipart/form-data:
+            schema:
+              type: object
+              required: [metadata]
+              additionalProperties: true
+              description: |
+                Exactly one JSON metadata part and one binary part per files entry.
+                Dynamic binary part names must match metadata exactly; duplicate,
+                missing, or unreferenced parts are rejected. Filenames are ignored.
+                Files total at most 20,000,000 bytes; zero-byte files are allowed.
+                ZIP files must be expanded by the client.
+              properties:
+                metadata: { $ref: '#/components/schemas/SubmissionMetadata' }
+            encoding:
+              metadata:
+                contentType: application/json
+      responses:
+        "201":
+          description: New Request created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CreatedRequest' }
+        "200":
+          description: Current state of the existing Request for this key
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CreatedRequest' }
+        "401": { $ref: '#/components/responses/Unauthorized' }
+        "403":
+          description: Submission belongs to another user (including for Managers and Admins)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        "404":
+          description: Project missing or not visible; Submission missing
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        "409":
+          description: idempotency_key_conflict (different Project or kind)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        "413":
+          description: payload_too_large (file contents or HTTP body exceed the limit)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        "415":
+          description: unsupported_media_type
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        "422": { $ref: '#/components/responses/ValidationError' }
+        "500": { $ref: '#/components/responses/InternalError' }
+
 components:
   securitySchemes:
     sessionAuth:
@@ -329,6 +417,41 @@ components:
       required: false
       schema: { type: string }
   schemas:
+    SubmissionMetadata:
+      type: object
+      additionalProperties: false
+      required: [files]
+      properties:
+        files:
+          type: array
+          minItems: 1
+          maxItems: 50
+          items:
+            type: object
+            additionalProperties: false
+            required: [part, path]
+            properties:
+              part:
+                type: string
+                minLength: 1
+                not: { const: metadata }
+              path:
+                type: string
+                minLength: 1
+                description: |
+                  Relative UTF-8 path with slash separators. Dot components and repeated
+                  slashes are normalized; the parent folder is preserved. Absolute paths,
+                  drive-letter paths, backslashes, NUL, parent (..) components, and paths
+                  normalizing to empty are rejected. Normalized duplicate paths and
+                  file/directory collisions return 422 with the paths in error.message.
+    CreatedRequest:
+      type: object
+      additionalProperties: false
+      required: [id, state, status]
+      properties:
+        id: { type: string, format: uuid, description: UUID v7 Request ID }
+        state: { type: string, enum: [pending, running, retrying, completed] }
+        status: { $ref: '#/components/schemas/NullableStatus' }
     ProjectUpdate:
       type: object
       additionalProperties: false
@@ -344,7 +467,7 @@ components:
       description: RFC 3339 UTC or null
     Status:
       type: string
-      enum: [AC, WA, TLE, MLE, RE, OLE, IE]
+      enum: [AC, WA, TLE, MLE, RE, OLE, IE, CE, SKIP]
     NullableStatus:
       anyOf:
         - $ref: "#/components/schemas/Status"

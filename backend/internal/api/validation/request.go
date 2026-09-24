@@ -1,7 +1,9 @@
 package validation
 
 import (
+	"errors"
 	"fmt"
+	"mime"
 	"net/http"
 
 	"github.com/dsa-uts/dsa-project/backend/internal/api/generated"
@@ -22,21 +24,32 @@ func init() {
 }
 
 func RequestValidator(spec *openapi3.T, authenticate openapi3filter.AuthenticationFunc) echo.MiddlewareFunc {
-	// openapi.yaml の required / minLength 等をリクエスト受理前に強制する
-	// (ADR 0010: kin-openapi による validation は spec から従属的に得られる)。
 	return echomiddleware.OapiRequestValidatorWithOptions(spec, &echomiddleware.Options{
-		Options: openapi3filter.Options{AuthenticationFunc: authenticate},
-		ErrorHandler: func(c echo.Context, err *echo.HTTPError) error {
-			if body, ok := err.Message.(generated.Error); ok {
-				return c.JSON(err.Code, body)
-			}
-			// middleware はリクエスト不正を 400 で返すが、docs/spec/api.md では
-			// バリデーション失敗は 422 + 統一エラー封筒。404 / 405 等はそのまま
-			// httpErrorHandler に流して封筒化する。
-			if err.Code == http.StatusBadRequest {
-				return c.JSON(http.StatusUnprocessableEntity, httpresponse.NewError("validation_failed", fmt.Sprint(err.Message)))
-			}
-			return err
-		},
+		Options:      openapi3filter.Options{AuthenticationFunc: authenticate},
+		ErrorHandler: validationErrorHandler,
 	})
+}
+
+func validationErrorHandler(c echo.Context, err *echo.HTTPError) error {
+	var tooLarge *http.MaxBytesError
+	if errors.As(err, &tooLarge) {
+		return c.JSON(http.StatusRequestEntityTooLarge, httpresponse.NewError("payload_too_large", "HTTP body exceeds 21,000,000 bytes."))
+	}
+	if body, ok := err.Message.(generated.Error); ok {
+		return c.JSON(err.Code, body)
+	}
+	var requestError *openapi3filter.RequestError
+	if errors.As(err, &requestError) && requestError.RequestBody != nil {
+		content := requestError.RequestBody.Content
+		media, _, parseErr := mime.ParseMediaType(c.Request().Header.Get("Content-Type"))
+		if len(content) > 0 && (parseErr != nil || content.Get(media) == nil) {
+			return c.JSON(http.StatusUnsupportedMediaType, httpresponse.NewError("unsupported_media_type", "Content-Type is not supported by this operation."))
+		}
+	}
+	// Keep the public API's 422 envelope for invalid input; authentication and
+	// routing errors retain their original status through the HTTP error handler.
+	if err.Code == http.StatusBadRequest {
+		return c.JSON(http.StatusUnprocessableEntity, httpresponse.NewError("validation_failed", fmt.Sprint(err.Message)))
+	}
+	return err
 }

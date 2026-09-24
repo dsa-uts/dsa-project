@@ -164,28 +164,13 @@ Manager/Admin 専用。evaluation Submission を archive し、所属するす�
 | `state` | `pending` / `queued` / `running` / `completed`。 |
 | `status` | `completed` まで `null`。完了後は Status(Worst-wins で集約)。 |
 
-上記を Request コアオブジェクトと呼ぶ。作成 API のレスポンスはコアのみ、詳細 API はコア + `workflows` を返す。Submission / Request 間の訂正元・再実行元を示す導出関係は保存しない。各 Request の対象 Submission と Resource Version への参照は保持する。
+上記は未実装の取得 API の草稿であり、作成 API のレスポンスではない。作成の API contract は OpenAPI を参照する。Submission / Request 間の訂正元・再実行元を示す導出関係は保存しない。各 Request の対象 Submission と Resource Version への参照は保持する。
 
-### `POST /api/projects/{project_id}/requests`
+### Request 作成
 
-Request を作成する。Request はその Version の全 Workflow を実行する(Single-Version Request)。
+Validation の作成は `POST /api/projects/{project_id}/validation` ([OpenAPI](../../api/openapi.yaml)) に移行した。multipart による提出と JSON による再実行を受け付ける。作成レスポンスを含む API contract は OpenAPI を参照する。
 
-```json
-{
-  "submission_id": "uuid"
-}
-```
-
-- サーバーが Request 作成時点の latest を確定する。初回・手動再実行とも同じ規則で、待機中の課題更新でも Version は変更しない。`version_id` は受け付けない。
-- 認可:
-  - Student: 自分の validation Submission に対してのみ。Version は latest のみ。
-  - Manager/Admin: non-archived な evaluation Submission と、自分の validation Submission。いずれも作成時点の latest。
-- Response: `201` + Request コアオブジェクト(`state` は `pending`)
-- Errors:
-  - `404`(Submission が不可視・不存在)
-  - `409 submission_archived`
-  - `422 version_not_allowed`(`version_id` を指定)
-  - `409 duplicate_request`(同一 `(submission_id, version_id)` の Request が `pending` / `queued` / `running` に存在する間。完了後の再実行は許可)
+旧案の共通 `POST /api/projects/{project_id}/requests` は採用しない。Evaluation の作成は未実装で、[設計メモ](../design/request-judge-decisions.md)を参照する。
 
 ### `GET /api/requests/{request_id}`
 

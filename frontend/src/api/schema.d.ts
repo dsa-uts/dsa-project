@@ -199,10 +199,59 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/projects/{project_id}/validation": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create a Validation Request
+         * @description Creates a Request for the authenticated user against the latest Resource Version.
+         *     Multipart uploads reuse a Submission with the same normalized file tree.
+         *     JSON reruns an existing own validation Submission in this Project.
+         *     A new key always creates a new Request, including when another run is incomplete.
+         *     Replaying a key returns the current Request without comparing input contents.
+         *     Keys are scoped to the user across Projects and kinds; mismatches return 409.
+         *     Maximum HTTP body size is 21,000,000 bytes, including multipart overhead.
+         */
+        post: operations["createValidation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        SubmissionMetadata: {
+            files: {
+                part: string;
+                /**
+                 * @description Relative UTF-8 path with slash separators. Dot components and repeated
+                 *     slashes are normalized; the parent folder is preserved. Absolute paths,
+                 *     drive-letter paths, backslashes, NUL, parent (..) components, and paths
+                 *     normalizing to empty are rejected. Normalized duplicate paths and
+                 *     file/directory collisions return 422 with the paths in error.message.
+                 */
+                path: string;
+            }[];
+        };
+        CreatedRequest: {
+            /**
+             * Format: uuid
+             * @description UUID v7 Request ID
+             */
+            id: string;
+            /** @enum {string} */
+            state: "pending" | "running" | "retrying" | "completed";
+            status: components["schemas"]["NullableStatus"];
+        };
         ProjectUpdate: {
             /** Format: uuid */
             id: string;
@@ -215,7 +264,7 @@ export interface components {
          */
         NullableTimestamp: string | null;
         /** @enum {string} */
-        Status: "AC" | "WA" | "TLE" | "MLE" | "RE" | "OLE" | "IE";
+        Status: "AC" | "WA" | "TLE" | "MLE" | "RE" | "OLE" | "IE" | "CE" | "SKIP";
         NullableStatus: components["schemas"]["Status"] | null;
         Project: {
             /** Format: uuid */
@@ -785,6 +834,99 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
+        };
+    };
+    createValidation: {
+        parameters: {
+            query?: never;
+            header: {
+                "Idempotency-Key": string;
+            };
+            path: {
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** Format: uuid */
+                    submission_id: string;
+                };
+                "multipart/form-data": {
+                    metadata: components["schemas"]["SubmissionMetadata"];
+                } & {
+                    [key: string]: unknown;
+                };
+            };
+        };
+        responses: {
+            /** @description Current state of the existing Request for this key */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CreatedRequest"];
+                };
+            };
+            /** @description New Request created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CreatedRequest"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            /** @description Submission belongs to another user (including for Managers and Admins) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Project missing or not visible; Submission missing */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description idempotency_key_conflict (different Project or kind) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description payload_too_large (file contents or HTTP body exceed the limit) */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description unsupported_media_type */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            422: components["responses"]["ValidationError"];
+            500: components["responses"]["InternalError"];
         };
     };
 }

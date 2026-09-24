@@ -52,7 +52,7 @@ ALTER TABLE projects ADD CONSTRAINT projects_latest_version_fkey
     DEFERRABLE INITIALLY DEFERRED;
 
 CREATE TABLE submissions (
-    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    id uuid PRIMARY KEY DEFAULT uuidv7(),
     project_id uuid NOT NULL REFERENCES projects(id),
     kind text NOT NULL CHECK (kind IN ('validation', 'evaluation')),
     subject_user_id uuid NOT NULL REFERENCES user_accounts(id),
@@ -75,7 +75,7 @@ CREATE TABLE submission_files (
 );
 
 CREATE TABLE requests (
-    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    id uuid PRIMARY KEY DEFAULT uuidv7(),
     -- Composite foreign keys keep the Submission and Version in one Project.
     project_id uuid NOT NULL,
     submission_id uuid NOT NULL,
