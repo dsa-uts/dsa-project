@@ -12,6 +12,7 @@ import (
 	"github.com/uptrace/bun"
 
 	"github.com/dsa-uts/dsa-project/backend/internal/api"
+	"github.com/dsa-uts/dsa-project/backend/internal/api/generated"
 	"github.com/dsa-uts/dsa-project/backend/internal/api/httpresponse"
 	"github.com/dsa-uts/dsa-project/backend/internal/handler"
 	"github.com/dsa-uts/dsa-project/backend/internal/resourceimport"
@@ -42,14 +43,18 @@ func httpErrorHandler(err error, c echo.Context) {
 		return
 	}
 	status := http.StatusInternalServerError
-	message := "Internal server error."
+	body := httpresponse.NewError("internal_server_error", "Internal server error.")
 	if he, ok := errors.AsType[*echo.HTTPError](err); ok {
 		status = he.Code
-		message = fmt.Sprint(he.Message)
+		if classified, ok := he.Message.(generated.Error); ok {
+			body = classified
+		} else {
+			// 404 → not_found のように status text から機械可読 code を導出する
+			code := strings.ReplaceAll(strings.ToLower(http.StatusText(status)), " ", "_")
+			body = httpresponse.NewError(cmp.Or(code, "error"), fmt.Sprint(he.Message))
+		}
 	}
-	// 404 → not_found のように status text から機械可読 code を導出する
-	code := strings.ReplaceAll(strings.ToLower(http.StatusText(status)), " ", "_")
-	if err := c.JSON(status, httpresponse.NewError(cmp.Or(code, "error"), message)); err != nil {
+	if err := c.JSON(status, body); err != nil {
 		c.Logger().Error(err)
 	}
 }

@@ -32,20 +32,20 @@ func RequestValidator(spec *openapi3.T, authenticate openapi3filter.Authenticati
 func validationErrorHandler(c echo.Context, err *echo.HTTPError) error {
 	var tooLarge *http.MaxBytesError
 	if errors.As(err, &tooLarge) {
-		return c.JSON(http.StatusRequestEntityTooLarge, httpresponse.NewError("payload_too_large", "HTTP body exceeds 21,000,000 bytes."))
+		return echo.NewHTTPError(http.StatusRequestEntityTooLarge, httpresponse.NewError("payload_too_large", "HTTP body exceeds 21,000,000 bytes.")).SetInternal(err)
 	}
 	var requestError *openapi3filter.RequestError
 	if errors.As(err, &requestError) && requestError.RequestBody != nil {
 		content := requestError.RequestBody.Content
 		media, _, parseErr := mime.ParseMediaType(c.Request().Header.Get("Content-Type"))
 		if len(content) > 0 && (parseErr != nil || content.Get(media) == nil) {
-			return c.JSON(http.StatusUnsupportedMediaType, httpresponse.NewError("unsupported_media_type", "Content-Type is not supported by this operation."))
+			return echo.NewHTTPError(http.StatusUnsupportedMediaType, httpresponse.NewError("unsupported_media_type", "Content-Type is not supported by this operation.")).SetInternal(err)
 		}
 	}
 	// Keep the public API's 422 envelope for invalid input; authentication and
 	// routing errors retain their original status through the HTTP error handler.
 	if err.Code == http.StatusBadRequest {
-		return c.JSON(http.StatusUnprocessableEntity, httpresponse.NewError("validation_failed", fmt.Sprint(err.Message)))
+		return echo.NewHTTPError(http.StatusUnprocessableEntity, httpresponse.NewError("validation_failed", fmt.Sprint(err.Message))).SetInternal(err)
 	}
 	return err
 }
