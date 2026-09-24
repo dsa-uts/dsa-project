@@ -6,7 +6,6 @@ import (
 	"mime"
 	"net/http"
 
-	"github.com/dsa-uts/dsa-project/backend/internal/api/generated"
 	"github.com/dsa-uts/dsa-project/backend/internal/api/httpresponse"
 	"github.com/getkin/kin-openapi/openapi3"
 	"github.com/getkin/kin-openapi/openapi3filter"
@@ -34,9 +33,6 @@ func validationErrorHandler(c echo.Context, err *echo.HTTPError) error {
 	var tooLarge *http.MaxBytesError
 	if errors.As(err, &tooLarge) {
 		return c.JSON(http.StatusRequestEntityTooLarge, httpresponse.NewError("payload_too_large", "HTTP body exceeds 21,000,000 bytes."))
-	}
-	if body, ok := err.Message.(generated.Error); ok {
-		return c.JSON(err.Code, body)
 	}
 	var requestError *openapi3filter.RequestError
 	if errors.As(err, &requestError) && requestError.RequestBody != nil {
