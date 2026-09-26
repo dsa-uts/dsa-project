@@ -82,7 +82,6 @@ CREATE TABLE requests (
     version_id uuid NOT NULL,
     requested_by uuid NOT NULL REFERENCES user_accounts(id),
     requested_at timestamptz NOT NULL DEFAULT now(),
-    idempotency_key text NOT NULL,
     state text NOT NULL DEFAULT 'pending'
         CHECK (state IN ('pending', 'running', 'retrying', 'completed')),
     status text CHECK (status IN ('IE', 'CE', 'OLE', 'MLE', 'TLE', 'RE', 'WA', 'SKIP', 'AC')),
@@ -101,8 +100,7 @@ CREATE TABLE requests (
         OR (state <> 'pending' AND attempt_count > 0)
     ),
     FOREIGN KEY (project_id, submission_id) REFERENCES submissions(project_id, id) ON DELETE CASCADE,
-    FOREIGN KEY (project_id, version_id) REFERENCES project_versions(project_id, id),
-    UNIQUE (requested_by, idempotency_key)
+    FOREIGN KEY (project_id, version_id) REFERENCES project_versions(project_id, id)
 );
 
 CREATE INDEX requests_submission_id_idx ON requests (submission_id);

@@ -4,11 +4,17 @@ resources:
   - ../e2e
 patches:
   - target:
-      kind: Ingress
+      kind: IngressRoute
       name: dsa
     patch: |-
       - op: replace
-        path: /spec/rules/0/host
-        value: e2e.localhost
+        path: /spec/routes/0/match
+        value: Host(`e2e.localhost`) && Method(`POST`) && PathRegexp(`^/api/projects/[^/]+/validation$`)
+      - op: replace
+        path: /spec/routes/1/match
+        value: Host(`e2e.localhost`) && PathRegexp(`^/(api|health)(/|$)`)
+      - op: replace
+        path: /spec/routes/2/match
+        value: Host(`e2e.localhost`) && PathPrefix(`/`)
       - op: remove
-        path: /metadata/annotations/traefik.ingress.kubernetes.io~1router.tls
+        path: /spec/tls

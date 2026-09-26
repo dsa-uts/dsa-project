@@ -1,14 +1,11 @@
 # Shared by OrbStack and k3d; both provide LoadBalancer services.
 ingressClass:
-  enabled: true
-  name: traefik
-  isDefaultClass: false
+  enabled: false
 providers:
   kubernetesCRD:
-    enabled: false
-  kubernetesIngress:
     enabled: true
-    ingressClass: traefik
+  kubernetesIngress:
+    enabled: false
 service:
   type: LoadBalancer
 ports:

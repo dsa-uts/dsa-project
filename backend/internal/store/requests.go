@@ -17,7 +17,6 @@ type Request struct {
 	VersionID      uuid.UUID       `bun:"version_id,notnull"`
 	RequestedBy    uuid.UUID       `bun:"requested_by,notnull"`
 	RequestedAt    time.Time       `bun:"requested_at,notnull,default:now()"`
-	IdempotencyKey string          `bun:"idempotency_key,notnull"`
 	State          string          `bun:"state,notnull,default:'pending'"`
 	Status         *string         `bun:"status"`
 	Result         json.RawMessage `bun:"result,type:jsonb"`

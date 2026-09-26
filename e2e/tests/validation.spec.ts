@@ -19,7 +19,7 @@ async function error(response: APIResponse, status: number, code?: string) {
   expect(body).not.toHaveProperty('error')
 }
 
-test('Validation upload, concurrent replay, scope and input limits', async ({ request }) => {
+test('Validation upload, concurrent requests, scope and input limits', async ({ request }) => {
   test.setTimeout(120_000)
   const login = await request.post('/api/session', { data: { userid: 'admin', password: 'admin' } })
   expect(login.status()).toBe(200)
@@ -32,43 +32,40 @@ test('Validation upload, concurrent replay, scope and input limits', async ({ re
   }
   const url = `/api/projects/${projectIDs[0]}/validation`
   const files = [{ path: 'answer/./main.c', content: Buffer.from([0, 255, 10]) }, { path: 'Makefile', content: Buffer.alloc(0) }]
-  const send = (body = multipart(files), key: string = randomUUID(), target = url, auth = cookie) => request.post(target, {
-    data: body.data, headers: { Cookie: auth, 'Content-Type': body.contentType, 'Idempotency-Key': key },
+  const send = (body = multipart(files), target = url, auth = cookie) => request.post(target, {
+    data: body.data, headers: { Cookie: auth, 'Content-Type': body.contentType },
   })
-  await error(await send(undefined, undefined, url, ''), 401)
-  await error(await send({ data: Buffer.from('x'), contentType: 'text/plain' }, undefined, url, ''), 401)
-  // kin-openapi buffers the body before invoking authentication; the transport
-  // size limit therefore also applies to unauthenticated requests. Keep the
-  // middleware default: security-stage read failures return 403.
-  await error(await send({ data: Buffer.alloc(21_000_001, 32), contentType: 'application/json' }, undefined, url, ''), 403)
-  await error(await send(undefined, 'bad'), 400)
+  await error(await send(undefined, url, ''), 401)
+  await error(await send({ data: Buffer.from('x'), contentType: 'text/plain' }, url, ''), 401)
+  // Ingress rejects oversized bodies before authentication, without an API JSON error.
+  const oversized = { data: Buffer.alloc(21_000_001, 32), contentType: 'application/json' }
+  expect((await send(oversized, url, '')).status()).toBe(413)
+  await error(await send({ ...oversized, data: oversized.data.subarray(0, 21_000_000) }, url, ''), 401)
+  // Other routes and methods retain the default 128 KiB limit.
+  const defaultLimit = { ...oversized, data: oversized.data.subarray(0, 131_072) }
+  await error(await send(defaultLimit, '/api/admin/resource-imports', ''), 401)
+  expect((await send({ ...oversized, data: oversized.data.subarray(0, 131_073) }, '/api/admin/resource-imports', '')).status()).toBe(413)
+  expect((await request.put(url, { data: oversized.data, headers: { Cookie: '', 'Content-Type': oversized.contentType } })).status()).toBe(413)
   await error(await request.post(url, { data: {}, headers: { Cookie: cookie, 'Content-Type': 'application/json' } }), 400)
   await error(await send({ data: Buffer.from('x'), contentType: 'text/plain' }), 400)
-  await error(await send(undefined, undefined, `/api/projects/${randomUUID()}/validation`), 404, 'not_found')
+  await error(await send(undefined, `/api/projects/${randomUUID()}/validation`), 404, 'not_found')
 
-  const key = randomUUID()
-  const responses = await Promise.all([send(undefined, key), send(undefined, key)])
-  expect(responses.map(r => r.status()).sort()).toEqual([200, 201])
+  const responses = await Promise.all([send(), send()])
+  expect(responses.map(r => r.status())).toEqual([201, 201])
   const created = await responses[0].json()
   expect(created).toEqual({ id: expect.stringMatching(/^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/), state: 'pending', status: null })
-  expect(await responses[1].json()).toEqual(created)
-  // Replays compare the key and scope, not file contents or submission_id.
-  const replay = await send(multipart([{ path: 'changed', content: Buffer.from('changed') }]), key)
-  expect(replay.status()).toBe(200)
-  expect(await replay.json()).toEqual(created)
-  const jsonReplay = await request.post(url, { data: { submission_id: randomUUID() }, headers: { Cookie: cookie, 'Idempotency-Key': key } })
-  expect(jsonReplay.status(), await jsonReplay.text()).toBe(200)
-  expect(await jsonReplay.json()).toEqual(created)
-  const canonicalReplay = await send({ data: Buffer.from(JSON.stringify({ submission_id: randomUUID() })), contentType: 'Application/JSON; Charset=utf-8' }, key)
-  expect(canonicalReplay.status(), await canonicalReplay.text()).toBe(200)
-  expect(await canonicalReplay.json()).toEqual(created)
-  await error(await send(undefined, key, `/api/projects/${projectIDs[1]}/validation`), 409, 'idempotency_key_conflict')
+  expect((await responses[1].json()).id).not.toBe(created.id)
+  const changed = await send(multipart([{ path: 'changed', content: Buffer.from('changed') }]))
+  expect(changed.status(), await changed.text()).toBe(201)
+  expect((await changed.json()).id).not.toBe(created.id)
+  await error(await send({ data: Buffer.from(JSON.stringify({ submission_id: randomUUID() })), contentType: 'Application/JSON; Charset=utf-8' }), 404, 'not_found')
+  expect((await send(undefined, `/api/projects/${projectIDs[1]}/validation`)).status()).toBe(201)
   const again = await send()
   expect(again.status(), await again.text()).toBe(201)
   expect((await again.json()).id).not.toBe(created.id)
-  await error(await request.post(url, { data: { submission_id: randomUUID() }, headers: { Cookie: cookie, 'Idempotency-Key': randomUUID() } }), 404, 'not_found')
+  await error(await request.post(url, { data: { submission_id: randomUUID() }, headers: { Cookie: cookie } }), 404, 'not_found')
   for (const data of [{}, { submission_id: 'bad' }, { submission_id: randomUUID(), kind: 'evaluation' }]) {
-    await error(await request.post(url, { data, headers: { Cookie: cookie, 'Idempotency-Key': randomUUID() } }), 400)
+    await error(await request.post(url, { data, headers: { Cookie: cookie } }), 400)
   }
 
   for (const paths of [[], ['a', './a'], ['answer', 'answer/main.c'], ['../x'], ['/x'], ['a/../x'], ['C:/x'], ['a\\b'], Array.from({ length: 51 }, (_, i) => `file${i}`)]) {
@@ -79,11 +76,8 @@ test('Validation upload, concurrent replay, scope and input limits', async ({ re
   await error(await send(multipart(files, '{')), 400)
   await error(await send(multipart(files, JSON.stringify({ files: [{ part: 'missing', path: 'a' }] }))), 422, 'validation_failed')
   await error(await send(multipart(files, JSON.stringify({ files: [{ part: 'file0', path: 'a' }] }))), 422, 'validation_failed')
-  const limitKey = randomUUID()
-  await error(await send(multipart([{ path: 'large', content: Buffer.alloc(20_000_001) }]), limitKey), 400)
-  // Rejection must not consume the key or leave a partial Request.
-  expect((await send(undefined, limitKey)).status()).toBe(201)
-  await error(await send({ data: Buffer.alloc(21_000_001, 32), contentType: 'application/json' }), 403)
+  await error(await send(multipart([{ path: 'large', content: Buffer.alloc(20_000_001) }])), 400, 'validation_failed')
+  expect((await send(oversized)).status()).toBe(413)
 })
 
 test('Validation respects Project visibility and permits every logged-in Role', async ({ request }) => {
@@ -102,8 +96,7 @@ test('Validation respects Project visibility and permits every logged-in Role', 
   const original = projects.map((p: { id: string; published_at: string | null; deadline: string | null }) => ({ id: p.id, published_at: p.published_at, deadline: p.deadline }))
   const visibility = (published_at: string | null) => request.patch('/api/admin/projects', { headers, data: { projects: original.map((p: { id: string }) => p.id === id ? { ...p, published_at, deadline: null } : p) } })
   const body = multipart([{ path: 'empty', content: Buffer.alloc(0) }])
-  const key = randomUUID()
-  const send = (role: string) => request.post(`/api/projects/${id}/validation`, { data: body.data, headers: { Cookie: cookies[role], 'Content-Type': body.contentType, 'Idempotency-Key': key } })
+  const send = (role: string) => request.post(`/api/projects/${id}/validation`, { data: body.data, headers: { Cookie: cookies[role], 'Content-Type': body.contentType } })
   try {
     expect((await visibility(null)).status()).toBe(204)
     await error(await send('student'), 404, 'not_found')

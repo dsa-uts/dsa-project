@@ -213,10 +213,9 @@ export interface paths {
          * @description Creates a Request for the authenticated user against the latest Resource Version.
          *     Multipart uploads reuse a Submission with the same normalized file tree.
          *     JSON reruns an existing own validation Submission in this Project.
-         *     A new key always creates a new Request, including when another run is incomplete.
-         *     Replaying a key returns the current Request without comparing input contents.
-         *     Keys are scoped to the user across Projects and kinds; mismatches return 409.
-         *     Maximum HTTP body size is 21,000,000 bytes, including multipart overhead.
+         *     Every successful call creates a new Request, including when another run is incomplete.
+         *     The maximum request body size is 21 MB (21,000,000 bytes), including multipart overhead.
+         *     Requests exceeding this limit return HTTP 413.
          */
         post: operations["createValidation"];
         delete?: never;
@@ -842,9 +841,7 @@ export interface operations {
     createValidation: {
         parameters: {
             query?: never;
-            header: {
-                "Idempotency-Key": string;
-            };
+            header?: never;
             path: {
                 project_id: string;
             };
@@ -864,15 +861,6 @@ export interface operations {
             };
         };
         responses: {
-            /** @description Current state of the existing Request for this key */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CreatedRequest"];
-                };
-            };
             /** @description New Request created */
             201: {
                 headers: {
@@ -884,7 +872,7 @@ export interface operations {
             };
             400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
-            /** @description Submission belongs to another user (including for Managers and Admins), or security validation could not read the HTTP body (including the 21,000,000-byte limit) */
+            /** @description Submission belongs to another user (including for Managers and Admins) */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -902,13 +890,13 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description idempotency_key_conflict (different Project or kind) */
-            409: {
+            /** @description Request body exceeds 21 MB (21,000,000 bytes) */
+            413: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Error"];
+                    "text/plain": string;
                 };
             };
             422: components["responses"]["ValidationError"];

@@ -28,13 +28,19 @@ patches:
         path: /spec/template/spec/containers/0/imagePullPolicy
         value: Never
   - target:
-      kind: Ingress
+      kind: IngressRoute
       name: dsa
     patch: |-
-      - op: add
-        path: /spec/rules/0/host
-        value: dsa.k8s.orb.local
+      - op: replace
+        path: /spec/routes/0/match
+        value: Host(`dsa.k8s.orb.local`) && Method(`POST`) && PathRegexp(`^/api/projects/[^/]+/validation$`)
+      - op: replace
+        path: /spec/routes/1/match
+        value: Host(`dsa.k8s.orb.local`) && PathRegexp(`^/(api|health)(/|$)`)
+      - op: replace
+        path: /spec/routes/2/match
+        value: Host(`dsa.k8s.orb.local`) && PathPrefix(`/`)
       # OrbStack supplies the certificate; Traefik must route TLS on web too.
       - op: add
-        path: /metadata/annotations/traefik.ingress.kubernetes.io~1router.tls
-        value: "true"
+        path: /spec/tls
+        value: {}

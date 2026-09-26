@@ -1,32 +1,48 @@
-apiVersion: networking.k8s.io/v1
-kind: Ingress
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
 metadata:
   name: dsa
-  annotations:
-    traefik.ingress.kubernetes.io/router.entrypoints: web
 spec:
-  ingressClassName: traefik
-  rules:
-    - http:
-        paths:
-          - path: /health
-            pathType: Prefix
-            backend:
-              service:
-                name: dsa-backend
-                port:
-                  name: http
-          - path: /api
-            pathType: Prefix
-            backend:
-              service:
-                name: dsa-backend
-                port:
-                  name: http
-          - path: /
-            pathType: Prefix
-            backend:
-              service:
-                name: dsa-frontend
-                port:
-                  name: http
+  entryPoints:
+    - web
+  routes:
+    - kind: Rule
+      match: Method(`POST`) && PathRegexp(`^/api/projects/[^/]+/validation$`)
+      priority: 100
+      middlewares:
+        - name: validation-body-limit
+      services:
+        - name: dsa-backend
+          port: http
+    - kind: Rule
+      match: PathRegexp(`^/(api|health)(/|$)`)
+      priority: 10
+      middlewares:
+        - name: request-body-limit
+      services:
+        - name: dsa-backend
+          port: http
+    - kind: Rule
+      match: PathPrefix(`/`)
+      priority: 1
+      middlewares:
+        - name: request-body-limit
+      services:
+        - name: dsa-frontend
+          port: http
+---
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: request-body-limit
+spec:
+  buffering:
+    maxRequestBodyBytes: 131072
+---
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: validation-body-limit
+spec:
+  buffering:
+    maxRequestBodyBytes: 21000000

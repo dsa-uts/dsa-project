@@ -35,7 +35,7 @@ func (h *Handler) CreateValidation(ctx context.Context, req generated.CreateVali
 	} else {
 		return generated.CreateValidation400JSONResponse{Code: &httpresponse.ValidationErrorCode, Message: "Request body is required."}, nil
 	}
-	result, created, err := h.requests.CreateValidation(ctx, httpauth.Actor(ctx), req.ProjectId, req.Params.IdempotencyKey.String(), submissionID, files, hash)
+	result, err := h.requests.CreateValidation(ctx, httpauth.Actor(ctx), req.ProjectId, submissionID, files, hash)
 	switch {
 	case errors.Is(err, store.ErrNotFound):
 		return generated.CreateValidation404JSONResponse{Code: &httpresponse.NotFoundErrorCode, Message: "Project or Submission not found."}, nil
@@ -43,15 +43,9 @@ func (h *Handler) CreateValidation(ctx context.Context, req generated.CreateVali
 		return generated.CreateValidation403JSONResponse{Code: &httpresponse.ForbiddenErrorCode, Message: "Submission belongs to another user."}, nil
 	case errors.Is(err, store.ErrSubmissionScope):
 		return generated.CreateValidation422JSONResponse{Code: &httpresponse.ValidationErrorCode, Message: "Submission must belong to this Project and have kind validation."}, nil
-	case errors.Is(err, store.ErrIdempotencyConflict):
-		return generated.CreateValidation409JSONResponse{Code: &httpresponse.IdempotencyKeyConflictErrorCode, Message: "Key already used for another Project or kind."}, nil
 	case err != nil:
 		return nil, err
 	}
 	body := generated.CreatedRequest{Id: result.ID, State: generated.CreatedRequestState(result.State), Status: (*generated.NullableStatus)(result.Status)}
-	if created {
-		return generated.CreateValidation201JSONResponse(body), nil
-	}
-	return generated.CreateValidation200JSONResponse(body), nil
+	return generated.CreateValidation201JSONResponse(body), nil
 }
-

@@ -2,6 +2,7 @@ package api
 
 import (
 	"fmt"
+	"mime"
 
 	"github.com/dsa-uts/dsa-project/backend/internal/api/generated"
 	"github.com/dsa-uts/dsa-project/backend/internal/api/httpauth"
@@ -26,13 +27,24 @@ func Register(e *echo.Echo, authStore *store.AuthStore, projectStore *store.Proj
 	validator := validation.RequestValidator(spec, httpauth.Authenticate(authStore))
 	// Group middleware wraps every generated route, before generated parameter
 	// binding. No operation ID list needs to track future endpoints.
-	g := e.Group("", noStore, validator)
+	g := e.Group("", noStore, normalizeContentType, validator)
 	generated.RegisterHandlers(g, generated.NewStrictHandler(newHandler(authStore, projectStore, requestStore, source), nil))
 }
 
 func noStore(next echo.HandlerFunc) echo.HandlerFunc {
 	return func(c echo.Context) error {
 		c.Response().Header().Set("Cache-Control", "no-store")
+		return next(c)
+	}
+}
+
+// Normalize media type casing before OpenAPI validation and generated body dispatch.
+func normalizeContentType(next echo.HandlerFunc) echo.HandlerFunc {
+	return func(c echo.Context) error {
+		req := c.Request()
+		if media, params, err := mime.ParseMediaType(req.Header.Get("Content-Type")); err == nil {
+			req.Header.Set("Content-Type", mime.FormatMediaType(media, params))
+		}
 		return next(c)
 	}
 }

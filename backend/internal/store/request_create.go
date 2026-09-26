@@ -14,21 +14,15 @@ type RequestStore struct{ db *bun.DB }
 func NewRequestStore(db *bun.DB) *RequestStore { return &RequestStore{db: db} }
 
 var (
-	ErrIdempotencyConflict = errors.New("idempotency_key_conflict")
-	ErrSubmissionOwner     = errors.New("submission_owner_mismatch")
-	ErrSubmissionScope     = errors.New("submission_scope_mismatch")
+	ErrSubmissionOwner = errors.New("submission_owner_mismatch")
+	ErrSubmissionScope = errors.New("submission_scope_mismatch")
 )
 
 // CreateValidation commits the Submission, files and Request together. Unique
-// constraints also protect content deduplication across concurrent, distinct keys.
-func (s *RequestStore) CreateValidation(ctx context.Context, actor *UserAccount, projectID uuid.UUID, key string, submissionID *uuid.UUID, files []SubmissionFile, hash string) (*Request, bool, error) {
+// constraints also protect content deduplication across concurrent requests.
+func (s *RequestStore) CreateValidation(ctx context.Context, actor *UserAccount, projectID uuid.UUID, submissionID *uuid.UUID, files []SubmissionFile, hash string) (*Request, error) {
 	result := new(Request)
-	created := false
 	err := s.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
-		// Serialize only the same user's key, including requests in different Projects.
-		if _, err := tx.ExecContext(ctx, "SELECT pg_advisory_xact_lock(hashtextextended(?, 0))", actor.ID.String()+":"+key); err != nil {
-			return err
-		}
 		project := new(Project)
 		query := tx.NewSelect().Model(project).Where("id = ?", projectID)
 		if actor.Role == "student" {
@@ -38,20 +32,6 @@ func (s *RequestStore) CreateValidation(ctx context.Context, actor *UserAccount,
 			if errors.Is(err, sql.ErrNoRows) {
 				return ErrNotFound
 			}
-			return err
-		}
-		err := tx.NewSelect().Model(result).Where("requested_by = ? AND idempotency_key = ?", actor.ID, key).Scan(ctx)
-		if err == nil {
-			submission := new(Submission)
-			if err := tx.NewSelect().Model(submission).Where("id = ?", result.SubmissionID).Scan(ctx); err != nil {
-				return err
-			}
-			if result.ProjectID != projectID || submission.Kind != "validation" {
-				return ErrIdempotencyConflict
-			}
-			return nil
-		}
-		if !errors.Is(err, sql.ErrNoRows) {
 			return err
 		}
 		submission := &Submission{ProjectID: projectID, Kind: "validation", SubjectUserID: actor.ID, ContentHash: hash}
@@ -90,12 +70,11 @@ func (s *RequestStore) CreateValidation(ctx context.Context, actor *UserAccount,
 				}
 			}
 		}
-		*result = Request{ProjectID: projectID, SubmissionID: submission.ID, VersionID: project.LatestVersionID, RequestedBy: actor.ID, IdempotencyKey: key, State: "pending"}
+		*result = Request{ProjectID: projectID, SubmissionID: submission.ID, VersionID: project.LatestVersionID, RequestedBy: actor.ID, State: "pending"}
 		if _, err := tx.NewInsert().Model(result).Exec(ctx); err != nil {
 			return err
 		}
-		created = true
 		return nil
 	})
-	return result, created, err
+	return result, err
 }
