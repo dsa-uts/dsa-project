@@ -12,7 +12,6 @@ import (
 	"path"
 	"slices"
 	"strings"
-	"unicode/utf8"
 
 	"github.com/dsa-uts/dsa-project/backend/internal/api/generated"
 	"github.com/dsa-uts/dsa-project/backend/internal/store"
@@ -109,15 +108,18 @@ func readUpload(reader *multipart.Reader) ([]store.SubmissionFile, string, error
 }
 
 func normalizePath(name string) (string, error) {
-	invalid := name == "" || !utf8.ValidString(name) || strings.HasPrefix(name, "/") || strings.ContainsAny(name, "\\\x00") || (len(name) >= 2 && name[1] == ':')
-	for _, component := range strings.Split(name, "/") {
-		if component == ".." {
-			invalid = true
-		}
-	}
-	normalized := path.Clean(name)
-	if invalid || normalized == "." {
+	normalized := strings.ToValidUTF8(name, "")
+	normalized = strings.ReplaceAll(normalized, "\\", "/")
+
+	// Refuse NUL and "C://"
+	if strings.ContainsRune(normalized, '\x00') || (len(normalized) >= 2 && normalized[1] == ':') {
 		return "", fmt.Errorf("Invalid relative path: %q.", name)
 	}
+
+	normalized = strings.TrimPrefix(path.Clean("/"+normalized), "/")
+	if normalized == "" {
+		return "", fmt.Errorf("Invalid relative path: %q.", name)
+	}
+
 	return normalized, nil
 }
