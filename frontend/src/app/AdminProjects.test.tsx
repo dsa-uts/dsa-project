@@ -36,7 +36,7 @@ test('failed saves preserve JST edits for retry and send all schedules in UTC', 
 })
 
 test('a changed project list requires explicit reload without silently discarding edits', async () => {
-  const patch = vi.fn(async (_request: Request) => Response.json({ code: 'project_ids_mismatch', message: 'Reload' }, { status: 422 }))
+  const patch = vi.fn(async (_request: Request) => Response.json({ code: 409, message: 'Reload' }, { status: 409 }))
   setup(patch)
   const input = await screen.findByLabelText('課題1 の公開日時')
   fireEvent.change(input, { target: { value: '' } })
@@ -82,7 +82,7 @@ test('import failures retain input and prevent duplicate requests while retrying
   fireEvent.submit(form)
   expect(importRequest).toHaveBeenCalledTimes(1)
   expect(screen.getByRole('button', { name: '登録' })).toHaveProperty('disabled', true)
-  finish(Response.json({ code: 'resource_source_unavailable', message: '取得元に接続できません' }, { status: 503 }))
+  finish(Response.json({ code: 503, message: '取得元に接続できません' }, { status: 503 }))
   expect(await screen.findByRole('alert')).toHaveProperty('textContent', '取得元に接続できません')
   expect(screen.getByLabelText('バージョン')).toHaveProperty('value', 'v1.0.0')
   fireEvent.submit(form)

@@ -13,7 +13,7 @@ test('authentication backend outage returns 500 before input validation', async 
   ]) {
     expect(response.status()).toBe(500)
     expect(await response.json()).toEqual({
-      message: 'Internal server error.',
+      code: 500, message: 'Internal Server Error',
     })
     expect(response.headers()['cache-control']).toBe('no-store')
     expect(response.headers()['set-cookie']).toBeUndefined()

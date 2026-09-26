@@ -72,7 +72,7 @@ test('direct Workflow URLs, default selection and unknown Workflow recovery', as
 
 test('not-found and server failures are recoverable without showing stale content', async () => {
   let status = 404
-  setup('/projects/project-1', async () => status === 200 ? Response.json({ ...project, required_files: [] }) : Response.json({ code: status === 404 ? 'not_found' : 'internal_error', message: 'Unavailable' }, { status }))
+  setup('/projects/project-1', async () => status === 200 ? Response.json({ ...project, required_files: [] }) : Response.json({ code: status, message: 'Unavailable' }, { status }))
   expect((await screen.findByRole('alert')).textContent).toContain('公開されていません')
   status = 500
   fireEvent.click(screen.getByRole('button', { name: '再読み込み' }))

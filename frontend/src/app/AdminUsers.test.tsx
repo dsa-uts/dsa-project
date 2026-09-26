@@ -16,7 +16,7 @@ function renderAdmin() {
       else {
         const data = await request.json()
         status = data.userid === 'taken' ? 409 : 400
-        body = { ...(status === 409 ? { code: 'userid_taken' } : {}), message: 'Rejected by server.' }
+        body = { code: status, message: 'Rejected by server.' }
       }
     }
     return new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } })

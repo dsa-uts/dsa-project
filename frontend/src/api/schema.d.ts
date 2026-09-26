@@ -232,11 +232,12 @@ export interface components {
             files: {
                 part: string;
                 /**
-                 * @description Relative UTF-8 path with slash separators. Dot components and repeated
-                 *     slashes are normalized; the parent folder is preserved. Absolute paths,
-                 *     drive-letter paths, backslashes, NUL, parent (..) components, and paths
-                 *     normalizing to empty are rejected. Normalized duplicate paths and
-                 *     file/directory collisions return 422 with the paths in message.
+                 * @description Normalized to a relative path with slash separators. Invalid UTF-8
+                 *     bytes are removed and backslashes become slashes. Dot components,
+                 *     repeated slashes, and parent (..) components are resolved under a
+                 *     virtual root; leading slashes are removed. NUL, drive-letter paths,
+                 *     and paths normalizing to empty are rejected. Normalized duplicate
+                 *     paths and file/directory collisions return 422 with the paths in message.
                  */
                 path: string;
             }[];
@@ -381,7 +382,10 @@ export interface components {
             disabled?: boolean;
         };
         Error: {
-            /** @description HTTPレスポンスのステータスコードと同じ値 */
+            /**
+             * @description HTTPレスポンスのステータスコードと同じ値
+             * @example 404
+             */
             code: number;
             /** @example Project not found. */
             message: string;
@@ -751,7 +755,16 @@ export interface operations {
             400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
-            /** @description project_ids_mismatch or validation_failed; nothing is changed */
+            /** @description Project IDs do not match the complete list; nothing is changed */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Deadline precedes publication; nothing is changed */
             422: {
                 headers: {
                     [name: string]: unknown;

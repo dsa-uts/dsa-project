@@ -7,24 +7,22 @@ import (
 	"testing"
 
 	"github.com/dsa-uts/dsa-project/backend/internal/store"
+	resource "github.com/dsa-uts/dsa-resource-spec"
 	"github.com/google/uuid"
 )
 
 func TestProjectDetail(t *testing.T) {
 	p := &store.ProjectLatest{Project: store.Project{
 		ID: uuid.New(), ResourceID: "ex1", Name: "Example", LatestVersionID: uuid.New(), DisplayOrder: 3,
-	}, Version: "v1.0.0", ResourceJSON: json.RawMessage(`{
-		"required-files": ["z.c", "*.h", "レポート.pdf（任意）"],
-		"workflows": {
-			"ex1-2": {"name": "Second", "jobs": {"private": {"secret": "must-not-leak"}}},
-			"ex1-10": {"name": "Tenth", "description": "# Markdown\n\n[Link](https://example.com)", "presets": ["must-not-leak"]},
-			"ex1-1": {"name": "First"}
-		}
-	}`)}
-	detail, err := projectDetail(p)
-	if err != nil {
-		t.Fatal(err)
-	}
+	}, Version: "v1.0.0", ResourceJSON: resource.Resource{
+		RequiredFiles: []string{"z.c", "*.h", "レポート.pdf（任意）"},
+		Workflows: map[string]resource.Workflow{
+			"ex1-2":  {Name: "Second", Jobs: map[string]resource.Job{"private": {Name: "must-not-leak"}}},
+			"ex1-10": {Name: "Tenth", Description: "# Markdown\n\n[Link](https://example.com)", Presets: []resource.Preset{{Path: "must-not-leak"}}},
+			"ex1-1":  {Name: "First"},
+		},
+	}}
+	detail := projectDetail(p)
 	if detail.Id != p.ID || detail.LatestVersionId != p.LatestVersionID || detail.LatestVersion != p.Version || detail.ResourceId != p.ResourceID || detail.Name != p.Name || detail.DisplayOrder != 3 {
 		t.Fatalf("lost Project metadata: %+v", detail)
 	}
@@ -46,14 +44,14 @@ func TestProjectDetail(t *testing.T) {
 	if !strings.Contains(string(data), `"my_result":null`) {
 		t.Fatalf("expected null result: %s", data)
 	}
+}
+
+func TestProjectDetailMissingGuidance(t *testing.T) {
 	// Snapshots imported before required-files existed remain readable.
-	p.ResourceJSON = json.RawMessage(`{"workflows":{"judge":{"name":"Judge"}}}`)
-	detail, err = projectDetail(p)
-	if err != nil || detail.RequiredFiles == nil || len(detail.RequiredFiles) != 0 {
-		t.Fatalf("missing guidance must be an empty array: %+v, %v", detail, err)
-	}
-	p.ResourceJSON = json.RawMessage(`{`)
-	if _, err := projectDetail(p); err == nil {
-		t.Fatal("corrupt snapshot accepted")
+	detail := projectDetail(&store.ProjectLatest{ResourceJSON: resource.Resource{
+		Workflows: map[string]resource.Workflow{"judge": {Name: "Judge"}},
+	}})
+	if detail.RequiredFiles == nil || len(detail.RequiredFiles) != 0 {
+		t.Fatalf("missing guidance must be an empty array: %+v", detail)
 	}
 }

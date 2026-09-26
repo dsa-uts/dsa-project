@@ -90,8 +90,8 @@ function ProjectsScreen() {
     try {
       const result = await fetchClient.PATCH('/api/admin/projects', { body: { projects: rows.map(({ id, published_at, deadline }) => ({ id, published_at, deadline })) } })
       if (result.error) {
-        setMismatch(result.error.code === 'project_ids_mismatch')
-        setError(result.error.code === 'project_ids_mismatch' ? '課題一覧が変更されています。編集を破棄して再読み込みし、もう一度変更してください。' : result.error.message)
+        setMismatch(result.error.code === 409)
+        setError(result.error.code === 409 ? '課題一覧が変更されています。編集を破棄して再読み込みし、もう一度変更してください。' : result.error.message)
         return
       }
       queryClient.setQueryData($api.queryOptions('get', '/api/projects', {}).queryKey, { projects: rows.map((row, display_order) => ({ ...row, display_order })) })

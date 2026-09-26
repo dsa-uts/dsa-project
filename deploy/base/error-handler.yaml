@@ -75,5 +75,4 @@ spec:
     service:
       name: dsa-error-handler
       port: 8080
-    query /413
-
+    query: /413

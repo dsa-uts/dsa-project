@@ -50,7 +50,7 @@ function UserDialog({ user, onClose, onSaved }: { user: User | null; onClose: ()
         ? await fetchClient.PATCH('/api/admin/users/{user_id}', { params: { path: { user_id: user.id } }, body: { name: fields.name, ...(user.role !== 'admin' ? { role: fields.role } : {}), ...(fields.password !== '' ? { password: fields.password } : {}) } })
         : await fetchClient.POST('/api/admin/users', { body: { userid: fields.userid, name: fields.name, role: fields.role, password: fields.password } })
       if (result.error) {
-        if (result.error.code === 'userid_taken') setErrors({ userid: 'This User ID is already taken.' })
+        if (!user && result.error.code === 409) setErrors({ userid: 'This User ID is already taken.' })
         else setApiError(result.error.message)
         return
       }

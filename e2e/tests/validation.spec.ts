@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto'
-import { expect, test, type APIResponse } from '@playwright/test'
+import { expect, test } from '@playwright/test'
+import { expectAPIError } from './helpers.js'
 
 // Build raw multipart so duplicate names, JSON part headers, binary bytes and
 // metadata/part mismatches travel through the deployed public HTTP interface.
@@ -9,14 +10,6 @@ function multipart(files: { path: string; content: Buffer }[], metadata = JSON.s
   files.forEach((file, i) => chunks.push(Buffer.from(`--${boundary}\r\nContent-Disposition: form-data; name="file${i}"; filename="ignored"\r\nContent-Type: application/octet-stream\r\n\r\n`), file.content, Buffer.from('\r\n')))
   chunks.push(Buffer.from(`--${boundary}--\r\n`))
   return { data: Buffer.concat(chunks), contentType: `multipart/form-data; boundary=${boundary}` }
-}
-async function error(response: APIResponse, status: number, code?: string) {
-  expect(response.status(), await response.text()).toBe(status)
-  expect(response.headers()['cache-control']).toBe('no-store')
-  const body = await response.json()
-  expect(body.message).toEqual(expect.any(String))
-  expect(body.code).toBe(code)
-  expect(body).not.toHaveProperty('error')
 }
 
 test('Validation upload, concurrent requests, scope and input limits', async ({ request }) => {
@@ -35,20 +28,20 @@ test('Validation upload, concurrent requests, scope and input limits', async ({ 
   const send = (body = multipart(files), target = url, auth = cookie) => request.post(target, {
     data: body.data, headers: { Cookie: auth, 'Content-Type': body.contentType },
   })
-  await error(await send(undefined, url, ''), 401)
-  await error(await send({ data: Buffer.from('x'), contentType: 'text/plain' }, url, ''), 401)
-  // Ingress rejects oversized bodies before authentication, without an API JSON error.
+  await expectAPIError(await send(undefined, url, ''), 401)
+  await expectAPIError(await send({ data: Buffer.from('x'), contentType: 'text/plain' }, url, ''), 401)
+  // Ingress rejects oversized bodies before authentication using the shared JSON envelope.
   const oversized = { data: Buffer.alloc(21_000_001, 32), contentType: 'application/json' }
-  expect((await send(oversized, url, '')).status()).toBe(413)
-  await error(await send({ ...oversized, data: oversized.data.subarray(0, 21_000_000) }, url, ''), 401)
+  await expectAPIError(await send(oversized, url, ''), 413)
+  await expectAPIError(await send({ ...oversized, data: oversized.data.subarray(0, 21_000_000) }, url, ''), 401)
   // Other routes and methods retain the default 128 KiB limit.
   const defaultLimit = { ...oversized, data: oversized.data.subarray(0, 131_072) }
-  await error(await send(defaultLimit, '/api/admin/resource-imports', ''), 401)
-  expect((await send({ ...oversized, data: oversized.data.subarray(0, 131_073) }, '/api/admin/resource-imports', '')).status()).toBe(413)
-  expect((await request.put(url, { data: oversized.data, headers: { Cookie: '', 'Content-Type': oversized.contentType } })).status()).toBe(413)
-  await error(await request.post(url, { data: {}, headers: { Cookie: cookie, 'Content-Type': 'application/json' } }), 400)
-  await error(await send({ data: Buffer.from('x'), contentType: 'text/plain' }), 400)
-  await error(await send(undefined, `/api/projects/${randomUUID()}/validation`), 404, 'not_found')
+  await expectAPIError(await send(defaultLimit, '/api/admin/resource-imports', ''), 401)
+  await expectAPIError(await send({ ...oversized, data: oversized.data.subarray(0, 131_073) }, '/api/admin/resource-imports', ''), 413)
+  await expectAPIError(await request.put(url, { data: oversized.data, headers: { Cookie: '', 'Content-Type': oversized.contentType } }), 413)
+  await expectAPIError(await request.post(url, { data: {}, headers: { Cookie: cookie, 'Content-Type': 'application/json' } }), 400)
+  await expectAPIError(await send({ data: Buffer.from('x'), contentType: 'text/plain' }), 400)
+  await expectAPIError(await send(undefined, `/api/projects/${randomUUID()}/validation`), 404)
 
   const responses = await Promise.all([send(), send()])
   expect(responses.map(r => r.status())).toEqual([201, 201])
@@ -58,26 +51,30 @@ test('Validation upload, concurrent requests, scope and input limits', async ({ 
   const changed = await send(multipart([{ path: 'changed', content: Buffer.from('changed') }]))
   expect(changed.status(), await changed.text()).toBe(201)
   expect((await changed.json()).id).not.toBe(created.id)
-  await error(await send({ data: Buffer.from(JSON.stringify({ submission_id: randomUUID() })), contentType: 'Application/JSON; Charset=utf-8' }), 404, 'not_found')
+  await expectAPIError(await send({ data: Buffer.from(JSON.stringify({ submission_id: randomUUID() })), contentType: 'Application/JSON; Charset=utf-8' }), 404)
   expect((await send(undefined, `/api/projects/${projectIDs[1]}/validation`)).status()).toBe(201)
   const again = await send()
   expect(again.status(), await again.text()).toBe(201)
   expect((await again.json()).id).not.toBe(created.id)
-  await error(await request.post(url, { data: { submission_id: randomUUID() }, headers: { Cookie: cookie } }), 404, 'not_found')
+  await expectAPIError(await request.post(url, { data: { submission_id: randomUUID() }, headers: { Cookie: cookie } }), 404)
   for (const data of [{}, { submission_id: 'bad' }, { submission_id: randomUUID(), kind: 'evaluation' }]) {
-    await error(await request.post(url, { data, headers: { Cookie: cookie } }), 400)
+    await expectAPIError(await request.post(url, { data, headers: { Cookie: cookie } }), 400)
   }
 
-  for (const paths of [[], ['a', './a'], ['answer', 'answer/main.c'], ['../x'], ['/x'], ['a/../x'], ['C:/x'], ['a\\b'], Array.from({ length: 51 }, (_, i) => `file${i}`)]) {
+  for (const paths of [[], ['a', './a'], ['answer', 'answer/main.c'], ['C:/x'], Array.from({ length: 51 }, (_, i) => `file${i}`)]) {
     const response = await send(multipart(paths.map(path => ({ path, content: Buffer.alloc(0) }))))
-    await error(response, paths.length === 0 || paths.length > 50 ? 400 : 422, paths.length === 0 || paths.length > 50 ? undefined : 'validation_failed')
+    await expectAPIError(response, paths.length === 0 || paths.length > 50 ? 400 : 422)
     if (paths[0] === 'answer') expect((await response.json()).message).toContain('answer')
   }
-  await error(await send(multipart(files, '{')), 400)
-  await error(await send(multipart(files, JSON.stringify({ files: [{ part: 'missing', path: 'a' }] }))), 422, 'validation_failed')
-  await error(await send(multipart(files, JSON.stringify({ files: [{ part: 'file0', path: 'a' }] }))), 422, 'validation_failed')
-  await error(await send(multipart([{ path: 'large', content: Buffer.alloc(20_000_001) }])), 400, 'validation_failed')
-  expect((await send(oversized)).status()).toBe(413)
+  for (const path of ['../x', '/x', 'a/../x', 'a\\b']) {
+    const response = await send(multipart([{ path, content: Buffer.alloc(0) }]))
+    expect(response.status(), await response.text()).toBe(201)
+  }
+  await expectAPIError(await send(multipart(files, '{')), 400)
+  await expectAPIError(await send(multipart(files, JSON.stringify({ files: [{ part: 'missing', path: 'a' }] }))), 422)
+  await expectAPIError(await send(multipart(files, JSON.stringify({ files: [{ part: 'file0', path: 'a' }] }))), 422)
+  await expectAPIError(await send(multipart([{ path: 'large', content: Buffer.alloc(20_000_001) }])), 400)
+  await expectAPIError(await send(oversized), 413)
 })
 
 test('Validation respects Project visibility and permits every logged-in Role', async ({ request }) => {
@@ -99,7 +96,7 @@ test('Validation respects Project visibility and permits every logged-in Role', 
   const send = (role: string) => request.post(`/api/projects/${id}/validation`, { data: body.data, headers: { Cookie: cookies[role], 'Content-Type': body.contentType } })
   try {
     expect((await visibility(null)).status()).toBe(204)
-    await error(await send('student'), 404, 'not_found')
+    await expectAPIError(await send('student'), 404)
     const admin = await send('admin')
     const manager = await send('manager')
     expect(admin.status(), await admin.text()).toBe(201)
