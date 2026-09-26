@@ -10,6 +10,7 @@ spec:
       match: Method(`POST`) && PathRegexp(`^/api/projects/[^/]+/validation$`)
       priority: 100
       middlewares:
+        - name: json-body-too-large
         - name: validation-body-limit
       services:
         - name: dsa-backend
@@ -18,6 +19,7 @@ spec:
       match: PathRegexp(`^/(api|health)(/|$)`)
       priority: 10
       middlewares:
+        - name: json-body-too-large
         - name: request-body-limit
       services:
         - name: dsa-backend
@@ -26,6 +28,7 @@ spec:
       match: PathPrefix(`/`)
       priority: 1
       middlewares:
+        - name: json-body-too-large
         - name: request-body-limit
       services:
         - name: dsa-frontend

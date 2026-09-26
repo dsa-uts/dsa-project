@@ -28,7 +28,7 @@ func TestAllowsRole(t *testing.T) {
 		{"", "", false},
 	} {
 		t.Run(tt.actual+"/"+tt.required, func(t *testing.T) {
-			if got := auth.AllowsRole(tt.actual, tt.required); got != tt.want {
+			if got := auth.AllowsRole(auth.Role(tt.actual), auth.Role(tt.required)); got != tt.want {
 				t.Fatalf("AllowsRole(%q, %q) = %t, want %t", tt.actual, tt.required, got, tt.want)
 			}
 		})

@@ -8,6 +8,15 @@ import (
 	"github.com/uptrace/bun"
 )
 
+type RequestState string
+
+const (
+	PendingState   RequestState = "pending"
+	RunningState   RequestState = "running"
+	RetryingState  RequestState = "retrying"
+	CompletedState RequestState = "completed"
+)
+
 type Request struct {
 	bun.BaseModel `bun:"table:requests"`
 
@@ -17,7 +26,7 @@ type Request struct {
 	VersionID      uuid.UUID       `bun:"version_id,notnull"`
 	RequestedBy    uuid.UUID       `bun:"requested_by,notnull"`
 	RequestedAt    time.Time       `bun:"requested_at,notnull,default:now()"`
-	State          string          `bun:"state,notnull,default:'pending'"`
+	State          RequestState    `bun:"state,notnull,default:'pending'"`
 	Status         *string         `bun:"status"`
 	Result         json.RawMessage `bun:"result,type:jsonb"`
 	LeaseOwner     *uuid.UUID      `bun:"lease_owner"`

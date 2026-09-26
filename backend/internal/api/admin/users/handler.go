@@ -3,13 +3,13 @@ package users
 import (
 	"context"
 	"errors"
-	"log/slog"
+	"net/http"
 
 	"github.com/dsa-uts/dsa-project/backend/internal/api/generated"
 	"github.com/dsa-uts/dsa-project/backend/internal/api/httpauth"
-	"github.com/dsa-uts/dsa-project/backend/internal/api/httpresponse"
 	"github.com/dsa-uts/dsa-project/backend/internal/auth"
 	"github.com/dsa-uts/dsa-project/backend/internal/store"
+	"github.com/labstack/echo/v4"
 )
 
 // Handler implements Admin User Account operations.
@@ -40,11 +40,14 @@ func (h *Handler) CreateUserAccount(ctx context.Context, req generated.CreateUse
 	if err != nil {
 		return nil, err
 	}
-	user := &store.UserAccount{Userid: req.Body.Userid, Name: req.Body.Name, Role: string(req.Body.Role), PasswordHash: hash}
-	if err := h.auth.CreateUser(ctx, user); errors.Is(err, store.ErrUseridTaken) {
-		return generated.CreateUserAccount409JSONResponse{UserConflictJSONResponse: generated.UserConflictJSONResponse(httpresponse.NewError("userid_taken", "This User ID is already taken."))}, nil
-	} else if err != nil {
-		slog.ErrorContext(ctx, "create User Account", "error", err)
+	user := &store.UserAccount{Userid: req.Body.Userid, Name: req.Body.Name, Role: store.Role(req.Body.Role), PasswordHash: hash}
+	if err := h.auth.CreateUser(ctx, user); err != nil {
+		if errors.Is(err, store.ErrUseridTaken) {
+			return nil, echo.NewHTTPError(
+				http.StatusConflict,
+				"This User ID is already taken.",
+			)
+		}
 		return nil, err
 	}
 	return generated.CreateUserAccount201JSONResponse(userAccountResponse(user)), nil
@@ -54,7 +57,7 @@ func (h *Handler) UpdateUserAccount(ctx context.Context, req generated.UpdateUse
 	actor := httpauth.Actor(ctx)
 	update := store.UserUpdate{Name: req.Body.Name, Disabled: req.Body.Disabled}
 	if req.Body.Role != nil {
-		update.Role = new(string(*req.Body.Role))
+		update.Role = new(store.Role(*req.Body.Role))
 	}
 	if req.Body.Password != nil {
 		hash, err := auth.HashPassword(*req.Body.Password)
@@ -66,11 +69,16 @@ func (h *Handler) UpdateUserAccount(ctx context.Context, req generated.UpdateUse
 	user, err := h.auth.UpdateUser(ctx, actor.ID, req.UserId, update)
 	switch {
 	case errors.Is(err, store.ErrNotFound):
-		return generated.UpdateUserAccount404JSONResponse{NotFoundJSONResponse: generated.NotFoundJSONResponse(httpresponse.NewError("not_found", "User Account not found."))}, nil
+		return nil, echo.NewHTTPError(
+			http.StatusNotFound,
+			"User Account not found.",
+		)
 	case errors.Is(err, store.ErrCannotModifySelf):
-		return generated.UpdateUserAccount409JSONResponse{UserConflictJSONResponse: generated.UserConflictJSONResponse(httpresponse.NewError(err.Error(), "This User Account cannot be modified in that way."))}, nil
+		return nil, echo.NewHTTPError(
+			http.StatusConflict,
+			"You cannot modify yourself.",
+		)
 	case err != nil:
-		slog.ErrorContext(ctx, "update User Account", "error", err)
 		return nil, err
 	}
 	return generated.UpdateUserAccount200JSONResponse(userAccountResponse(user)), nil
@@ -79,7 +87,10 @@ func (h *Handler) UpdateUserAccount(ctx context.Context, req generated.UpdateUse
 func (h *Handler) ReorderUserAccounts(ctx context.Context, req generated.ReorderUserAccountsRequestObject) (generated.ReorderUserAccountsResponseObject, error) {
 	err := h.auth.ReorderUsers(ctx, req.Body.UserIds)
 	if errors.Is(err, store.ErrUserIDsMismatch) {
-		return generated.ReorderUserAccounts422JSONResponse(httpresponse.NewError("user_ids_mismatch", "User Accounts changed. Reload the complete list and reorder again.")), nil
+		return nil, echo.NewHTTPError(
+			http.StatusUnprocessableEntity,
+			"User Accounts changed. Reload the complete list and reorder again.",
+		)
 	}
 	if err != nil {
 		return nil, err

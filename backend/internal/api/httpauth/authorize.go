@@ -11,11 +11,19 @@ import (
 	"github.com/dsa-uts/dsa-project/backend/internal/auth"
 	"github.com/dsa-uts/dsa-project/backend/internal/store"
 	"github.com/getkin/kin-openapi/openapi3filter"
+	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
 	echomiddleware "github.com/oapi-codegen/echo-middleware"
 )
 
 type actorContextKey struct{}
+
+type UserInfo struct {
+	ID     uuid.UUID
+	Userid string
+	Name   string
+	Role   auth.Role
+}
 
 // Authenticate runs during security validation, before parameters and bodies.
 // ValidateAccessPolicies must have accepted the spec before registering routes.
@@ -48,17 +56,24 @@ func Authenticate(authStore *store.AuthStore) openapi3filter.AuthenticationFunc 
 		}
 		// kin-openapi passes the required Roles through its Scopes field.
 		// Startup validation permits at most one minimum Role.
-		for _, role := range input.Scopes {
-			if !auth.AllowsRole(user.Role, role) {
-				return echo.NewHTTPError(http.StatusForbidden, fmt.Sprintf("%s Role is required.", role))
+		actualRole := auth.Role(user.Role)
+		for _, scope := range input.Scopes {
+			requiredRole := auth.Role(scope)
+			if !auth.AllowsRole(actualRole, requiredRole) {
+				return echo.NewHTTPError(http.StatusForbidden, fmt.Sprintf("%s Role is required.", requiredRole))
 			}
 		}
-		c.SetRequest(c.Request().WithContext(context.WithValue(requestContext, actorContextKey{}, user)))
+		c.SetRequest(c.Request().WithContext(context.WithValue(requestContext, actorContextKey{}, UserInfo{
+			ID:     user.ID,
+			Userid: user.Userid,
+			Name:   user.Name,
+			Role:   actualRole,
+		})))
 		return nil
 	}
 }
 
 // Actor returns the User Account installed by successful security validation.
-func Actor(ctx context.Context) *store.UserAccount {
-	return ctx.Value(actorContextKey{}).(*store.UserAccount)
+func Actor(ctx context.Context) UserInfo {
+	return ctx.Value(actorContextKey{}).(UserInfo)
 }

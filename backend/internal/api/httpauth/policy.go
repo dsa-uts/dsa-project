@@ -44,7 +44,7 @@ func validateAccessPolicy(operation *openapi3.Operation) error {
 			return fmt.Errorf("sessionAuth accepts at most one minimum Role")
 		}
 		for _, role := range roles {
-			if !auth.AllowsRole(role, role) {
+			if !auth.AllowsRole(auth.Role(role), auth.Role(role)) {
 				return fmt.Errorf("unknown sessionAuth Role %q", role)
 			}
 		}

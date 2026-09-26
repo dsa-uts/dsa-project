@@ -2,15 +2,15 @@ package projects
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
+	"net/http"
 	"sort"
 
 	"github.com/dsa-uts/dsa-project/backend/internal/api/generated"
 	"github.com/dsa-uts/dsa-project/backend/internal/api/httpauth"
-	"github.com/dsa-uts/dsa-project/backend/internal/api/httpresponse"
 	"github.com/dsa-uts/dsa-project/backend/internal/resourceimport"
 	"github.com/dsa-uts/dsa-project/backend/internal/store"
+	"github.com/labstack/echo/v4"
 	"golang.org/x/mod/semver"
 )
 
@@ -30,16 +30,7 @@ func (h *Handler) ListProjects(ctx context.Context, req generated.ListProjectsRe
 	}
 	result := make([]generated.Project, 0, len(projects))
 	for _, p := range projects {
-		// Decode only summary fields. Private jobs, presets and expected outputs never
-		// enter the response DTO. The complete snapshot was validated on import.
-		var snapshot struct {
-			Workflows map[string]struct {
-				Name string `json:"name"`
-			} `json:"workflows"`
-		}
-		if err := json.Unmarshal(p.ResourceJSON, &snapshot); err != nil {
-			return nil, err
-		}
+		snapshot := p.ResourceJSON
 		item := generated.Project{Id: p.ID, ResourceId: p.ResourceID, Name: p.Name,
 			LatestVersionId: p.LatestVersionID, LatestVersion: p.Version, DisplayOrder: p.DisplayOrder,
 			PublishedAt: p.PublishedAt, Deadline: p.Deadline, Workflows: make([]struct {
@@ -65,24 +56,14 @@ func (h *Handler) GetProject(ctx context.Context, req generated.GetProjectReques
 		return nil, err
 	}
 	if p == nil {
-		return generated.GetProject404JSONResponse(httpresponse.NewError("not_found", "Project not found.")), nil
+		return nil, echo.NewHTTPError(http.StatusNotFound, "Project not found.")
 	}
-	detail, err := projectDetail(p)
+	detail := projectDetail(p)
 	return generated.GetProject200JSONResponse(detail), err
 }
 
-func projectDetail(p *store.ProjectLatest) (generated.ProjectDetail, error) {
-	// Select display fields only; never serialize the full trusted snapshot.
-	var snapshot struct {
-		RequiredFiles []string `json:"required-files"`
-		Workflows     map[string]struct {
-			Name        string `json:"name"`
-			Description string `json:"description"`
-		} `json:"workflows"`
-	}
-	if err := json.Unmarshal(p.ResourceJSON, &snapshot); err != nil {
-		return generated.ProjectDetail{}, err
-	}
+func projectDetail(p *store.ProjectLatest) generated.ProjectDetail {
+	snapshot := p.ResourceJSON
 	detail := generated.ProjectDetail{Id: p.ID, ResourceId: p.ResourceID, Name: p.Name,
 		LatestVersionId: p.LatestVersionID, LatestVersion: p.Version, DisplayOrder: p.DisplayOrder,
 		PublishedAt: p.PublishedAt, Deadline: p.Deadline,
@@ -101,20 +82,20 @@ func projectDetail(p *store.ProjectLatest) (generated.ProjectDetail, error) {
 		}{workflow.Description, id, workflow.Name})
 	}
 	sort.Slice(detail.Workflows, func(i, j int) bool { return detail.Workflows[i].Id < detail.Workflows[j].Id })
-	return detail, nil
+	return detail
 }
 
 func (h *Handler) UpdateProjects(ctx context.Context, req generated.UpdateProjectsRequestObject) (generated.UpdateProjectsResponseObject, error) {
 	updates := make([]store.ProjectUpdate, 0, len(req.Body.Projects))
 	for _, p := range req.Body.Projects {
 		if p.PublishedAt != nil && p.Deadline != nil && p.PublishedAt.After(*p.Deadline) {
-			return generated.UpdateProjects422JSONResponse(httpresponse.NewError("validation_failed", "Deadline must not precede publication.")), nil
+			return nil, echo.NewHTTPError(http.StatusUnprocessableEntity, "Deadline must not precede publication")
 		}
 		updates = append(updates, store.ProjectUpdate{ID: p.Id, PublishedAt: p.PublishedAt, Deadline: p.Deadline})
 	}
 	err := h.projects.UpdateProjects(ctx, updates)
 	if errors.Is(err, store.ErrProjectIDsMismatch) {
-		return generated.UpdateProjects422JSONResponse(httpresponse.NewError("project_ids_mismatch", "Projects changed. Reload the complete list and save again.")), nil
+		return nil, echo.NewHTTPError(http.StatusConflict, "Projects changed. Reload the complete list and save again.")
 	}
 	if err != nil {
 		return nil, err
@@ -125,7 +106,7 @@ func (h *Handler) UpdateProjects(ctx context.Context, req generated.UpdateProjec
 func (h *Handler) ImportResource(ctx context.Context, req generated.ImportResourceRequestObject) (generated.ImportResourceResponseObject, error) {
 	id, version := req.Body.ResourceId, req.Body.Version
 	if !resourceimport.ValidVersion(version) {
-		return generated.ImportResource422JSONResponse(httpresponse.NewError("invalid_resource_version", "Version must be a formal vMAJOR.MINOR.PATCH.")), nil
+		return nil, echo.NewHTTPError(http.StatusUnprocessableEntity, "Version must be a formal vMAJOR.MINOR.PATCH.")
 	}
 	current, err := h.projects.CurrentVersion(ctx, id)
 	if err != nil {
@@ -134,22 +115,18 @@ func (h *Handler) ImportResource(ctx context.Context, req generated.ImportResour
 	if current != nil {
 		switch semver.Compare(version, current.Version) {
 		case -1:
-			return importError(store.ErrOlderResourceVersion)
+			return nil, importError(store.ErrOlderResourceVersion)
 		case 0:
 			return importResponse(current, false), nil
 		}
 	}
 	snapshot, err := h.source.Fetch(ctx, id, version)
 	if err != nil {
-		return importError(err)
+		return nil, importError(err)
 	}
-	data, err := json.Marshal(snapshot)
+	current, changed, err := h.projects.ImportVersion(ctx, *snapshot)
 	if err != nil {
-		return nil, err
-	}
-	current, changed, err := h.projects.ImportVersion(ctx, id, snapshot.Metadata.Name, version, data)
-	if err != nil {
-		return importError(err)
+		return nil, importError(err)
 	}
 	return importResponse(current, changed), nil
 }
@@ -158,17 +135,28 @@ func importResponse(p *store.ProjectLatest, changed bool) generated.ImportResour
 	return generated.ImportResource200JSONResponse{ProjectId: p.ID, VersionId: p.LatestVersionID, ResourceId: p.ResourceID, Version: p.Version, Changed: changed}
 }
 
-func importError(err error) (generated.ImportResourceResponseObject, error) {
+func importError(err error) error {
 	switch {
 	case errors.Is(err, store.ErrOlderResourceVersion):
-		return generated.ImportResource409JSONResponse(httpresponse.NewError(err.Error(), "The requested Version is older than the current Version.")), nil
+		return echo.NewHTTPError(
+			http.StatusConflict,
+			"The requested Version is older than the current Version.",
+		)
 	case errors.Is(err, resourceimport.ErrNotFound):
-		return generated.ImportResource404JSONResponse(httpresponse.NewError(err.Error(), "The requested Resource Version is not in the index.")), nil
-	case errors.Is(err, resourceimport.ErrInvalid), errors.Is(err, resourceimport.ErrHashMismatch):
-		return generated.ImportResource422JSONResponse(httpresponse.NewError(err.Error(), "Resource validation failed.")), nil
+		return echo.NewHTTPError(
+			http.StatusNotFound,
+			"The requested Resource Version is not in the index.",
+		)
+	case errors.Is(err, resourceimport.ErrInvalid),
+		errors.Is(err, resourceimport.ErrHashMismatch):
+		return echo.NewHTTPError(
+			http.StatusUnprocessableEntity,
+			"Resource validation failed.",
+		)
 	case errors.Is(err, resourceimport.ErrUnavailable):
-		return generated.ImportResource503JSONResponse(httpresponse.NewError(err.Error(), "The Resource source is unavailable.")), nil
+		return echo.NewHTTPError(http.StatusServiceUnavailable).
+			SetInternal(err)
 	default:
-		return nil, err
+		return err
 	}
 }

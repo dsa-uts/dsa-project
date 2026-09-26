@@ -14,13 +14,21 @@ var ErrNotFound = errors.New("not found")
 
 const maxSessionsPerUser = 5
 
+type Role string
+
+const (
+	RoleStudent Role = "student"
+	RoleManager Role = "manager"
+	RoleAdmin   Role = "admin"
+)
+
 type UserAccount struct {
 	bun.BaseModel `bun:"table:user_accounts"`
 
 	ID           uuid.UUID  `bun:"id,pk,default:gen_random_uuid()"`
 	Userid       string     `bun:"userid,notnull"`
 	Name         string     `bun:"name,notnull"`
-	Role         string     `bun:"role,notnull"`
+	Role         Role       `bun:"role,notnull"`
 	PasswordHash string     `bun:"password_hash,notnull"`
 	DisabledAt   *time.Time `bun:"disabled_at"`
 	DisplayOrder int64      `bun:"display_order,autoincrement"`

@@ -616,12 +616,17 @@ components:
         disabled: { type: boolean }
     Error:
       type: object
-      required: [message]
+      required: [code, message]
       properties:
-        message: { type: string }
         code:
+          type: integer
+          description: HTTPレスポンスのステータスコードと同じ値
+          minimum: 400
+          maximum: 599
+          exampe: 404
+        message:
           type: string
-          description: Optional application error code; generic errors use HTTP status only.
+          example: Project not found.
   responses:
     BadRequest:
       description: Invalid input, including malformed bodies, unsupported Content-Type, and file size limits

@@ -381,9 +381,10 @@ export interface components {
             disabled?: boolean;
         };
         Error: {
+            /** @description HTTPレスポンスのステータスコードと同じ値 */
+            code: number;
+            /** @example Project not found. */
             message: string;
-            /** @description Optional application error code; generic errors use HTTP status only. */
-            code?: string;
         };
     };
     responses: {

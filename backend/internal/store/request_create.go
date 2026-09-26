@@ -20,12 +20,22 @@ var (
 
 // CreateValidation commits the Submission, files and Request together. Unique
 // constraints also protect content deduplication across concurrent requests.
-func (s *RequestStore) CreateValidation(ctx context.Context, actor *UserAccount, projectID uuid.UUID, submissionID *uuid.UUID, files []SubmissionFile, hash string) (*Request, error) {
+func (s *RequestStore) CreateValidation(
+	ctx context.Context,
+	actorID uuid.UUID,
+	actorRole Role,
+	projectID uuid.UUID,
+	submissionID *uuid.UUID,
+	files []SubmissionFile,
+	hash string,
+) (*Request, error) {
 	result := new(Request)
 	err := s.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
 		project := new(Project)
-		query := tx.NewSelect().Model(project).Where("id = ?", projectID)
-		if actor.Role == "student" {
+		query := tx.NewSelect().
+			Model(project).
+			Where("id = ?", projectID)
+		if actorRole == RoleStudent {
 			query = query.Where("published_at <= CURRENT_TIMESTAMP")
 		}
 		if err := query.Scan(ctx); err != nil {
@@ -34,7 +44,12 @@ func (s *RequestStore) CreateValidation(ctx context.Context, actor *UserAccount,
 			}
 			return err
 		}
-		submission := &Submission{ProjectID: projectID, Kind: "validation", SubjectUserID: actor.ID, ContentHash: hash}
+		submission := &Submission{
+			ProjectID:     projectID,
+			Kind:          ValidationKind,
+			SubjectUserID: actorID,
+			ContentHash:   hash,
+		}
 		if submissionID != nil {
 			if err := tx.NewSelect().Model(submission).Where("id = ?", *submissionID).Scan(ctx); err != nil {
 				if errors.Is(err, sql.ErrNoRows) {
@@ -42,14 +57,18 @@ func (s *RequestStore) CreateValidation(ctx context.Context, actor *UserAccount,
 				}
 				return err
 			}
-			if submission.SubjectUserID != actor.ID {
+			if submission.SubjectUserID != actorID {
 				return ErrSubmissionOwner
 			}
-			if submission.ProjectID != projectID || submission.Kind != "validation" {
+			if submission.ProjectID != projectID || submission.Kind != ValidationKind {
 				return ErrSubmissionScope
 			}
 		} else {
-			inserted, err := tx.NewInsert().Model(submission).On("CONFLICT (project_id, kind, subject_user_id, content_hash) DO NOTHING").Returning("id").Exec(ctx)
+			inserted, err := tx.NewInsert().
+				Model(submission).
+				On("CONFLICT (project_id, kind, subject_user_id, content_hash) DO NOTHING").
+				Returning("id").
+				Exec(ctx)
 			if err != nil {
 				return err
 			}
@@ -58,7 +77,10 @@ func (s *RequestStore) CreateValidation(ctx context.Context, actor *UserAccount,
 				return err
 			}
 			if count == 0 {
-				if err := tx.NewSelect().Model(submission).Where("project_id = ? AND kind = ? AND subject_user_id = ? AND content_hash = ?", projectID, "validation", actor.ID, hash).Scan(ctx); err != nil {
+				if err := tx.NewSelect().
+					Model(submission).
+					Where("project_id = ? AND kind = ? AND subject_user_id = ? AND content_hash = ?", projectID, "validation", actorID, hash).
+					Scan(ctx); err != nil {
 					return err
 				}
 			} else {
@@ -70,7 +92,13 @@ func (s *RequestStore) CreateValidation(ctx context.Context, actor *UserAccount,
 				}
 			}
 		}
-		*result = Request{ProjectID: projectID, SubmissionID: submission.ID, VersionID: project.LatestVersionID, RequestedBy: actor.ID, State: "pending"}
+		*result = Request{
+			ProjectID:    projectID,
+			SubmissionID: submission.ID,
+			VersionID:    project.LatestVersionID,
+			RequestedBy:  actorID,
+			State:        PendingState,
+		}
 		if _, err := tx.NewInsert().Model(result).Exec(ctx); err != nil {
 			return err
 		}

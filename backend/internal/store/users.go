@@ -33,7 +33,7 @@ func (s *AuthStore) CreateUser(ctx context.Context, user *UserAccount) error {
 
 type UserUpdate struct {
 	Name         *string
-	Role         *string
+	Role         *Role
 	PasswordHash *string
 	Disabled     *bool
 }
