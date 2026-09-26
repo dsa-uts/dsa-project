@@ -21,7 +21,7 @@ test('Apply preflights all rows, continues failures, retains passwords and expor
       const data: components['schemas']['CreateUserAccountRequest'] = await request.json()
       created.push(data)
       status = data.userid === 'taken' ? 409 : 201
-      body = status === 409 ? { error: { code: 'userid_taken', message: 'Already taken.' } } : { ...data, id: crypto.randomUUID(), disabled: false }
+      body = status === 409 ? { code: 'userid_taken', message: 'Already taken.' } : { ...data, id: crypto.randomUUID(), disabled: false }
     } else if (path === '/api/admin/users') body = { users: [] }
     return new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } })
   }))

@@ -50,8 +50,8 @@ function UserDialog({ user, onClose, onSaved }: { user: User | null; onClose: ()
         ? await fetchClient.PATCH('/api/admin/users/{user_id}', { params: { path: { user_id: user.id } }, body: { name: fields.name, ...(user.role !== 'admin' ? { role: fields.role } : {}), ...(fields.password !== '' ? { password: fields.password } : {}) } })
         : await fetchClient.POST('/api/admin/users', { body: { userid: fields.userid, name: fields.name, role: fields.role, password: fields.password } })
       if (result.error) {
-        if (result.error.error.code === 'userid_taken') setErrors({ userid: 'This User ID is already taken.' })
-        else setApiError(result.error.error.message)
+        if (result.error.code === 'userid_taken') setErrors({ userid: 'This User ID is already taken.' })
+        else setApiError(result.error.message)
         return
       }
       await onSaved(user ? 'User Account updated.' : 'User Account created.')
@@ -98,7 +98,7 @@ function UsersScreen() {
     setBusy(true)
     try {
       const result = await fetchClient.PATCH('/api/admin/users/{user_id}', { params: { path: { user_id: user.id } }, body })
-      if (result.error) { setMutationError(result.error.error.message); return }
+      if (result.error) { setMutationError(result.error.message); return }
       await saved(body.disabled ? 'User Account disabled. All sessions ended.' : 'User Account re-enabled.')
       setMutationError('')
       setDisabling(null)

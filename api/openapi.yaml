@@ -30,7 +30,7 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/CurrentUser" }
         "401": { $ref: "#/components/responses/InvalidCredentials" }
-        "422": { $ref: "#/components/responses/ValidationError" }
+        "400": { $ref: "#/components/responses/BadRequest" }
         "500": { $ref: "#/components/responses/InternalError" }
     delete:
       operationId: deleteSession
@@ -94,7 +94,7 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/UserAccount" }
         "409": { $ref: "#/components/responses/UserConflict" }
-        "422": { $ref: "#/components/responses/ValidationError" }
+        "400": { $ref: "#/components/responses/BadRequest" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "500": { $ref: "#/components/responses/InternalError" }
@@ -128,7 +128,7 @@ paths:
               schema: { $ref: "#/components/schemas/UserAccount" }
         "404": { $ref: "#/components/responses/NotFound" }
         "409": { $ref: "#/components/responses/UserConflict" }
-        "422": { $ref: "#/components/responses/ValidationError" }
+        "400": { $ref: "#/components/responses/BadRequest" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "500": { $ref: "#/components/responses/InternalError" }
@@ -159,8 +159,9 @@ paths:
           description: Global display order saved
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
+        "400": { $ref: "#/components/responses/BadRequest" }
         "422":
-          description: user_ids_mismatch for an incomplete or incorrect set; validation_failed for malformed input
+          description: user_ids_mismatch for an incomplete or incorrect set
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
@@ -214,11 +215,7 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
-        "422":
-          description: validation_failed
-          content:
-            application/json:
-              schema: { $ref: "#/components/schemas/Error" }
+        "400": { $ref: "#/components/responses/BadRequest" }
         "500": { $ref: "#/components/responses/InternalError" }
   /api/admin/projects:
     patch:
@@ -247,6 +244,7 @@ paths:
         "204": { description: Schedules and order saved; reload GET /api/projects }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
+        "400": { $ref: "#/components/responses/BadRequest" }
         "422":
           description: project_ids_mismatch or validation_failed; nothing is changed
           content:
@@ -304,8 +302,9 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
+        "400": { $ref: "#/components/responses/BadRequest" }
         "422":
-          description: invalid_resource_version, invalid_resource, resource_hash_mismatch, or validation_failed
+          description: invalid_resource_version, invalid_resource, or resource_hash_mismatch
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
@@ -376,7 +375,7 @@ paths:
               schema: { $ref: '#/components/schemas/CreatedRequest' }
         "401": { $ref: '#/components/responses/Unauthorized' }
         "403":
-          description: Submission belongs to another user (including for Managers and Admins)
+          description: Submission belongs to another user (including for Managers and Admins), or security validation could not read the HTTP body (including the 21,000,000-byte limit)
           content:
             application/json:
               schema: { $ref: '#/components/schemas/Error' }
@@ -390,16 +389,7 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/Error' }
-        "413":
-          description: payload_too_large (file contents or HTTP body exceed the limit)
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/Error' }
-        "415":
-          description: unsupported_media_type
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/Error' }
+        "400": { $ref: '#/components/responses/BadRequest' }
         "422": { $ref: '#/components/responses/ValidationError' }
         "500": { $ref: '#/components/responses/InternalError' }
 
@@ -443,7 +433,7 @@ components:
                   slashes are normalized; the parent folder is preserved. Absolute paths,
                   drive-letter paths, backslashes, NUL, parent (..) components, and paths
                   normalizing to empty are rejected. Normalized duplicate paths and
-                  file/directory collisions return 422 with the paths in error.message.
+                  file/directory collisions return 422 with the paths in message.
     CreatedRequest:
       type: object
       additionalProperties: false
@@ -632,17 +622,20 @@ components:
         disabled: { type: boolean }
     Error:
       type: object
-      required: [error]
+      required: [message]
       properties:
-        error:
-          type: object
-          required: [code, message]
-          properties:
-            code: { type: string }
-            message: { type: string }
+        message: { type: string }
+        code:
+          type: string
+          description: Optional application error code; generic errors use HTTP status only.
   responses:
+    BadRequest:
+      description: Invalid input, including malformed bodies, unsupported Content-Type, and file size limits
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
     ValidationError:
-      description: バリデーション失敗
+      description: 業務上の制約違反
       content:
         application/json:
           schema: { $ref: "#/components/schemas/Error" }

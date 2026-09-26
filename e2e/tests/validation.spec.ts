@@ -10,10 +10,13 @@ function multipart(files: { path: string; content: Buffer }[], metadata = JSON.s
   chunks.push(Buffer.from(`--${boundary}--\r\n`))
   return { data: Buffer.concat(chunks), contentType: `multipart/form-data; boundary=${boundary}` }
 }
-async function error(response: APIResponse, status: number, code: string) {
+async function error(response: APIResponse, status: number, code?: string) {
   expect(response.status(), await response.text()).toBe(status)
   expect(response.headers()['cache-control']).toBe('no-store')
-  expect(await response.json()).toMatchObject({ error: { code } })
+  const body = await response.json()
+  expect(body.message).toEqual(expect.any(String))
+  expect(body.code).toBe(code)
+  expect(body).not.toHaveProperty('error')
 }
 
 test('Validation upload, concurrent replay, scope and input limits', async ({ request }) => {
@@ -32,14 +35,15 @@ test('Validation upload, concurrent replay, scope and input limits', async ({ re
   const send = (body = multipart(files), key: string = randomUUID(), target = url, auth = cookie) => request.post(target, {
     data: body.data, headers: { Cookie: auth, 'Content-Type': body.contentType, 'Idempotency-Key': key },
   })
-  await error(await send(undefined, undefined, url, ''), 401, 'unauthorized')
-  await error(await send({ data: Buffer.from('x'), contentType: 'text/plain' }, undefined, url, ''), 401, 'unauthorized')
+  await error(await send(undefined, undefined, url, ''), 401)
+  await error(await send({ data: Buffer.from('x'), contentType: 'text/plain' }, undefined, url, ''), 401)
   // kin-openapi buffers the body before invoking authentication; the transport
-  // size limit therefore also applies to unauthenticated requests.
-  await error(await send({ data: Buffer.alloc(21_000_001, 32), contentType: 'application/json' }, undefined, url, ''), 413, 'payload_too_large')
-  await error(await send(undefined, 'bad'), 422, 'validation_failed')
-  await error(await request.post(url, { data: {}, headers: { Cookie: cookie, 'Content-Type': 'application/json' } }), 422, 'validation_failed')
-  await error(await send({ data: Buffer.from('x'), contentType: 'text/plain' }), 415, 'unsupported_media_type')
+  // size limit therefore also applies to unauthenticated requests. Keep the
+  // middleware default: security-stage read failures return 403.
+  await error(await send({ data: Buffer.alloc(21_000_001, 32), contentType: 'application/json' }, undefined, url, ''), 403)
+  await error(await send(undefined, 'bad'), 400)
+  await error(await request.post(url, { data: {}, headers: { Cookie: cookie, 'Content-Type': 'application/json' } }), 400)
+  await error(await send({ data: Buffer.from('x'), contentType: 'text/plain' }), 400)
   await error(await send(undefined, undefined, `/api/projects/${randomUUID()}/validation`), 404, 'not_found')
 
   const key = randomUUID()
@@ -64,22 +68,22 @@ test('Validation upload, concurrent replay, scope and input limits', async ({ re
   expect((await again.json()).id).not.toBe(created.id)
   await error(await request.post(url, { data: { submission_id: randomUUID() }, headers: { Cookie: cookie, 'Idempotency-Key': randomUUID() } }), 404, 'not_found')
   for (const data of [{}, { submission_id: 'bad' }, { submission_id: randomUUID(), kind: 'evaluation' }]) {
-    await error(await request.post(url, { data, headers: { Cookie: cookie, 'Idempotency-Key': randomUUID() } }), 422, 'validation_failed')
+    await error(await request.post(url, { data, headers: { Cookie: cookie, 'Idempotency-Key': randomUUID() } }), 400)
   }
 
   for (const paths of [[], ['a', './a'], ['answer', 'answer/main.c'], ['../x'], ['/x'], ['a/../x'], ['C:/x'], ['a\\b'], Array.from({ length: 51 }, (_, i) => `file${i}`)]) {
     const response = await send(multipart(paths.map(path => ({ path, content: Buffer.alloc(0) }))))
-    await error(response, 422, 'validation_failed')
-    if (paths[0] === 'answer') expect((await response.json()).error.message).toContain('answer')
+    await error(response, paths.length === 0 || paths.length > 50 ? 400 : 422, paths.length === 0 || paths.length > 50 ? undefined : 'validation_failed')
+    if (paths[0] === 'answer') expect((await response.json()).message).toContain('answer')
   }
-  await error(await send(multipart(files, '{')), 422, 'validation_failed')
+  await error(await send(multipart(files, '{')), 400)
   await error(await send(multipart(files, JSON.stringify({ files: [{ part: 'missing', path: 'a' }] }))), 422, 'validation_failed')
   await error(await send(multipart(files, JSON.stringify({ files: [{ part: 'file0', path: 'a' }] }))), 422, 'validation_failed')
   const limitKey = randomUUID()
-  await error(await send(multipart([{ path: 'large', content: Buffer.alloc(20_000_001) }]), limitKey), 413, 'payload_too_large')
+  await error(await send(multipart([{ path: 'large', content: Buffer.alloc(20_000_001) }]), limitKey), 400)
   // Rejection must not consume the key or leave a partial Request.
   expect((await send(undefined, limitKey)).status()).toBe(201)
-  await error(await send({ data: Buffer.alloc(21_000_001, 32), contentType: 'application/json' }), 413, 'payload_too_large')
+  await error(await send({ data: Buffer.alloc(21_000_001, 32), contentType: 'application/json' }), 403)
 })
 
 test('Validation respects Project visibility and permits every logged-in Role', async ({ request }) => {

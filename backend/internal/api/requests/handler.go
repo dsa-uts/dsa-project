@@ -27,24 +27,24 @@ func (h *Handler) CreateValidation(ctx context.Context, req generated.CreateVali
 		var err error
 		files, hash, err = readUpload(req.MultipartBody)
 		if errors.Is(err, errFilesTooLarge) {
-			return generated.CreateValidation413JSONResponse(httpresponse.NewError("payload_too_large", err.Error())), nil
+			return generated.CreateValidation400JSONResponse{Code: &httpresponse.ValidationErrorCode, Message: err.Error()}, nil
 		}
 		if err != nil {
-			return invalid(err.Error()), nil
+			return generated.CreateValidation422JSONResponse{Code: &httpresponse.ValidationErrorCode, Message: err.Error()}, nil
 		}
 	} else {
-		return invalid("Request body is required."), nil
+		return generated.CreateValidation400JSONResponse{Code: &httpresponse.ValidationErrorCode, Message: "Request body is required."}, nil
 	}
 	result, created, err := h.requests.CreateValidation(ctx, httpauth.Actor(ctx), req.ProjectId, req.Params.IdempotencyKey.String(), submissionID, files, hash)
 	switch {
 	case errors.Is(err, store.ErrNotFound):
-		return generated.CreateValidation404JSONResponse(httpresponse.NewError("not_found", "Project or Submission not found.")), nil
+		return generated.CreateValidation404JSONResponse{Code: &httpresponse.NotFoundErrorCode, Message: "Project or Submission not found."}, nil
 	case errors.Is(err, store.ErrSubmissionOwner):
-		return generated.CreateValidation403JSONResponse(httpresponse.NewError("forbidden", "Submission belongs to another user.")), nil
+		return generated.CreateValidation403JSONResponse{Code: &httpresponse.ForbiddenErrorCode, Message: "Submission belongs to another user."}, nil
 	case errors.Is(err, store.ErrSubmissionScope):
-		return invalid("Submission must belong to this Project and have kind validation."), nil
+		return generated.CreateValidation422JSONResponse{Code: &httpresponse.ValidationErrorCode, Message: "Submission must belong to this Project and have kind validation."}, nil
 	case errors.Is(err, store.ErrIdempotencyConflict):
-		return generated.CreateValidation409JSONResponse(httpresponse.NewError("idempotency_key_conflict", "Key already used for another Project or kind.")), nil
+		return generated.CreateValidation409JSONResponse{Code: &httpresponse.IdempotencyKeyConflictErrorCode, Message: "Key already used for another Project or kind."}, nil
 	case err != nil:
 		return nil, err
 	}
@@ -55,6 +55,3 @@ func (h *Handler) CreateValidation(ctx context.Context, req generated.CreateVali
 	return generated.CreateValidation200JSONResponse(body), nil
 }
 
-func invalid(message string) generated.CreateValidation422JSONResponse {
-	return generated.CreateValidation422JSONResponse{ValidationErrorJSONResponse: generated.ValidationErrorJSONResponse(httpresponse.NewError("validation_failed", message))}
-}

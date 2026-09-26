@@ -50,11 +50,7 @@ func Authenticate(authStore *store.AuthStore) openapi3filter.AuthenticationFunc 
 		// Startup validation permits at most one minimum Role.
 		for _, role := range input.Scopes {
 			if !auth.AllowsRole(user.Role, role) {
-				label := role
-				if role == "admin" {
-					label = "Admin"
-				}
-				return echo.NewHTTPError(http.StatusForbidden, fmt.Sprintf("%s Role is required.", label))
+				return echo.NewHTTPError(http.StatusForbidden, fmt.Sprintf("%s Role is required.", role))
 			}
 		}
 		c.SetRequest(c.Request().WithContext(context.WithValue(requestContext, actorContextKey{}, user)))

@@ -2,10 +2,13 @@ package httpresponse
 
 import "github.com/dsa-uts/dsa-project/backend/internal/api/generated"
 
-// NewError builds the api.md unified error envelope.
+var ValidationErrorCode = "validation_failed"
+var NotFoundErrorCode = "not_found"
+var ForbiddenErrorCode = "forbidden"
+
+var IdempotencyKeyConflictErrorCode = "idempotency_key_conflict"
+
+// NewError builds an application error with a machine-readable code.
 func NewError(code, message string) generated.Error {
-	var e generated.Error
-	e.Error.Code = code
-	e.Error.Message = message
-	return e
+	return generated.Error{Code: &code, Message: message}
 }

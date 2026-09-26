@@ -86,10 +86,13 @@ async function cookie(request: APIRequestContext, role = 'admin') {
   expect(response.status()).toBe(200)
   return { Cookie: response.headers()['set-cookie'].split(';')[0] }
 }
-async function error(response: APIResponse, status: number, code: string) {
+async function error(response: APIResponse, status: number, code?: string) {
   expect(response.status()).toBe(status)
   expect(response.headers()['cache-control']).toBe('no-store')
-  expect(await response.json()).toMatchObject({ error: { code } })
+  const body = await response.json()
+  expect(body.message).toEqual(expect.any(String))
+  expect(body.code).toBe(code)
+  expect(body).not.toHaveProperty('error')
 }
 
 test('Project authorization precedes input validation', async ({ request }) => {
@@ -98,10 +101,10 @@ test('Project authorization precedes input validation', async ({ request }) => {
     for (const response of [
       await request.patch('/api/admin/projects', { headers, data: {} }),
       await request.post('/api/admin/resource-imports', { headers, data: { version: 'invalid' } }),
-    ]) await error(response, role ? 403 : 401, role ? 'forbidden' : 'unauthorized')
+    ]) await error(response, role ? 403 : 401)
   }
-  await error(await request.get('/api/projects', { headers: { Cookie: '' } }), 401, 'unauthorized')
-  await error(await request.get('/api/projects/invalid', { headers: { Cookie: '' } }), 401, 'unauthorized')
+  await error(await request.get('/api/projects', { headers: { Cookie: '' } }), 401)
+  await error(await request.get('/api/projects/invalid', { headers: { Cookie: '' } }), 401)
 })
 
 test('real Resource import, idempotence, publication and atomic bulk saves', async ({ request }) => {
@@ -140,7 +143,7 @@ test('real Resource import, idempotence, publication and atomic bulk saves', asy
     expect(workflow.description_markdown).toEqual(expect.any(String))
     expect(workflow.description_markdown.length).toBeGreaterThan(0)
   }
-  await error(await request.get('/api/projects/invalid', { headers }), 422, 'validation_failed')
+  await error(await request.get('/api/projects/invalid', { headers }), 400)
   await error(await request.get(`/api/projects/${randomUUID()}`, { headers }), 404, 'not_found')
   expect(project).toMatchObject({ resource_id: 'ex1', latest_version_id: result.version_id, latest_version: 'v1.0.0', my_result: null })
   expect(Object.keys(project).sort()).toEqual(['id','resource_id','name','latest_version_id','latest_version','display_order','published_at','deadline','workflows','my_result'].sort())
@@ -158,7 +161,7 @@ test('real Resource import, idempotence, publication and atomic bulk saves', asy
   for (const version of ['1.0.0','v1.0','v01.0.0','v1.0.0-rc.1','v1.0.0+build']) {
     await error(await request.post('/api/admin/resource-imports', { headers, data: { ...data, version } }), 422, 'invalid_resource_version')
   }
-  await error(await request.post('/api/admin/resource-imports', { headers, data: { ...data, repository: 'https://evil.test' } }), 422, 'validation_failed')
+  await error(await request.post('/api/admin/resource-imports', { headers, data: { ...data, repository: 'https://evil.test' } }), 400)
   await error(await request.post('/api/admin/resource-imports', { headers, data: { resource_id: `missing-${randomUUID()}`, version: 'v1.0.0' } }), 404, 'resource_version_not_found')
   expect(await list()).toEqual(after)
 
@@ -177,14 +180,15 @@ test('real Resource import, idempotence, publication and atomic bulk saves', asy
       await error(await save(projects), 422, 'project_ids_mismatch')
       expect(await list()).toEqual(saved)
     }
+    await error(await save([{ ...updates[0], deadline: '1999-01-01T00:00:00Z' }, ...updates.slice(1)]), 422, 'validation_failed')
+    expect(await list()).toEqual(saved)
     for (const invalid of [
       { id: result.project_id, published_at: null },
-      { ...updates[0], deadline: '1999-01-01T00:00:00Z' },
       { ...updates[0], published_at: 'invalid' },
       { ...updates[0], published_at: '2020-01-01T09:00:00+09:00' },
       { ...updates[0], name: 'Must not change' },
     ]) {
-      await error(await save([invalid, ...updates.slice(1)]), 422, 'validation_failed')
+      await error(await save([invalid, ...updates.slice(1)]), 400)
       expect(await list()).toEqual(saved)
     }
     expect((await save(updates.map((p: { id: string }) => ({ ...p, published_at: null })))).status()).toBe(204)

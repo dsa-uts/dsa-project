@@ -90,8 +90,8 @@ function ProjectsScreen() {
     try {
       const result = await fetchClient.PATCH('/api/admin/projects', { body: { projects: rows.map(({ id, published_at, deadline }) => ({ id, published_at, deadline })) } })
       if (result.error) {
-        setMismatch(result.error.error.code === 'project_ids_mismatch')
-        setError(result.error.error.code === 'project_ids_mismatch' ? '課題一覧が変更されています。編集を破棄して再読み込みし、もう一度変更してください。' : result.error.error.message)
+        setMismatch(result.error.code === 'project_ids_mismatch')
+        setError(result.error.code === 'project_ids_mismatch' ? '課題一覧が変更されています。編集を破棄して再読み込みし、もう一度変更してください。' : result.error.message)
         return
       }
       queryClient.setQueryData($api.queryOptions('get', '/api/projects', {}).queryKey, { projects: rows.map((row, display_order) => ({ ...row, display_order })) })
@@ -107,7 +107,7 @@ function ProjectsScreen() {
     working.current = true; setBusy(true); setError(''); setNotice('')
     try {
       const result = await fetchClient.POST('/api/admin/resource-imports', { body: { resource_id: resourceId, version } })
-      if (result.error) { setError(result.error.error.message); return }
+      if (result.error) { setError(result.error.message); return }
       setNotice(result.data.changed ? '新しいバージョンを登録しました。' : '同じバージョンが登録済みです。変更はありません。')
       await reload()
     } catch { setError('登録できませんでした。通信を確認して同じバージョンで再試行してください。') }

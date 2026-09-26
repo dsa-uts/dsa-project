@@ -15,8 +15,8 @@ function renderAdmin() {
       if (request.method === 'GET') body = { users: [] }
       else {
         const data = await request.json()
-        status = data.userid === 'taken' ? 409 : 422
-        body = { error: { code: status === 409 ? 'userid_taken' : 'validation_failed', message: 'Rejected by server.' } }
+        status = data.userid === 'taken' ? 409 : 400
+        body = { ...(status === 409 ? { code: 'userid_taken' } : {}), message: 'Rejected by server.' }
       }
     }
     return new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } })

@@ -237,7 +237,7 @@ export interface components {
                  *     slashes are normalized; the parent folder is preserved. Absolute paths,
                  *     drive-letter paths, backslashes, NUL, parent (..) components, and paths
                  *     normalizing to empty are rejected. Normalized duplicate paths and
-                 *     file/directory collisions return 422 with the paths in error.message.
+                 *     file/directory collisions return 422 with the paths in message.
                  */
                 path: string;
             }[];
@@ -382,14 +382,22 @@ export interface components {
             disabled?: boolean;
         };
         Error: {
-            error: {
-                code: string;
-                message: string;
-            };
+            message: string;
+            /** @description Optional application error code; generic errors use HTTP status only. */
+            code?: string;
         };
     };
     responses: {
-        /** @description バリデーション失敗 */
+        /** @description Invalid input, including malformed bodies, unsupported Content-Type, and file size limits */
+        BadRequest: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["Error"];
+            };
+        };
+        /** @description 業務上の制約違反 */
         ValidationError: {
             headers: {
                 [name: string]: unknown;
@@ -486,8 +494,8 @@ export interface operations {
                     "application/json": components["schemas"]["CurrentUser"];
                 };
             };
+            400: components["responses"]["BadRequest"];
             401: components["responses"]["InvalidCredentials"];
-            422: components["responses"]["ValidationError"];
             500: components["responses"]["InternalError"];
         };
     };
@@ -582,10 +590,10 @@ export interface operations {
                     "application/json": components["schemas"]["UserAccount"];
                 };
             };
+            400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             409: components["responses"]["UserConflict"];
-            422: components["responses"]["ValidationError"];
             500: components["responses"]["InternalError"];
         };
     };
@@ -613,11 +621,11 @@ export interface operations {
                     "application/json": components["schemas"]["UserAccount"];
                 };
             };
+            400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
             409: components["responses"]["UserConflict"];
-            422: components["responses"]["ValidationError"];
             500: components["responses"]["InternalError"];
         };
     };
@@ -643,9 +651,10 @@ export interface operations {
                 };
                 content?: never;
             };
+            400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
-            /** @description user_ids_mismatch for an incomplete or incorrect set; validation_failed for malformed input */
+            /** @description user_ids_mismatch for an incomplete or incorrect set */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -702,19 +711,11 @@ export interface operations {
                     "application/json": components["schemas"]["ProjectDetail"];
                 };
             };
+            400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             /** @description Project not found or not visible */
             404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description validation_failed */
-            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -747,6 +748,7 @@ export interface operations {
                 };
                 content?: never;
             };
+            400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             /** @description project_ids_mismatch or validation_failed; nothing is changed */
@@ -795,6 +797,7 @@ export interface operations {
                     };
                 };
             };
+            400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             /** @description resource_version_not_found (not in index) */
@@ -815,7 +818,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description invalid_resource_version, invalid_resource, resource_hash_mismatch, or validation_failed */
+            /** @description invalid_resource_version, invalid_resource, or resource_hash_mismatch */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -879,8 +882,9 @@ export interface operations {
                     "application/json": components["schemas"]["CreatedRequest"];
                 };
             };
+            400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
-            /** @description Submission belongs to another user (including for Managers and Admins) */
+            /** @description Submission belongs to another user (including for Managers and Admins), or security validation could not read the HTTP body (including the 21,000,000-byte limit) */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -900,24 +904,6 @@ export interface operations {
             };
             /** @description idempotency_key_conflict (different Project or kind) */
             409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description payload_too_large (file contents or HTTP body exceed the limit) */
-            413: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description unsupported_media_type */
-            415: {
                 headers: {
                     [name: string]: unknown;
                 };

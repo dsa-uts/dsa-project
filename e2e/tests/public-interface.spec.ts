@@ -47,9 +47,9 @@ test('login validates input and makes authentication failures indistinguishable'
   ]
   for (const data of invalidInputs) {
     const response = await request.post('/api/session', { data, headers: presentedSession })
-    expect(response.status()).toBe(422)
+    expect(response.status()).toBe(400)
     expect(response.headers()['cache-control']).toBe('no-store')
-    await expect(response.json()).resolves.toMatchObject({ error: { code: 'validation_failed' } })
+    await expect(response.json()).resolves.toMatchObject({ message: expect.any(String) })
   }
 
   const attempts = [
@@ -66,7 +66,7 @@ test('login validates input and makes authentication failures indistinguishable'
     expect(response.headers()['cache-control']).toBe('no-store')
     bodies.push(await response.json())
   }
-  expect(bodies).toEqual(attempts.map(() => ({ error: { code: 'invalid_credentials', message: 'Invalid userid or password.' } })))
+  expect(bodies).toEqual(attempts.map(() => ({ code: 'invalid_credentials', message: 'Invalid userid or password.' })))
   expect((await request.get('/api/me', { headers: presentedSession })).status()).toBe(200)
 })
 
@@ -113,7 +113,7 @@ test('a User Account retains only its five latest sequential sessions', async ({
   expect(responses.map(response => response.status())).toEqual([401, 200, 200, 200, 200, 200])
   expect(responses[0].headers()['set-cookie']).toContain('Max-Age=0')
   await expect(responses[0].json()).resolves.toEqual({
-    error: { code: 'unauthorized', message: 'Authentication is required.' },
+    message: 'Authentication is required.',
   })
 })
 
@@ -157,7 +157,7 @@ test('invalid and expired sessions are rejected and cleared', async ({ request }
   expect(expiredAgain.status()).toBe(401)
 })
 
-test('health and the generic API error envelope remain available', async ({ request }) => {
+test('health and the generic API errors remain available', async ({ request }) => {
   // Exercise connection reuse through the public ingress, not just its first response.
   for (let attempt = 0; attempt < 3; attempt++) {
     expect((await request.get('/health')).status()).toBe(200)
@@ -166,5 +166,5 @@ test('health and the generic API error envelope remain available', async ({ requ
   expect(wrongMethod.status()).toBe(405)
   const response = await request.get('/api/unknown')
   expect(response.status()).toBe(404)
-  await expect(response.json()).resolves.toMatchObject({ error: { code: 'not_found', message: expect.any(String) } })
+  await expect(response.json()).resolves.toMatchObject({ message: expect.any(String) })
 })

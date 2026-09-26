@@ -10,11 +10,14 @@ async function cookie(request: APIRequestContext, userid = 'admin', password = '
   expect(response.status()).toBe(200)
   return { Cookie: response.headers()['set-cookie'].split(';')[0] }
 }
-async function error(response: APIResponse, status: number, code: string) {
+async function error(response: APIResponse, status: number, code?: string) {
   expect(response.status()).toBe(status)
   expect(response.headers()['cache-control']).toBe('no-store')
-  if (code === 'unauthorized') expect(response.headers()['set-cookie']).toContain('Max-Age=0')
-  expect(await response.json()).toMatchObject({ error: { code } })
+  if (status === 401 && code === undefined) expect(response.headers()['set-cookie']).toContain('Max-Age=0')
+  const body = await response.json()
+  expect(body.message).toEqual(expect.any(String))
+  expect(body.code).toBe(code)
+  expect(body).not.toHaveProperty('error')
 }
 
 test('every Admin user endpoint requires authentication and Admin Role, before validation', async ({ request }) => {
@@ -28,14 +31,14 @@ test('every Admin user endpoint requires authentication and Admin Role, before v
       await request.patch(`/api/admin/users/${unknownID}`, { headers, data: {} }),
       await request.patch('/api/admin/users/not-a-uuid', { headers, data: { name: 'changed' } }),
       await request.patch('/api/admin/users/not-a-uuid', { headers: { ...headers, 'Content-Type': 'application/json' }, data: '{' }),
-    ]) await error(response, role ? 403 : 401, role ? 'forbidden' : 'unauthorized')
+    ]) await error(response, role ? 403 : 401)
   }
 })
 
 test('creation appends and validates immutable case-sensitive Userids and Unicode inputs', async ({ request }) => {
   const headers = await cookie(request)
-  await error(await request.patch('/api/admin/users/not-a-uuid', { headers, data: { name: 'changed' } }), 422, 'validation_failed')
-  await error(await request.post('/api/admin/users', { data: '{', headers: { ...headers, 'Content-Type': 'application/json' } }), 422, 'validation_failed')
+  await error(await request.patch('/api/admin/users/not-a-uuid', { headers, data: { name: 'changed' } }), 400)
+  await error(await request.post('/api/admin/users', { data: '{', headers: { ...headers, 'Content-Type': 'application/json' } }), 400)
   const before = (await (await request.get('/api/admin/users', { headers })).json()).users
   expect(before.find((u: { userid: string }) => u.userid === 'disabled')).toMatchObject({ disabled: true })
   const data = { ...valid(), name: ' 🔑'.repeat(32), password: '🔑'.repeat(256) }
@@ -52,9 +55,9 @@ test('creation appends and validates immutable case-sensitive Userids and Unicod
     { userid: '' }, { userid: 'a'.repeat(31) }, { userid: ' leading' }, { userid: '_leading' }, { userid: 'trailing\n' }, { userid: '日本語' },
     { name: '' }, { name: '🔑'.repeat(65) }, { name: ' \t\u3000' }, { name: 'a\u0085b' }, { name: 'a\nb' },
     { password: undefined }, { password: null }, { password: '🔑'.repeat(7) }, { password: '🔑'.repeat(257) }, { role: 'system' }, { confirmation: 'extra' },
-  ]) await error(await request.post('/api/admin/users', { headers, data: { ...valid(), ...invalid } }), 422, 'validation_failed')
+  ]) await error(await request.post('/api/admin/users', { headers, data: { ...valid(), ...invalid } }), 400)
   for (const patch of [{}, { userid: 'replacement' }, { password: '' }, { name: null }, { disabled: null }, { name: '\u3000' }, { role: 'invalid' }]) {
-    await error(await request.patch(`/api/admin/users/${user.id}`, { headers, data: patch }), 422, 'validation_failed')
+    await error(await request.patch(`/api/admin/users/${user.id}`, { headers, data: patch }), 400)
   }
   await error(await request.patch(`/api/admin/users/${randomUUID()}`, { headers, data: { name: 'Unknown' } }), 404, 'not_found')
 })
@@ -62,7 +65,7 @@ test('creation appends and validates immutable case-sensitive Userids and Unicod
 test('Admin cannot be created or assigned, and rejected promotion is atomic', async ({ request }) => {
   const headers = await cookie(request)
   const rejected = { ...valid(), role: 'admin' }
-  await error(await request.post('/api/admin/users', { headers, data: rejected }), 422, 'validation_failed')
+  await error(await request.post('/api/admin/users', { headers, data: rejected }), 400)
   for (const role of ['student', 'manager']) {
     const data = { ...valid(), role }
     const created = await request.post('/api/admin/users', { headers, data })
@@ -70,7 +73,7 @@ test('Admin cannot be created or assigned, and rejected promotion is atomic', as
     const user = await created.json()
     await error(await request.patch(`/api/admin/users/${user.id}`, {
       headers, data: { role: 'admin', name: 'Must not persist', password: 'must-not-persist', disabled: true },
-    }), 422, 'validation_failed')
+    }), 400)
     const session = await cookie(request, data.userid, data.password)
     expect(await (await request.get('/api/me', { headers: session })).json()).toMatchObject({ role, name: data.name })
     expect(await (await request.patch(`/api/admin/users/${user.id}`, {
@@ -200,7 +203,7 @@ for (const role of ['student', 'manager']) {
 test('global order is Admin-only, requires every User Account ID once and preserves order on mismatch', async ({ request }) => {
   for (const role of [null, 'student', 'manager']) {
     const headers = role ? await cookie(request, role) : { Cookie: '' }
-    await error(await request.patch('/api/users/order', { headers, data: { user_ids: [] } }), role ? 403 : 401, role ? 'forbidden' : 'unauthorized')
+    await error(await request.patch('/api/users/order', { headers, data: { user_ids: [] } }), role ? 403 : 401)
   }
   const headers = await cookie(request)
   const list = async (): Promise<string[]> => (await (await request.get('/api/admin/users', { headers })).json()).users.map((u: { id: string }) => u.id)

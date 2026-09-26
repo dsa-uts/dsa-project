@@ -62,7 +62,7 @@ export function ProblemDetailPage() {
 
   if (detail.isPending) return <main className="p-8" role="status">読み込み中…</main>
   if (detail.isError || !project) return <main className="space-y-4 p-8">
-    <p role="alert" className="text-destructive">{detail.error?.error.code === 'not_found' ? '課題が見つからないか、公開されていません。' : '課題を取得できませんでした。'}</p>
+    <p role="alert" className="text-destructive">{detail.error?.code === 'not_found' ? '課題が見つからないか、公開されていません。' : '課題を取得できませんでした。'}</p>
     <Button variant="outline" onClick={() => void detail.refetch()}>再読み込み</Button>
     <Link to="/projects" className="block text-link underline">Problem Listへ戻る</Link>
   </main>

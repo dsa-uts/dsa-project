@@ -88,7 +88,7 @@ test('pending results hide judgments and durations, poll after 5 seconds and sto
 
 test('a failed list load can be retried and an empty list is explicit', async () => {
   let fails = true
-  setup(async () => fails ? Response.json({ error: { code: 'internal_error', message: 'Unavailable' } }, { status: 500 }) : Response.json({ projects: [] }))
+  setup(async () => fails ? Response.json({ message: 'Unavailable' }, { status: 500 }) : Response.json({ projects: [] }))
   expect(await screen.findByRole('alert')).toHaveProperty('textContent', expect.stringContaining('課題一覧を取得できませんでした。'))
   fails = false
   fireEvent.click(screen.getByRole('button', { name: '再読み込み' }))

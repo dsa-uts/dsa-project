@@ -20,7 +20,7 @@ function setup(patch: (request: Request) => Promise<Response>, role = 'admin', p
 }
 
 test('failed saves preserve JST edits for retry and send all schedules in UTC', async () => {
-  const patch = vi.fn(async (_request: Request) => Response.json({ error: { code: 'internal_error', message: '保存に失敗しました' } }, { status: 500 }))
+  const patch = vi.fn(async (_request: Request) => Response.json({ message: '保存に失敗しました' }, { status: 500 }))
   setup(patch)
   const input = await screen.findByLabelText('課題1 の公開日時')
   expect((input as HTMLInputElement).value).toBe('2026-09-12T19:59')
@@ -36,7 +36,7 @@ test('failed saves preserve JST edits for retry and send all schedules in UTC', 
 })
 
 test('a changed project list requires explicit reload without silently discarding edits', async () => {
-  const patch = vi.fn(async (_request: Request) => Response.json({ error: { code: 'project_ids_mismatch', message: 'Reload' } }, { status: 422 }))
+  const patch = vi.fn(async (_request: Request) => Response.json({ code: 'project_ids_mismatch', message: 'Reload' }, { status: 422 }))
   setup(patch)
   const input = await screen.findByLabelText('課題1 の公開日時')
   fireEvent.change(input, { target: { value: '' } })
@@ -82,7 +82,7 @@ test('import failures retain input and prevent duplicate requests while retrying
   fireEvent.submit(form)
   expect(importRequest).toHaveBeenCalledTimes(1)
   expect(screen.getByRole('button', { name: '登録' })).toHaveProperty('disabled', true)
-  finish(Response.json({ error: { code: 'resource_source_unavailable', message: '取得元に接続できません' } }, { status: 503 }))
+  finish(Response.json({ code: 'resource_source_unavailable', message: '取得元に接続できません' }, { status: 503 }))
   expect(await screen.findByRole('alert')).toHaveProperty('textContent', '取得元に接続できません')
   expect(screen.getByLabelText('バージョン')).toHaveProperty('value', 'v1.0.0')
   fireEvent.submit(form)
@@ -98,7 +98,7 @@ test('keyboard reordering keeps schedules attached to projects and cancellation 
     const index = rows.indexOf(this.closest('tr')!)
     return { x: 0, y: index * 60, top: index * 60, bottom: (index + 1) * 60, left: 0, right: 800, width: 800, height: 60, toJSON() {} }
   })
-  const patch = vi.fn(async (_request: Request) => Response.json({ error: { code: 'internal_error', message: 'Retry' } }, { status: 500 }))
+  const patch = vi.fn(async (_request: Request) => Response.json({ message: 'Retry' }, { status: 500 }))
   setup(patch, 'admin', [project, { ...project, id: 'project-2', name: '課題2', resource_id: 'ex2' }])
   const handle = await screen.findByRole('button', { name: '課題2 を移動' })
   handle.focus()
@@ -124,7 +124,7 @@ test('a failed refresh after saving cannot restore stale schedules on the next s
   setup(patch)
   const publication = await screen.findByLabelText('課題1 の公開日時')
   const originalFetch = globalThis.fetch
-  vi.stubGlobal('fetch', (request: Request) => new URL(request.url).pathname === '/api/projects' ? Promise.resolve(Response.json({ error: { code: 'internal_error', message: 'Unavailable' } }, { status: 500 })) : originalFetch(request))
+  vi.stubGlobal('fetch', (request: Request) => new URL(request.url).pathname === '/api/projects' ? Promise.resolve(Response.json({ message: 'Unavailable' }, { status: 500 })) : originalFetch(request))
   fireEvent.change(publication, { target: { value: '2026-09-13T00:15' } })
   fireEvent.click(screen.getByRole('button', { name: '変更を保存' }))
   await screen.findByRole('alert')
