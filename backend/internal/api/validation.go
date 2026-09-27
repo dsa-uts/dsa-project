@@ -1,4 +1,4 @@
-package validation
+package api
 
 import (
 	"github.com/getkin/kin-openapi/openapi3"
@@ -15,8 +15,9 @@ func init() {
 	openapi3.DefineStringFormatValidator("uuid", openapi3.NewCallbackValidator(uuid.Validate))
 }
 
-func RequestValidator(spec *openapi3.T, authenticate openapi3filter.AuthenticationFunc) echo.MiddlewareFunc {
+func openAPIValidator(spec *openapi3.T, authenticate openapi3filter.AuthenticationFunc) echo.MiddlewareFunc {
 	return echomiddleware.OapiRequestValidatorWithOptions(spec, &echomiddleware.Options{
 		Options: openapi3filter.Options{AuthenticationFunc: authenticate},
 	})
 }
+

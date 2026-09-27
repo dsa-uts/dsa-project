@@ -6,7 +6,6 @@ import (
 
 	"github.com/dsa-uts/dsa-project/backend/internal/api/generated"
 	"github.com/dsa-uts/dsa-project/backend/internal/api/httpauth"
-	"github.com/dsa-uts/dsa-project/backend/internal/api/validation"
 	"github.com/dsa-uts/dsa-project/backend/internal/resourceimport"
 	"github.com/dsa-uts/dsa-project/backend/internal/store"
 	"github.com/labstack/echo/v4"
@@ -24,7 +23,7 @@ func Register(e *echo.Echo, authStore *store.AuthStore, projectStore *store.Proj
 	if err := httpauth.ValidateAccessPolicies(spec); err != nil {
 		panic(fmt.Sprintf("invalid API access policy: %v", err))
 	}
-	validator := validation.RequestValidator(spec, httpauth.Authenticate(authStore))
+	validator := openAPIValidator(spec, httpauth.Authenticate(authStore))
 	// Group middleware wraps every generated route, before generated parameter
 	// binding. No operation ID list needs to track future endpoints.
 	g := e.Group("", noStore, normalizeContentType, validator)
