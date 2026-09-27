@@ -70,7 +70,7 @@ CREATE TABLE submissions (
 CREATE TABLE submission_files (
     submission_id uuid NOT NULL REFERENCES submissions(id) ON DELETE CASCADE,
     path text NOT NULL,
-    content bytea NOT NULL,
+    object_key text NOT NULL,
     PRIMARY KEY (submission_id, path)
 );
 

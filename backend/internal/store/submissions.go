@@ -31,5 +31,6 @@ type SubmissionFile struct {
 
 	SubmissionID uuid.UUID `bun:"submission_id,pk"`
 	Path         string    `bun:"path,pk"`
-	Content      []byte    `bun:"content,notnull"`
+	ObjectKey    string    `bun:"object_key,notnull"`
+	Content      []byte    `bun:"-"`
 }

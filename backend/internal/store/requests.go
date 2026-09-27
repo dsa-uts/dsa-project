@@ -1,12 +1,16 @@
 package store
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"time"
 
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/google/uuid"
 	"github.com/uptrace/bun"
 )
@@ -37,9 +41,15 @@ type Request struct {
 	AttemptCount   int32           `bun:"attempt_count,notnull,default:0"`
 }
 
-type RequestStore struct{ db *bun.DB }
+type RequestStore struct {
+	db      *bun.DB
+	objects *s3.Client
+	bucket  string
+}
 
-func NewRequestStore(db *bun.DB) *RequestStore { return &RequestStore{db: db} }
+func NewRequestStore(db *bun.DB, objects *s3.Client, bucket string) *RequestStore {
+	return &RequestStore{db: db, objects: objects, bucket: bucket}
+}
 
 var (
 	ErrSubmissionOwner = errors.New("submission_owner_mismatch")
@@ -113,7 +123,19 @@ func (s *RequestStore) CreateValidation(
 				}
 			} else {
 				for i := range files {
-					files[i].SubmissionID = submission.ID
+					file := &files[i]
+					file.SubmissionID = submission.ID
+					file.ObjectKey = fmt.Sprintf("submissions/%s/%s", submission.ID, file.Path)
+
+					if _, err := s.objects.PutObject(ctx, &s3.PutObjectInput{
+						Bucket:        aws.String(s.bucket),
+						Key:           aws.String(file.ObjectKey),
+						Body:          bytes.NewReader(file.Content),
+						ContentLength: aws.Int64(int64(len(file.Content))),
+						ContentType:   aws.String("application/octet-stream"),
+					}); err != nil {
+						return fmt.Errorf("upload submission file %q: %w", file.Path, err)
+					}
 				}
 				if _, err := tx.NewInsert().Model(&files).Exec(ctx); err != nil {
 					return err
