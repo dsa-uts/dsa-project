@@ -26,11 +26,11 @@ type handler struct {
 
 var _ generated.StrictServerInterface = (*handler)(nil)
 
-func newHandler(authStore *store.AuthStore, projectStore *store.ProjectStore, requestStore *store.RequestStore, source *resourceimport.Source) *handler {
+func newHandler(accountStore *store.AccountStore, projectStore *store.ProjectStore, requestStore *store.RequestStore, source *resourceimport.Source) *handler {
 	return &handler{
-		sessionHandler: sessions.NewHandler(authStore),
+		sessionHandler: sessions.NewHandler(accountStore),
 		projectHandler: projects.NewHandler(projectStore, source),
-		userHandler:    users.NewHandler(authStore),
+		userHandler:    users.NewHandler(accountStore),
 		requestHandler: requests.NewHandler(requestStore),
 	}
 }

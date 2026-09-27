@@ -27,7 +27,7 @@ type UserInfo struct {
 
 // Authenticate runs during security validation, before parameters and bodies.
 // ValidateAccessPolicies must have accepted the spec before registering routes.
-func Authenticate(authStore *store.AuthStore) openapi3filter.AuthenticationFunc {
+func Authenticate(accountStore *store.AccountStore) openapi3filter.AuthenticationFunc {
 	return func(ctx context.Context, input *openapi3filter.AuthenticationInput) error {
 		c := echomiddleware.GetEchoContext(ctx)
 		if c == nil || input.SecuritySchemeName != "sessionAuth" {
@@ -44,7 +44,7 @@ func Authenticate(authStore *store.AuthStore) openapi3filter.AuthenticationFunc 
 		// echo-middleware supplies a background context to this callback. Use the
 		// original request for DB cancellation and install the actor there for strict handlers.
 		requestContext := c.Request().Context()
-		user, err := authStore.CurrentUser(requestContext, auth.HashToken(cookie.Value), time.Now())
+		user, err := accountStore.CurrentUser(requestContext, auth.HashToken(cookie.Value), time.Now())
 		if errors.Is(err, store.ErrNotFound) {
 			return unauthorized()
 		}

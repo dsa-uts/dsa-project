@@ -17,13 +17,13 @@ var (
 	ErrCannotModifySelf = errors.New("cannot_modify_self")
 )
 
-func (s *AuthStore) ListUsers(ctx context.Context) ([]UserAccount, error) {
+func (s *AccountStore) ListUsers(ctx context.Context) ([]UserAccount, error) {
 	users := []UserAccount{}
 	err := s.db.NewSelect().Model(&users).OrderExpr("display_order ASC").Scan(ctx)
 	return users, err
 }
 
-func (s *AuthStore) CreateUser(ctx context.Context, user *UserAccount) error {
+func (s *AccountStore) CreateUser(ctx context.Context, user *UserAccount) error {
 	_, err := s.db.NewInsert().Model(user).Returning("*").Exec(ctx)
 	if pgErr, ok := errors.AsType[pgdriver.Error](err); ok && pgErr.Field('C') == "23505" && pgErr.Field('n') == "user_accounts_userid_key" {
 		return ErrUseridTaken
@@ -40,7 +40,7 @@ type UserUpdate struct {
 
 // UpdateUser locks the account shared with session creation. Only supplied fields
 // are written; session invalidation and the account change commit together.
-func (s *AuthStore) UpdateUser(ctx context.Context, actorID, userID uuid.UUID, update UserUpdate) (*UserAccount, error) {
+func (s *AccountStore) UpdateUser(ctx context.Context, actorID, userID uuid.UUID, update UserUpdate) (*UserAccount, error) {
 	user := new(UserAccount)
 	err := s.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
 		err := tx.NewSelect().Model(user).Where("id = ?", userID).For("UPDATE").Scan(ctx)
@@ -95,7 +95,7 @@ func (s *AuthStore) UpdateUser(ctx context.Context, actorID, userID uuid.UUID, u
 // ReorderUsers reuses the existing sequence-generated positions, so future
 // inserts still append. The table lock serializes membership changes and saves;
 // deferred uniqueness allows a permutation without temporary positions.
-func (s *AuthStore) ReorderUsers(ctx context.Context, ids []uuid.UUID) error {
+func (s *AccountStore) ReorderUsers(ctx context.Context, ids []uuid.UUID) error {
 	return s.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
 		if _, err := tx.ExecContext(ctx, "LOCK TABLE user_accounts IN SHARE ROW EXCLUSIVE MODE"); err != nil {
 			return err

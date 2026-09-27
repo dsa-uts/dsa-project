@@ -12,7 +12,7 @@ import (
 )
 
 // Register assembles API handlers, authorization, and contract validation.
-func Register(e *echo.Echo, authStore *store.AuthStore, projectStore *store.ProjectStore, requestStore *store.RequestStore, source *resourceimport.Source) {
+func Register(e *echo.Echo, accountStore *store.AccountStore, projectStore *store.ProjectStore, requestStore *store.RequestStore, source *resourceimport.Source) {
 	spec, err := generated.GetSpec()
 	if err != nil {
 		panic(fmt.Sprintf("load embedded openapi spec: %v", err))
@@ -23,11 +23,11 @@ func Register(e *echo.Echo, authStore *store.AuthStore, projectStore *store.Proj
 	if err := httpauth.ValidateAccessPolicies(spec); err != nil {
 		panic(fmt.Sprintf("invalid API access policy: %v", err))
 	}
-	validator := openAPIValidator(spec, httpauth.Authenticate(authStore))
+	validator := openAPIValidator(spec, httpauth.Authenticate(accountStore))
 	// Group middleware wraps every generated route, before generated parameter
 	// binding. No operation ID list needs to track future endpoints.
 	g := e.Group("", noStore, normalizeContentType, validator)
-	generated.RegisterHandlers(g, generated.NewStrictHandler(newHandler(authStore, projectStore, requestStore, source), nil))
+	generated.RegisterHandlers(g, generated.NewStrictHandler(newHandler(accountStore, projectStore, requestStore, source), nil))
 }
 
 func noStore(next echo.HandlerFunc) echo.HandlerFunc {

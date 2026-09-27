@@ -13,10 +13,10 @@ import (
 )
 
 // Handler implements Admin User Account operations.
-type Handler struct{ auth *store.AuthStore }
+type Handler struct{ auth *store.AccountStore }
 
-func NewHandler(authStore *store.AuthStore) *Handler {
-	return &Handler{auth: authStore}
+func NewHandler(accountStore *store.AccountStore) *Handler {
+	return &Handler{auth: accountStore}
 }
 
 func userAccountResponse(user *store.UserAccount) generated.UserAccount {
