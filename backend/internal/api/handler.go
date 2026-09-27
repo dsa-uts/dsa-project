@@ -1,11 +1,11 @@
 package api
 
 import (
-	"github.com/dsa-uts/dsa-project/backend/internal/api/admin/users"
 	"github.com/dsa-uts/dsa-project/backend/internal/api/generated"
 	"github.com/dsa-uts/dsa-project/backend/internal/api/projects"
 	"github.com/dsa-uts/dsa-project/backend/internal/api/requests"
 	"github.com/dsa-uts/dsa-project/backend/internal/api/sessions"
+	"github.com/dsa-uts/dsa-project/backend/internal/api/users"
 	"github.com/dsa-uts/dsa-project/backend/internal/resourceimport"
 	"github.com/dsa-uts/dsa-project/backend/internal/store"
 )
