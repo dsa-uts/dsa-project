@@ -36,6 +36,22 @@ spec:
               value: dsa
             - name: DATABASE_PASSWORD_FILE
               value: /run/secrets/dsa/postgres-password
+            - name: S3_ENDPOINT
+              value: http://dsa-seaweedfs:8333
+            - name: S3_BUCKET
+              value: dsa-files
+            - name: AWS_REGION
+              value: us-east-1
+            - name: AWS_ACCESS_KEY_ID
+              valueFrom:
+                secretKeyRef:
+                  name: dsa-datastore
+                  key: s3-access-key-id
+            - name: AWS_SECRET_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: dsa-datastore
+                  key: s3-secret-access-key
           readinessProbe:
             httpGet:
               path: /health
