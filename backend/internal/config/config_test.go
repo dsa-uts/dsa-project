@@ -21,6 +21,8 @@ func TestLoad(t *testing.T) {
 		"DATABASE_USER":           "dsa user",
 		"DATABASE_NAME":           "dsa/database",
 		"DATABASE_PASSWORD_FILE":  databasePasswordPath,
+		"S3_ENDPOINT":             "http://dsa-seaweedfs:8333",
+		"S3_BUCKET":               "dsa-files",
 	} {
 		t.Setenv(name, value)
 	}
@@ -31,6 +33,12 @@ func TestLoad(t *testing.T) {
 	}
 	if cfg.Port != "8080" {
 		t.Errorf("Port = %q, want %q", cfg.Port, "8080")
+	}
+	if got, want := cfg.S3Endpoint, "http://dsa-seaweedfs:8333"; got != want {
+		t.Errorf("S3Endpoint = %q, want %q", got, want)
+	}
+	if got, want := cfg.S3Bucket, "dsa-files"; got != want {
+		t.Errorf("S3Bucket = %q, want %q", got, want)
 	}
 
 	postgresURL, err := url.Parse(cfg.DatabaseURL)

@@ -32,7 +32,7 @@ def diagnose-e2e [] {
   } | complete
   print-command-result $resources
 
-  for component in [postgresql backend frontend] {
+  for component in [postgresql seaweedfs backend frontend] {
     component-logs $e2e_namespace $component
   }
 
@@ -44,7 +44,12 @@ def diagnose-e2e [] {
 }
 
 def wait-for-application [] {
-  for resource in [statefulset/dsa-postgresql deployment/dsa-backend deployment/dsa-frontend] {
+  for resource in [
+    statefulset/dsa-postgresql
+    statefulset/dsa-seaweedfs
+    deployment/dsa-backend
+    deployment/dsa-frontend
+  ] {
     run-checked $"($resource) did not become ready" [
       kubectl --namespace $e2e_namespace rollout status $resource --timeout=120s
     ] | print

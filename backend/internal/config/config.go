@@ -17,6 +17,8 @@ import (
 type Configuration struct {
 	Port                  string
 	DatabaseURL           string
+	S3Endpoint            string
+	S3Bucket              string
 	ResourceRepositoryURL string
 	ResourceGitHubToken   string
 	DevelopmentSeed       bool
@@ -31,6 +33,8 @@ type specification struct {
 	DatabaseUser            string     `envconfig:"DATABASE_USER" required:"true"`
 	DatabaseName            string     `envconfig:"DATABASE_NAME" required:"true"`
 	DatabasePasswordFile    secretFile `envconfig:"DATABASE_PASSWORD_FILE" required:"true"`
+	S3Endpoint              string     `envconfig:"S3_ENDPOINT" required:"true"`
+	S3Bucket                string     `envconfig:"S3_BUCKET" required:"true"`
 	DevelopmentSeed         bool       `envconfig:"DEVELOPMENT_SEED" default:"false"`
 }
 
@@ -83,6 +87,8 @@ func load() (Configuration, error) {
 		ResourceRepositoryURL: spec.ResourceRepositoryURL,
 		ResourceGitHubToken:   string(spec.ResourceGitHubTokenFile),
 		DatabaseURL:           databaseURL,
+		S3Endpoint:            spec.S3Endpoint,
+		S3Bucket:              spec.S3Bucket,
 		DevelopmentSeed:       spec.DevelopmentSeed,
 	}, nil
 }

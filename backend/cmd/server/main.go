@@ -30,6 +30,11 @@ func main() {
 	}
 	defer db.Close()
 
+	_, err = store.ConnectObjectStorage(startupCtx, cfg.S3Endpoint, cfg.S3Bucket)
+	if err != nil {
+		log.Fatalf("initialize object storage: %v", err)
+	}
+
 	e := server.New(db, source)
 	log.Fatal(e.Start(net.JoinHostPort("", cfg.Port)))
 }
