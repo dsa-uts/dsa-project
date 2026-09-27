@@ -6,10 +6,10 @@ import (
 	"net"
 	"time"
 
-	"github.com/dsa-uts/dsa-project/backend/internal/app"
 	"github.com/dsa-uts/dsa-project/backend/internal/config"
 	"github.com/dsa-uts/dsa-project/backend/internal/resourceimport"
 	"github.com/dsa-uts/dsa-project/backend/internal/server"
+	"github.com/dsa-uts/dsa-project/backend/internal/store"
 )
 
 func main() {
@@ -24,7 +24,7 @@ func main() {
 		log.Fatalf("configure Resource source: %v", err)
 	}
 
-	db, err := app.ConnectDatabase(startupCtx, cfg.DatabaseURL, cfg.DevelopmentSeed)
+	db, err := store.ConnectDatabase(startupCtx, cfg.DatabaseURL, cfg.DevelopmentSeed)
 	if err != nil {
 		log.Fatalf("initialize datastores: %v", err)
 	}

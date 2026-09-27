@@ -7,7 +7,6 @@ import (
 
 	"github.com/dsa-uts/dsa-project/backend/internal/api"
 	"github.com/dsa-uts/dsa-project/backend/internal/api/httpresponse"
-	"github.com/dsa-uts/dsa-project/backend/internal/handler"
 	"github.com/dsa-uts/dsa-project/backend/internal/resourceimport"
 	"github.com/dsa-uts/dsa-project/backend/internal/store"
 )
@@ -23,7 +22,7 @@ func New(db *bun.DB, source *resourceimport.Source) *echo.Echo {
 	e.HideBanner = true
 	e.HTTPErrorHandler = httpresponse.ErrorHandler
 
-	e.GET("/health", handler.Health)
+	e.GET("/health", Health)
 
 	api.Register(e, store.NewAuthStore(db), store.NewProjectStore(db), store.NewRequestStore(db), source)
 
