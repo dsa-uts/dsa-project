@@ -24,7 +24,7 @@ func New(db *bun.DB, source *resourceimport.Source) *echo.Echo {
 
 	e.GET("/health", Health)
 
-	api.Register(e, store.NewAuthStore(db), store.NewProjectStore(db), store.NewRequestStore(db), source)
+	api.Register(e, store.NewAccountStore(db), store.NewProjectStore(db), store.NewRequestStore(db), source)
 
 	return e
 }

@@ -46,7 +46,7 @@ type Session struct {
 
 type AccountStore struct{ db *bun.DB }
 
-func NewAuthStore(db *bun.DB) *AccountStore { return &AccountStore{db: db} }
+func NewAccountStore(db *bun.DB) *AccountStore { return &AccountStore{db: db} }
 
 func (s *AccountStore) FindUserForLogin(ctx context.Context, userid string) (*UserAccount, error) {
 	user := new(UserAccount)
