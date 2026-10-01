@@ -7,8 +7,8 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/uptrace/bun"
-	"github.com/uptrace/bun/driver/pgdriver"
 )
 
 var (
@@ -25,7 +25,9 @@ func (s *AccountStore) ListUsers(ctx context.Context) ([]UserAccount, error) {
 
 func (s *AccountStore) CreateUser(ctx context.Context, user *UserAccount) error {
 	_, err := s.db.NewInsert().Model(user).Returning("*").Exec(ctx)
-	if pgErr, ok := errors.AsType[pgdriver.Error](err); ok && pgErr.Field('C') == "23505" && pgErr.Field('n') == "user_accounts_userid_key" {
+	if pgErr, ok := errors.AsType[*pgconn.PgError](err); ok &&
+		pgErr.Code == "23505" &&
+		pgErr.ConstraintName == "user_accounts_userid_key" {
 		return ErrUseridTaken
 	}
 	return err

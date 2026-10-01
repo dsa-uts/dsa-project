@@ -1,31 +1,27 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: dsa-backend
+  name: dsa-judge
   labels:
-    app.kubernetes.io/component: backend
+    app.kubernetes.io/component: judge
 spec:
   replicas: 1
   selector:
     matchLabels:
       app.kubernetes.io/name: dsa
-      app.kubernetes.io/component: backend
+      app.kubernetes.io/component: judge
   template:
     metadata:
       labels:
         app.kubernetes.io/name: dsa
-        app.kubernetes.io/component: backend
+        app.kubernetes.io/component: judge
     spec:
+      serviceAccountName: dsa-judge
       containers:
-        - name: backend
-          image: dsa-backend:required
+        - name: judge
+          image: dsa-judge:required
           imagePullPolicy: IfNotPresent
-          ports:
-            - name: http
-              containerPort: 8080
           env:
-            - name: RESOURCE_REPOSITORY_URL
-              value: https://github.com/dsa-uts/dsa-resource-spec
             - name: DATABASE_HOST
               value: dsa-postgresql
             - name: DATABASE_PORT
@@ -36,14 +32,8 @@ spec:
               value: dsa
             - name: DATABASE_PASSWORD_FILE
               value: /run/secrets/dsa/postgres-password
-          readinessProbe:
-            httpGet:
-              path: /health
-              port: http
-          livenessProbe:
-            httpGet:
-              path: /health
-              port: http
+            - name: SANDBOX_NAMESPACE
+              value: dsa-dev-sandbox
           resources: {}
           volumeMounts:
             - name: datastore-secrets

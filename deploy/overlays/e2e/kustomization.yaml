@@ -10,6 +10,8 @@ images:
     newTag: e2e
   - name: dsa-frontend
     newTag: e2e
+  - name: dsa-judge
+    newTag: e2e
 patches:
   - target:
       kind: Deployment
@@ -22,11 +24,27 @@ patches:
           value: "true"
   - target:
       kind: Deployment
-      name: dsa-(backend|frontend)
+      name: dsa-(backend|frontend|judge)
     patch: |-
       - op: replace
         path: /spec/template/spec/containers/0/imagePullPolicy
         value: Never
+  - target:
+      kind: Deployment
+      name: dsa-judge
+    patch: |-
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: dsa-judge
+      spec:
+        template:
+          spec:
+            containers:
+              - name: judge
+                env:
+                  - name: SANDBOX_NAMESPACE
+                    value: dsa-e2e-sandbox
   - target:
       kind: IngressRoute
       name: dsa

@@ -2,7 +2,6 @@
 package server
 
 import (
-	"github.com/aws/aws-sdk-go-v2/service/s3"
 	echo "github.com/labstack/echo/v4"
 	"github.com/uptrace/bun"
 
@@ -17,8 +16,6 @@ import (
 func New(
 	db *bun.DB,
 	source *resourceimport.Source,
-	objects *s3.Client,
-	bucket string,
 ) *echo.Echo {
 	if db == nil {
 		panic("Server.New: db must not be nil")
@@ -30,7 +27,12 @@ func New(
 
 	e.GET("/health", Health)
 
-	api.Register(e, store.NewAccountStore(db), store.NewProjectStore(db), store.NewRequestStore(db, objects, bucket), source)
+	api.Register(e,
+		store.NewAccountStore(db),
+		store.NewProjectStore(db),
+		store.NewRequestStore(db),
+		source,
+	)
 
 	return e
 }

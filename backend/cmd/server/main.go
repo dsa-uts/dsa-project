@@ -24,17 +24,22 @@ func main() {
 		log.Fatalf("configure Resource source: %v", err)
 	}
 
-	db, err := store.ConnectDatabase(startupCtx, cfg.DatabaseURL, cfg.DevelopmentSeed)
+	db, err := store.ConnectDatabase(startupCtx, cfg.DatabaseURL)
 	if err != nil {
 		log.Fatalf("initialize datastores: %v", err)
 	}
 	defer db.Close()
 
-	objects, err := store.ConnectObjectStorage(startupCtx, cfg.S3Endpoint, cfg.S3Bucket)
-	if err != nil {
-		log.Fatalf("initialize object storage: %v", err)
+	if err := store.MigrateSchema(startupCtx, db); err != nil {
+		log.Fatalf("migrate database: %v", err)
 	}
 
-	e := server.New(db, source, objects, cfg.S3Bucket)
+	if cfg.DevelopmentSeed {
+		if err := store.SeedDevelopment(startupCtx, db); err != nil {
+			log.Fatalf("seed development: %v", err)
+		}
+	}
+
+	e := server.New(db, source)
 	log.Fatal(e.Start(net.JoinHostPort("", cfg.Port)))
 }

@@ -3,11 +3,12 @@
 use kubernetes.nu *
 
 const development_namespace = 'dsa-dev'
+const sandbox_namespace = 'dsa-dev-sandbox'
 const application_selector = 'app.kubernetes.io/name=dsa'
 const development_workloads = [
   { resource: 'statefulset/dsa-postgresql', component: 'postgresql' }
-  { resource: 'statefulset/dsa-seaweedfs', component: 'seaweedfs' }
   { resource: 'deployment/dsa-backend', component: 'backend' }
+  { resource: 'deployment/dsa-judge', component: 'judge' }
   { resource: 'deployment/dsa-frontend', component: 'frontend' }
 ]
 const components = $development_workloads.component
@@ -58,6 +59,11 @@ def 'main deploy' [] {
   let images = build-images $root $image_specifications --system (cluster-image-system)
   import-orbstack-images $images
   let manifests = render-manifests $root dev $images
+
+  stage apply 'Applying the sandbox Kubernetes manifests ...'
+  run-checked 'failed to apply sandbox Kubernetes manifests' [
+    kubectl apply -k ($root | path join deploy sandbox)
+  ] | print
 
   stage apply 'Applying the development Kubernetes manifests ...'
   let apply = $manifests | ^kubectl apply -f - | complete
@@ -123,5 +129,5 @@ def 'main logs' [component: string = 'all'] {
 def 'main reset' [] {
   require-cluster orbstack
   stage reset $"Deleting namespace/($development_namespace) and its development data ..."
-  ^kubectl delete namespace $development_namespace --ignore-not-found --wait=true
+  ^kubectl delete namespace $development_namespace $sandbox_namespace --ignore-not-found --wait=true
 }

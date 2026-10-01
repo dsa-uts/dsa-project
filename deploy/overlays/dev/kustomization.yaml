@@ -10,6 +10,8 @@ images:
     newTag: dev
   - name: dsa-frontend
     newTag: dev
+  - name: dsa-judge
+    newTag: dev
 patches:
   - target:
       kind: Deployment
@@ -22,7 +24,7 @@ patches:
           value: "true"
   - target:
       kind: Deployment
-      name: dsa-(backend|frontend)
+      name: dsa-(backend|frontend|judge)
     patch: |-
       - op: replace
         path: /spec/template/spec/containers/0/imagePullPolicy

@@ -18,6 +18,10 @@
           coreutils
           findutils
           gnugrep
+          rustc
+          cargo
+          clippy
+          rust-analyzer
         ]
         ++ lib.optionals stdenv.hostPlatform.isLinux [
           k3d

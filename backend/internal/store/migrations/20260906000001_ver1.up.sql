@@ -70,7 +70,7 @@ CREATE TABLE submissions (
 CREATE TABLE submission_files (
     submission_id uuid NOT NULL REFERENCES submissions(id) ON DELETE CASCADE,
     path text NOT NULL,
-    object_key text NOT NULL,
+    content bytea NOT NULL,
     PRIMARY KEY (submission_id, path)
 );
 
@@ -85,11 +85,13 @@ CREATE TABLE requests (
     state text NOT NULL DEFAULT 'pending'
         CHECK (state IN ('pending', 'running', 'retrying', 'completed')),
     status text CHECK (status IN ('IE', 'CE', 'OLE', 'MLE', 'TLE', 'RE', 'WA', 'SKIP', 'AC')),
-    result jsonb,
     lease_owner uuid,
     lease_expires_at timestamptz,
     -- Increment on each attempt; also serves as the execution generation.
     attempt_count integer NOT NULL DEFAULT 0 CHECK (attempt_count BETWEEN 0 AND 3),
+    attempt_started_at timestamptz,
+    duration_ms bigint CHECK (duration_ms >= 0),
+    error text,
     CONSTRAINT requests_completed_status_check CHECK ((state = 'completed') = (status IS NOT NULL)),
     CONSTRAINT requests_lease_check CHECK (
         (state = 'running' AND lease_owner IS NOT NULL AND lease_expires_at IS NOT NULL)
@@ -101,6 +103,37 @@ CREATE TABLE requests (
     ),
     FOREIGN KEY (project_id, submission_id) REFERENCES submissions(project_id, id) ON DELETE CASCADE,
     FOREIGN KEY (project_id, version_id) REFERENCES project_versions(project_id, id)
+);
+
+CREATE TABLE workflow_results (
+    request_id uuid NOT NULL
+        REFERENCES requests(id) ON DELETE CASCADE,
+    workflow_id text NOT NULL,
+    status text NOT NULL CHECK (
+            status IN ('IE', 'CE', 'OLE', 'MLE', 'TLE', 'RE', 'WA', 'SKIP', 'AC')
+    ),
+    duration_ms bigint NOT NULL CHECK (duration_ms >= 0),
+    details jsonb NOT NULL,
+    PRIMARY KEY (request_id, workflow_id),
+    CHECK (jsonb_typeof(details) = 'object')
+);
+
+CREATE TABLE artifacts (
+    id uuid PRIMARY KEY DEFAULT uuidv7(),
+    request_id uuid NOT NULL
+        REFERENCES requests(id) ON DELETE CASCADE,
+    attempt_count integer NOT NULL CHECK (attempt_count > 0),
+    workflow_id text NOT NULL,
+    job_id text NOT NULL,
+    name text NOT NULL,
+    content bytea,
+    error text,
+    CONSTRAINT artifacts_capture_result_check CHECK (
+        (content IS NOT NULL AND error IS NULL)
+        OR (content IS NULL AND error IS NOT NULL AND error <> '')
+    ),
+
+    UNIQUE (request_id, attempt_count, workflow_id, job_id, name)
 );
 
 CREATE INDEX requests_submission_id_idx ON requests (submission_id);

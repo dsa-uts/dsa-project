@@ -3,6 +3,7 @@
 use kubernetes.nu *
 
 const e2e_namespace = 'dsa-e2e'
+const sandbox_namespace = 'dsa-e2e-sandbox'
 
 def repo-root [] {
   $env.FILE_PWD | path join .. | path expand
@@ -32,7 +33,7 @@ def diagnose-e2e [] {
   } | complete
   print-command-result $resources
 
-  for component in [postgresql seaweedfs backend frontend] {
+  for component in [postgresql backend judge frontend] {
     component-logs $e2e_namespace $component
   }
 
@@ -46,9 +47,9 @@ def diagnose-e2e [] {
 def wait-for-application [] {
   for resource in [
     statefulset/dsa-postgresql
-    statefulset/dsa-seaweedfs
     deployment/dsa-backend
     deployment/dsa-frontend
+    deployment/dsa-judge
   ] {
     run-checked $"($resource) did not become ready" [
       kubectl --namespace $e2e_namespace rollout status $resource --timeout=120s
@@ -68,6 +69,10 @@ def "main up" [--k3d-cluster: string] {
   }
   let overlay = if $k3d_cluster == null { 'e2e' } else { 'e2e-ci' }
   let manifests = render-manifests $root $overlay $images
+  stage apply 'Applying E2E sandbox manifests ...'
+  run-checked 'failed to apply E2E sandbox manifests' [
+    kubectl apply -k ($root | path join deploy overlays e2e-sandbox)
+  ] | print
   stage apply 'Applying E2E manifests without deleting existing data ...'
   let result = $manifests | ^kubectl apply -f - | complete
   print-command-result $result
@@ -82,16 +87,28 @@ def "main up" [--k3d-cluster: string] {
 # migrations and the development seed using the same startup path as deployment.
 def "main reset" [] {
   require-cluster
-  run-checked 'failed to stop E2E backend' [kubectl -n $e2e_namespace scale deployment/dsa-backend --replicas=0] | print
+  run-checked 'failed to stop E2E backend' [
+    kubectl -n $e2e_namespace scale deployment/dsa-backend deployment/dsa-judge --replicas=0
+  ] | print
   let reset = try {
-    run-checked 'E2E backend did not stop' [kubectl -n $e2e_namespace wait --for=delete pod -l app.kubernetes.io/component=backend --timeout=90s] | ignore
+    run-checked 'E2E backend did not stop' [
+      kubectl -n $e2e_namespace wait --for=delete pod 
+      -l 'app.kubernetes.io/component in (backend,judge)' --timeout=90s
+    ] | ignore
+    
+    run-checked 'failed to delete E2E sandbox Pods' [
+      kubectl -n $sandbox_namespace delete pods --all --wait=true --timeout=90s
+    ] | print
+
     run-checked 'failed to reset E2E database' [
       kubectl -n $e2e_namespace exec statefulset/dsa-postgresql --
       psql -U dsa -d dsa -v ON_ERROR_STOP=1 -c 'DROP SCHEMA public CASCADE; CREATE SCHEMA public;'
     ] | print
     null
   } catch { |err| $err.msg }
-  let restore = do { ^kubectl -n $e2e_namespace scale deployment/dsa-backend --replicas=1 } | complete
+  let restore = do {
+    ^kubectl -n $e2e_namespace scale deployment/dsa-backend deployment/dsa-judge --replicas=1
+  } | complete
   print-command-result $restore
   if $reset != null { print --stderr $reset }
   if $restore.exit_code != 0 { error make { msg: 'failed to restore E2E backend after reset' } }
@@ -104,7 +121,7 @@ def "main diagnostics" [] { require-cluster; diagnose-e2e }
 def "main down" [] {
   require-cluster
   run-checked 'failed to delete the E2E namespace' [
-    kubectl delete namespace $e2e_namespace --ignore-not-found --wait=true --timeout=2m
+    kubectl delete namespace $e2e_namespace $sandbox_namespace --ignore-not-found --wait=true --timeout=2m
   ] | print
 }
 

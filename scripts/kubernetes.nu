@@ -1,5 +1,6 @@
 export const image_specifications = [
   { name: 'dsa-backend', attribute: 'backend-image', label: 'backend' }
+  { name: 'dsa-judge', attribute: 'judge-image', label: 'judge' }
   { name: 'dsa-frontend', attribute: 'frontend-image', label: 'frontend' }
 ]
 
@@ -60,7 +61,7 @@ export def build-images [root: path, specifications: list<record>, --system: str
     run-checked 'failed to determine Nix host system' [nix eval --impure --raw --expr builtins.currentSystem]
       | str trim | str replace '-darwin' '-linux'
   }
-  if 'backend-image' in $specifications.attribute {
+  if ('backend-image' in $specifications.attribute) or ('judge-image' in $specifications.attribute) {
     stage dependencies 'Refreshing backend dependency metadata ...'
     run-checked 'failed to refresh backend dependency metadata' [
       nu ($root | path join scripts backend-deps.nu) refresh
