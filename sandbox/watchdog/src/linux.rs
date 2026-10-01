@@ -1,10 +1,7 @@
-use std::io;
-
 use nix::{
-    libc::{self, group, setresgid, setresuid},
-    sys::prctl,
-    unistd::{Gid, Uid, getresgid, getresuid, setgroups},
+    libc, sys::prctl, unistd::{Gid, Uid, getresgid, getresuid, setgroups, setresgid, setresuid},
 };
+use std::io;
 
 #[repr(C)]
 struct CapHeader {
