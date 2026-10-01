@@ -5,7 +5,7 @@ pkgs.pkgsStatic.rustPlatform.buildRustPackage {
   version = "0.1.0";
 
   src = pkgs.lib.cleanSourceWith {
-    src = "../sandbox/watchdog";
+    src = ../sandbox/watchdog;
     filter = path: type:
       baseNameOf path != "target"
       && pkgs.lib.cleanSourceFilter path type;
