@@ -22,6 +22,7 @@
           cargo
           clippy
           rust-analyzer
+          rustfmt
         ]
         ++ lib.optionals stdenv.hostPlatform.isLinux [
           k3d
