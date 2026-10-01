@@ -24,17 +24,14 @@
           backend = import ./nix/backend.nix { inherit pkgs; };
           frontend = import ./nix/frontend.nix { inherit pkgs; };
           e2e = import ./nix/e2e.nix { inherit pkgs; };
-          watchdog = import ./nix/watchdog.nix { inherit  pkgs; };
         in
         {
           inherit backend frontend e2e;
           kustomize-build = import ./nix/kustomize-check.nix { inherit pkgs; };
         }
         // lib.optionalAttrs pkgs.stdenv.hostPlatform.isLinux {
-          inherit watchdog;
-
           sandbox-loader-image = import ./nix/sandbox-loader-image.nix {
-            inherit pkgs watchdog;
+            inherit pkgs;
           };
 
           backend-image = import ./nix/backend-image.nix { inherit pkgs backend; };

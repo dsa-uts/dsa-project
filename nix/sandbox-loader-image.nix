@@ -1,11 +1,10 @@
-{ pkgs, watchdog }:
+{ pkgs }:
 
 pkgs.dockerTools.buildLayeredImage {
   name = "dsa-sandbox-loader";
   tag = "latest";
 
   contents = [
-    watchdog
     pkgs.coreutils
     pkgs.gnutar
   ];
