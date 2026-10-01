@@ -375,22 +375,19 @@ mod test {
         let mut writer = File::from(write_fd);
 
         // stdoutにデータがなければイベントなし。
-        let events = 
-            wait_for_io([None, Some(reader.as_fd()), None], 0).unwrap();
+        let events = wait_for_io([None, Some(reader.as_fd()), None], 0).unwrap();
         assert_eq!(events, [PollFlags::empty(); 3]);
 
         writer.write_all(b"x").unwrap();
 
         // stdoutの位置だけに読み取り可能イベントが返る。
-        let events =
-            wait_for_io([None, Some(reader.as_fd()), None], 0).unwrap();
+        let events = wait_for_io([None, Some(reader.as_fd()), None], 0).unwrap();
         assert!(events[0].is_empty());
         assert!(events[1].contains(PollFlags::POLLIN));
         assert!(events[2].is_empty());
 
         // stdinとして渡した書き込み端点は書き込み可能。
-        let events =
-            wait_for_io([Some(writer.as_fd()), None, None], 0).unwrap();
+        let events = wait_for_io([Some(writer.as_fd()), None, None], 0).unwrap();
         assert!(events[0].contains(PollFlags::POLLOUT));
         assert!(events[1].is_empty());
         assert!(events[2].is_empty());
