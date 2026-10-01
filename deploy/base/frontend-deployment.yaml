@@ -18,7 +18,7 @@ spec:
     spec:
       containers:
         - name: frontend
-          image: dsa-frontend:required
+          image: dsa-frontend:latest
           imagePullPolicy: IfNotPresent
           ports:
             - name: http

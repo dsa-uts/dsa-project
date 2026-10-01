@@ -5,13 +5,6 @@ resources:
   - namespace.yaml
   - ../../base
   - datastore-secret.yaml
-images:
-  - name: dsa-backend
-    newTag: dev
-  - name: dsa-frontend
-    newTag: dev
-  - name: dsa-judge
-    newTag: dev
 patches:
   - target:
       kind: Deployment

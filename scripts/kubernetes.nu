@@ -1,6 +1,7 @@
 export const image_specifications = [
   { name: 'dsa-backend', attribute: 'backend-image', label: 'backend' }
   { name: 'dsa-judge', attribute: 'judge-image', label: 'judge' }
+  { name: 'dsa-sandbox-loader', attribute: 'sandbox-loader-image', label: 'loader' }
   { name: 'dsa-frontend', attribute: 'frontend-image', label: 'frontend' }
 ]
 
@@ -73,12 +74,9 @@ export def build-images [root: path, specifications: list<record>, --system: str
     let path = run-checked $"failed to build the ($specification.label) image" [
       nix build --no-link --print-out-paths $"($root)#packages.($target).($specification.attribute)"
     ] | str trim
-    let tag = run-checked $"failed to evaluate the ($specification.label) image tag" [
-      nix eval --raw $"($root)#packages.($target).($specification.attribute).imageTag"
-    ] | str trim
     {
       name: $specification.name
-      reference: $"($specification.name):($tag)"
+      reference: $"($specification.name):latest"
       path: $path
     }
   }
@@ -91,29 +89,6 @@ export def import-orbstack-images [images: list<record>] {
       docker --context orbstack load --input $image.path
     ] | print
   }
-}
-
-export def render-manifests [root: path, overlay: string, images: list<record>] {
-  let render_dir = ^mktemp -d | str trim
-  let deploy_dir = $render_dir | path join deploy
-  ^cp -R ($root | path join deploy) $deploy_dir
-  ^chmod -R u+w $deploy_dir
-
-  let image_arguments = $images | each { |image| $"($image.name)=($image.reference)" }
-  let result = do {
-    cd ($deploy_dir | path join overlays $overlay)
-    ^kustomize edit set image ...$image_arguments
-    ^kustomize build .
-  } | complete
-
-  ^chmod -R u+w $render_dir
-  rm --recursive --force $render_dir
-
-  if $result.exit_code != 0 {
-    print --stderr $result.stderr
-    error make { msg: $"failed to render ($overlay) manifests" }
-  }
-  $result.stdout
 }
 
 export def component-logs [namespace: string, component: string] {

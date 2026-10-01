@@ -5,13 +5,6 @@ resources:
   - namespace.yaml
   - ../../base
   - datastore-secret.yaml
-images:
-  - name: dsa-backend
-    newTag: e2e
-  - name: dsa-frontend
-    newTag: e2e
-  - name: dsa-judge
-    newTag: e2e
 patches:
   - target:
       kind: Deployment

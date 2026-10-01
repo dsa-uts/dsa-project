@@ -68,15 +68,19 @@ def "main up" [--k3d-cluster: string] {
     import-k3d-images $k3d_cluster $images
   }
   let overlay = if $k3d_cluster == null { 'e2e' } else { 'e2e-ci' }
-  let manifests = render-manifests $root $overlay $images
   stage apply 'Applying E2E sandbox manifests ...'
   run-checked 'failed to apply E2E sandbox manifests' [
     kubectl apply -k ($root | path join deploy overlays e2e-sandbox)
   ] | print
   stage apply 'Applying E2E manifests without deleting existing data ...'
-  let result = $manifests | ^kubectl apply -f - | complete
+  let result = do { ^kubectl apply -k ($root | path join deploy overlays $overlay) } | complete
   print-command-result $result
   if $result.exit_code != 0 { error make { msg: 'failed to apply E2E manifests; environment retained' } }
+  # latest の参照は変わらないため、ロードしたイメージで Pod を作り直す。
+  run-checked 'failed to restart E2E applications' [
+    kubectl --namespace $e2e_namespace rollout restart
+    deployment/dsa-backend deployment/dsa-judge deployment/dsa-frontend
+  ] | print
   wait-for-application
   let default_url = if $k3d_cluster == null { 'https://dsa-e2e.k8s.orb.local' } else { 'http://e2e.localhost:8080' }
   let url = $env.E2E_BASE_URL? | default $default_url
