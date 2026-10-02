@@ -1,7 +1,6 @@
 export const image_specifications = [
   { name: 'dsa-backend', attribute: 'backend-image', label: 'backend' }
   { name: 'dsa-judge', attribute: 'judge-image', label: 'judge' }
-  { name: 'dsa-sandbox-loader', attribute: 'sandbox-loader-image', label: 'loader' }
   { name: 'dsa-frontend', attribute: 'frontend-image', label: 'frontend' }
 ]
 

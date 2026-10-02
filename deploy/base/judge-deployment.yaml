@@ -16,7 +16,6 @@ spec:
         app.kubernetes.io/name: dsa
         app.kubernetes.io/component: judge
     spec:
-      serviceAccountName: dsa-judge
       containers:
         - name: judge
           image: dsa-judge:latest
@@ -32,10 +31,6 @@ spec:
               value: dsa
             - name: DATABASE_PASSWORD_FILE
               value: /run/secrets/dsa/postgres-password
-            - name: SANDBOX_NAMESPACE
-              value: dsa-dev-sandbox
-            - name: SANDBOX_LOADER_IMAGE
-              value: dsa-sandbox-loader:latest
           resources: {}
           volumeMounts:
             - name: datastore-secrets

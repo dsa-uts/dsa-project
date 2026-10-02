@@ -23,22 +23,6 @@ patches:
         path: /spec/template/spec/containers/0/imagePullPolicy
         value: Never
   - target:
-      kind: Deployment
-      name: dsa-judge
-    patch: |-
-      apiVersion: apps/v1
-      kind: Deployment
-      metadata:
-        name: dsa-judge
-      spec:
-        template:
-          spec:
-            containers:
-              - name: judge
-                env:
-                  - name: SANDBOX_NAMESPACE
-                    value: dsa-e2e-sandbox
-  - target:
       kind: IngressRoute
       name: dsa
     patch: |-

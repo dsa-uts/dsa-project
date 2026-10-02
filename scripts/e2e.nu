@@ -3,7 +3,6 @@
 use kubernetes.nu *
 
 const e2e_namespace = 'dsa-e2e'
-const sandbox_namespace = 'dsa-e2e-sandbox'
 
 def repo-root [] {
   $env.FILE_PWD | path join .. | path expand
@@ -68,10 +67,6 @@ def "main up" [--k3d-cluster: string] {
     import-k3d-images $k3d_cluster $images
   }
   let overlay = if $k3d_cluster == null { 'e2e' } else { 'e2e-ci' }
-  stage apply 'Applying E2E sandbox manifests ...'
-  run-checked 'failed to apply E2E sandbox manifests' [
-    kubectl apply -k ($root | path join deploy overlays e2e-sandbox)
-  ] | print
   stage apply 'Applying E2E manifests without deleting existing data ...'
   let result = do { ^kubectl apply -k ($root | path join deploy overlays $overlay) } | complete
   print-command-result $result
@@ -100,10 +95,6 @@ def "main reset" [] {
       -l 'app.kubernetes.io/component in (backend,judge)' --timeout=90s
     ] | ignore
     
-    run-checked 'failed to delete E2E sandbox Pods' [
-      kubectl -n $sandbox_namespace delete pods --all --wait=true --timeout=90s
-    ] | print
-
     run-checked 'failed to reset E2E database' [
       kubectl -n $e2e_namespace exec statefulset/dsa-postgresql --
       psql -U dsa -d dsa -v ON_ERROR_STOP=1 -c 'DROP SCHEMA public CASCADE; CREATE SCHEMA public;'
@@ -125,7 +116,7 @@ def "main diagnostics" [] { require-cluster; diagnose-e2e }
 def "main down" [] {
   require-cluster
   run-checked 'failed to delete the E2E namespace' [
-    kubectl delete namespace $e2e_namespace $sandbox_namespace --ignore-not-found --wait=true --timeout=2m
+    kubectl delete namespace $e2e_namespace --ignore-not-found --wait=true --timeout=2m
   ] | print
 }
 
