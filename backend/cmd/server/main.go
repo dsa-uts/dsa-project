@@ -15,7 +15,7 @@ import (
 func main() {
 	startupCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	cfg, err := config.Get()
+	cfg, err := config.LoadServer()
 	if err != nil {
 		log.Fatalf("load configuration: %v", err)
 	}

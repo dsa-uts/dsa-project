@@ -31,7 +31,7 @@ func run() error {
 	)
 	defer stop()
 
-	cfg, err := config.Get()
+	cfg, err := config.LoadJudge()
 	if err != nil {
 		return fmt.Errorf("load configuration: %w", err)
 	}
