@@ -1,5 +1,7 @@
 #!/bin/sh
 
-go install github.com/air-verse/air@latest
+set -e
 
-air -c .air.toml
+go install github.com/air-verse/air@v1.63.0
+
+exec air -c .air.toml

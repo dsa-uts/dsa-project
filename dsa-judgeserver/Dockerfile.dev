@@ -3,8 +3,10 @@ FROM golang:1.25.1-bookworm
 WORKDIR /app
 
 ENV DOCKERIZE_VERSION=v0.9.4
+ARG TARGETARCH
 
 RUN apt-get update \
   && apt-get install -y wget \
-  && wget -O - https://github.com/jwilder/dockerize/releases/download/$DOCKERIZE_VERSION/dockerize-linux-amd64-$DOCKERIZE_VERSION.tar.gz | tar xzf - -C /usr/local/bin \
+  && wget -O /tmp/dockerize.tar.gz https://github.com/jwilder/dockerize/releases/download/$DOCKERIZE_VERSION/dockerize-linux-$TARGETARCH-$DOCKERIZE_VERSION.tar.gz \
+  && tar xzf /tmp/dockerize.tar.gz -C /usr/local/bin && rm /tmp/dockerize.tar.gz \
   && apt-get autoremove -yqq --purge wget && rm -rf /var/lib/apt/lists/*
