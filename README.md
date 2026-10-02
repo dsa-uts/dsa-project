@@ -8,8 +8,9 @@ React / TypeScriptのfrontend、GoのbackendをKubernetesへデプロイする�
 
 ## 初回セットアップ
 
-Apple Silicon Mac、起動済みのOrbStack（Docker・Kubernetes）、Nixと
-`aarch64-linux`をビルドできるLinux builder（dotfiles側で管理）が必要。
+Apple Silicon Mac、起動済みのOrbStack（Docker・Kubernetes）、Nixが必要。
+NixはdevShellのツールを提供し、コンテナイメージはDockerfileとbuildxでビルドする。
+Linux用Nix builderは不要。
 
 ```sh
 git clone git@github.com:dsa-uts/dsa-project.git
@@ -38,7 +39,9 @@ task frontend:test
 task frontend:typecheck
 task frontend:lint
 task backend:test
-task check                      # Nixによる全体検証
+task e2e:install                # task checkで使うE2E依存も導入
+task check                      # unit test・typecheck・lint・codegen確認
+task images:build               # Dockerfileからビルドしてローカルへロード
 ```
 
 REST API変更は`api/openapi.yaml`から始め、`task codegen:generate`で生成物を更新する。

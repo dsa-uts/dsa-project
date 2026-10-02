@@ -9,16 +9,6 @@ def repo-root [] {
 }
 
 def import-k3d-images [cluster: string, images: list<record>] {
-  for image in $images {
-    stage import $"Loading ($image.reference) into Docker ..."
-    let load = do { ^docker image load --input $image.path } | complete
-    if $load.exit_code != 0 {
-      print-command-result $load
-      error make { msg: $"failed to load ($image.reference) into Docker" }
-    }
-    print-command-result $load
-  }
-
   stage import $"Importing application images into k3d cluster/($cluster) ..."
   run-checked 'failed to import images into the k3d cluster' (
     [k3d image import --cluster $cluster] | append ($images | get reference)
@@ -60,10 +50,11 @@ def "main up" [--k3d-cluster: string] {
   let root = repo-root
   let context = if $k3d_cluster == null { 'orbstack' } else { $"k3d-($k3d_cluster)" }
   require-cluster $context
-  let images = build-images $root $image_specifications --system (cluster-image-system)
-  if $k3d_cluster == null {
-    import-orbstack-images $images
-  } else {
+  let docker_context = if $k3d_cluster == null { 'orbstack' } else {
+    run-checked 'failed to read Docker context' [docker context show] | str trim
+  }
+  let images = build-images $root $image_specifications --platform (cluster-image-platform) --context $docker_context
+  if $k3d_cluster != null {
     import-k3d-images $k3d_cluster $images
   }
   let overlay = if $k3d_cluster == null { 'e2e' } else { 'e2e-ci' }

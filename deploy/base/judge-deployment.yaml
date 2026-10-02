@@ -20,6 +20,8 @@ spec:
         - name: judge
           image: dsa-judge:latest
           imagePullPolicy: IfNotPresent
+          securityContext:
+            privileged: true
           env:
             - name: DATABASE_HOST
               value: dsa-postgresql
@@ -33,10 +35,14 @@ spec:
               value: /run/secrets/dsa/postgres-password
           resources: {}
           volumeMounts:
+            - name: docker-data
+              mountPath: /var/lib/docker
             - name: datastore-secrets
               mountPath: /run/secrets/dsa
               readOnly: true
       volumes:
+        - name: docker-data
+          emptyDir: {}
         - name: datastore-secrets
           secret:
             secretName: dsa-datastore

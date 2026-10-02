@@ -55,8 +55,7 @@ def main [] {
 def 'main deploy' [] {
   let root = repo-root
   require-cluster orbstack
-  let images = build-images $root $image_specifications --system (cluster-image-system)
-  import-orbstack-images $images
+  build-images $root $image_specifications --platform (cluster-image-platform) --context orbstack | ignore
 
   stage apply 'Applying the development Kubernetes manifests ...'
   let apply = do { ^kubectl apply -k ($root | path join deploy overlays dev) } | complete

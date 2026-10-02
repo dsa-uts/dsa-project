@@ -1,7 +1,7 @@
 export const image_specifications = [
-  { name: 'dsa-backend', attribute: 'backend-image', label: 'backend' }
-  { name: 'dsa-judge', attribute: 'judge-image', label: 'judge' }
-  { name: 'dsa-frontend', attribute: 'frontend-image', label: 'frontend' }
+  { name: 'dsa-backend', directory: 'backend', label: 'backend' }
+  { name: 'dsa-judge', directory: 'backend', label: 'judge' }
+  { name: 'dsa-frontend', directory: 'frontend', label: 'frontend' }
 ]
 
 export def run-checked [description: string, args: list<string>] {
@@ -43,50 +43,41 @@ export def print-command-result [result: record] {
   }
 }
 
-export def cluster-image-system [] {
+export def cluster-image-platform [] {
   let nodes = run-checked 'failed to read node architectures' [kubectl get nodes -o json] | from json
   let architectures = $nodes.items | each { |node| $node.status.nodeInfo.architecture } | uniq
   if ($architectures | length) != 1 {
     error make { msg: 'image import requires a cluster with a single architecture' }
   }
   match $architectures.0 {
-    arm64 => 'aarch64-linux'
-    amd64 => 'x86_64-linux'
+    arm64 => 'linux/arm64'
+    amd64 => 'linux/amd64'
     _ => { error make { msg: $"unsupported node architecture: ($architectures.0)" } }
   }
 }
 
-export def build-images [root: path, specifications: list<record>, --system: string] {
-  let target = if $system != null { $system } else {
-    run-checked 'failed to determine Nix host system' [nix eval --impure --raw --expr builtins.currentSystem]
-      | str trim | str replace '-darwin' '-linux'
+export def build-images [root: path, specifications: list<record>, --platform: string, --context: string] {
+  let docker_context = if $context != null { $context } else {
+    run-checked 'failed to read Docker context' [docker context show] | str trim
   }
-  if ('backend-image' in $specifications.attribute) or ('judge-image' in $specifications.attribute) {
-    stage dependencies 'Refreshing backend dependency metadata ...'
-    run-checked 'failed to refresh backend dependency metadata' [
-      nu ($root | path join scripts backend-deps.nu) refresh
-    ] | ignore
-  }
+  # The context's default builder keeps builds and --load on the same engine.
+  let docker = [docker --context $docker_context buildx build --builder $docker_context --load]
+  let command = if $platform == null { $docker } else { $docker | append [--platform $platform] }
 
   $specifications | each { |specification|
     stage build $"Building the ($specification.label) image ..."
-    let path = run-checked $"failed to build the ($specification.label) image" [
-      nix build --no-link --print-out-paths $"($root)#packages.($target).($specification.attribute)"
-    ] | str trim
+    let reference = $"($specification.name):latest"
+    let result = run-external ...($command | append [
+      --target $specification.label --tag $reference ($root | path join $specification.directory)
+    ]) | complete
+    print-command-result $result
+    if $result.exit_code != 0 {
+      error make { msg: $"failed to build the ($specification.label) image" }
+    }
     {
       name: $specification.name
-      reference: $"($specification.name):latest"
-      path: $path
+      reference: $reference
     }
-  }
-}
-
-export def import-orbstack-images [images: list<record>] {
-  for image in $images {
-    stage import $"Loading ($image.reference) into OrbStack ..."
-    run-checked $"failed to load ($image.reference) into OrbStack" [
-      docker --context orbstack load --input $image.path
-    ] | print
   }
 }
 
