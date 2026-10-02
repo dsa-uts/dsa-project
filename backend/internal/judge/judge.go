@@ -4,12 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io"
 	"log"
 	"maps"
-	"net"
 	"slices"
-	"strconv"
 	"strings"
 	"time"
 
@@ -17,45 +14,21 @@ import (
 	resource "github.com/dsa-uts/dsa-resource-spec"
 	"github.com/google/uuid"
 	"github.com/uptrace/bun"
-
-	corev1 "k8s.io/api/core/v1"
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/labels"
-	typedcorev1 "k8s.io/client-go/kubernetes/typed/core/v1"
-	"k8s.io/client-go/rest"
 )
 
 type worker struct {
 	requests *store.RequestStore
 	ownerID  uuid.UUID
-	pods     typedcorev1.PodInterface
 }
 
 func Run(
 	ctx context.Context,
 	db *bun.DB,
 	ownerID uuid.UUID,
-	sandboxNamespace string,
 ) error {
-	if sandboxNamespace == "" {
-		return errors.New("sandbox namespace is required")
-	}
-
-	cfg, err := rest.InClusterConfig()
-	if err != nil {
-		return fmt.Errorf("load kubernetes configuration: %w", err)
-	}
-
-	client, err := typedcorev1.NewForConfig(cfg)
-	if err != nil {
-		return fmt.Errorf("create kubernetes client: %w", err)
-	}
-
 	w := &worker{
 		requests: store.NewRequestStore(db),
 		ownerID:  ownerID,
-		pods:     client.Pods(sandboxNamespace),
 	}
 
 	for {
@@ -195,7 +168,7 @@ func (w *worker) execute(
 	}
 
 	if req.AttemptCount > 1 {
-		// 旧試行のSandboxを削除し、旧試行のArtifactをDBから削除する
+		// 旧試行のArtifactをDBから削除する
 		if err := w.cleanupPreviousAttempts(ctx, req); err != nil {
 			return nil, fmt.Errorf("cleanup previous attempts: %w", err)
 		}
@@ -228,7 +201,7 @@ func (w *worker) execute(
 		}
 		if err != nil {
 			return results, fmt.Errorf(
-				"execute workflow %s: %w", &workflowID, err,
+				"execute workflow %s: %w", workflowID, err,
 			)
 		}
 		if result == nil {
@@ -246,11 +219,6 @@ func (w *worker) cleanupPreviousAttempts(
 ) error {
 	if req.AttemptCount <= 1 {
 		return nil
-	}
-
-	// 旧試行のSandboxが削除されたことを確認するまで戻らない
-	if err := w.deletePreviousSandboxes(ctx, req); err != nil {
-		return fmt.Errorf("delete previous sandboxes: %w", err)
 	}
 
 	deleteCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
@@ -382,123 +350,6 @@ func orderedJobIDs(
 	}
 
 	return order, nil
-}
-
-func (w *worker) deletePreviousSandboxes(
-	ctx context.Context,
-	req *store.Request,
-) error {
-	if req.AttemptCount <= 1 {
-		return nil
-	}
-
-	ctx, cancel := context.WithTimeout(ctx, 60*time.Second)
-	defer cancel()
-
-	selector := labels.Set{
-		"app.kubernetes.io/name":      "dsa",
-		"app.kubernetes.io/component": "sandbox",
-		"dsa/request-id":              req.ID.String(),
-	}.AsSelector().String()
-
-	for {
-		var pods *corev1.PodList
-		err := retrySandboxAPI(ctx, func() error {
-			var err error
-			pods, err = w.pods.List(ctx, metav1.ListOptions{
-				LabelSelector: selector,
-			})
-			return err
-		})
-		if err != nil {
-			return fmt.Errorf("list sandbox pods: %w", err)
-		}
-
-		remaining := 0
-		for _, pod := range pods.Items {
-			attempt, err := strconv.ParseInt(
-				pod.Labels["dsa/attempt"], 10, 32,
-			)
-			if err != nil || attempt < 1 {
-				return fmt.Errorf(
-					"pod %s has invalid attempt label %q",
-					pod.Name, pod.Labels["dsa/attempt"],
-				)
-			}
-
-			// 現在・未来の試行には触れない。
-			if attempt >= int64(req.AttemptCount) {
-				continue
-			}
-
-			remaining++
-
-			// 削除中も残存 Pod として数え、消えるまでまつ。
-			if pod.DeletionTimestamp != nil {
-				continue
-			}
-
-			err = retrySandboxAPI(ctx, func() error {
-				err := w.pods.Delete(ctx, pod.Name, metav1.DeleteOptions{
-					Preconditions: &metav1.Preconditions{
-						UID: &pod.UID,
-					},
-				})
-				if apierrors.IsNotFound(err) {
-					return nil
-				}
-
-				return err
-			})
-			if err != nil {
-				return fmt.Errorf("delete pod %s: %w", pod.Name, err)
-			}
-		}
-
-		if remaining == 0 {
-			// List 完了直後のキャンセルも成功扱いにしない。
-			return ctx.Err()
-		}
-
-		if err := wait(ctx, 2*time.Second); err != nil {
-			return fmt.Errorf("wait for sandbox deletion: %w", err)
-		}
-	}
-}
-
-// 再送しても安全な API 操作にだけ使用する。
-func retrySandboxAPI(ctx context.Context, call func() error) error {
-	for attempt := 0; ; attempt++ {
-		if err := ctx.Err(); err != nil {
-			return err
-		}
-
-		err := call()
-		if err == nil {
-			return nil
-		}
-		if ctx.Err() != nil {
-			return ctx.Err()
-		}
-
-		var networkErr net.Error
-		retryable := apierrors.IsTimeout(err) ||
-			apierrors.IsServerTimeout(err) ||
-			apierrors.IsTooManyRequests(err) ||
-			apierrors.IsServiceUnavailable(err) ||
-			apierrors.IsInternalError(err) ||
-			errors.As(err, &networkErr) ||
-			errors.Is(err, io.EOF) ||
-			errors.Is(err, io.ErrUnexpectedEOF)
-
-		if !retryable || attempt >= 2 {
-			return err
-		}
-
-		if err := wait(ctx, time.Second); err != nil {
-			return err
-		}
-	}
 }
 
 func (w *worker) executeJob(
