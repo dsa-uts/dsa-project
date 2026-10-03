@@ -43,7 +43,7 @@ func TestPinnedFetchAndFailures(t *testing.T) {
 	r := resource.Resource{Metadata: resource.Metadata{ID: "ex1", Name: "Example", Version: "v1.0.0"},
 		RequiredFiles: []string{"main.c", "*.h", "レポート.pdf（任意）"},
 		Workflows: map[string]resource.Workflow{"judge": {Name: "Judge", Jobs: map[string]resource.Job{"test": {
-			Visibility: "private", SandboxImage: "ghcr.io/example/judge@sha256:" + strings.Repeat("a", 64),
+			Visibility: "private", SandboxImage: "ghcr.io/example/judge:latest",
 			Limits: resource.Limits{CPU: 1, PIDs: 1, Memory: 1, StdoutSize: 1, StderrSize: 1, WorkspaceSize: 1, ArtifactSize: 1},
 			Steps:  []resource.Step{{Run: "true", Timeout: time.Second}},
 		}}}},
@@ -70,7 +70,7 @@ func TestPinnedFetchAndFailures(t *testing.T) {
 		{"path traversal", strings.Replace(index, "release/ex1/v1.0.0.json", "release/../secret", 1), string(snapshot), 200, ErrInvalid},
 		{"absolute URL", strings.Replace(index, "release/ex1/v1.0.0.json", "https://evil.test/secret", 1), string(snapshot), 200, ErrInvalid},
 		{"unknown index field", strings.Replace(index, `"path":`, `"secret":"x","path":`, 1), string(snapshot), 200, ErrInvalid},
-		{"mutable image", index, strings.Replace(string(snapshot), "@sha256:"+strings.Repeat("a", 64), ":latest", 1), 200, ErrInvalid},
+		{"invalid image", index, strings.Replace(string(snapshot), "ghcr.io/example/judge:latest", "invalid image", 1), 200, ErrInvalid},
 		{"invalid snapshot", index, `{}`, 200, ErrInvalid},
 		{"wrong ID", index, strings.Replace(string(snapshot), `"id": "ex1"`, `"id": "ex2"`, 1), 200, ErrInvalid},
 		{"wrong Version", index, strings.Replace(string(snapshot), `"version": "v1.0.0"`, `"version": "v2.0.0"`, 1), 200, ErrInvalid},

@@ -91,7 +91,6 @@ CREATE TABLE requests (
     attempt_count integer NOT NULL DEFAULT 0 CHECK (attempt_count BETWEEN 0 AND 3),
     attempt_started_at timestamptz,
     duration_ms bigint CHECK (duration_ms >= 0),
-    error text,
     CONSTRAINT requests_completed_status_check CHECK ((state = 'completed') = (status IS NOT NULL)),
     CONSTRAINT requests_lease_check CHECK (
         (state = 'running' AND lease_owner IS NOT NULL AND lease_expires_at IS NOT NULL)
@@ -113,6 +112,8 @@ CREATE TABLE workflow_results (
             status IN ('IE', 'CE', 'OLE', 'MLE', 'TLE', 'RE', 'WA', 'SKIP', 'AC')
     ),
     duration_ms bigint NOT NULL CHECK (duration_ms >= 0),
+    max_step_duration_ms bigint CHECK (max_step_duration_ms >= 0),
+    peak_memory_bytes bigint CHECK (peak_memory_bytes >= 0),
     details jsonb NOT NULL,
     PRIMARY KEY (request_id, workflow_id),
     CHECK (jsonb_typeof(details) = 'object')
@@ -127,6 +128,7 @@ CREATE TABLE artifacts (
     job_id text NOT NULL,
     name text NOT NULL,
     content bytea,
+    executable boolean NOT NULL DEFAULT false,
     error text,
     CONSTRAINT artifacts_capture_result_check CHECK (
         (content IS NOT NULL AND error IS NULL)

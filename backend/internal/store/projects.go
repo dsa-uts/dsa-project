@@ -146,7 +146,7 @@ func (s *ProjectStore) ImportVersion(ctx context.Context, snapshot resource.Reso
 			return err
 		}
 		if !isNew {
-			switch semver.Compare(version, project.Version) {
+			switch semver.Compare(string(version), project.Version) {
 			case -1:
 				return ErrOlderResourceVersion
 			case 0:
@@ -158,7 +158,7 @@ func (s *ProjectStore) ImportVersion(ctx context.Context, snapshot resource.Reso
 		}
 		project.LatestVersionID = uuid.New()
 		project.Name = name
-		project.Version = version
+		project.Version = string(version)
 		if isNew {
 			if _, err := tx.NewInsert().Model(&project.Project).Exec(ctx); err != nil {
 				return err
@@ -171,7 +171,7 @@ func (s *ProjectStore) ImportVersion(ctx context.Context, snapshot resource.Reso
 		v := &ProjectVersion{
 			ID:           project.LatestVersionID,
 			ProjectID:    project.ID,
-			Version:      version,
+			Version:      string(version),
 			ResourceJSON: snapshot,
 		}
 		if _, err := tx.NewInsert().Model(v).Exec(ctx); err != nil {

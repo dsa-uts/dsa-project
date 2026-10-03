@@ -37,11 +37,15 @@ spec:
           volumeMounts:
             - name: docker-data
               mountPath: /var/lib/docker
+            - name: judge-workspaces
+              mountPath: /var/lib/dsa-judge/workspaces
             - name: datastore-secrets
               mountPath: /run/secrets/dsa
               readOnly: true
       volumes:
         - name: docker-data
+          emptyDir: {}
+        - name: judge-workspaces
           emptyDir: {}
         - name: datastore-secrets
           secret:

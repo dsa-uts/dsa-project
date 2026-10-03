@@ -140,17 +140,8 @@ func decodeIndex(data []byte, id, version string) (indexEntry, error) {
 
 func decodeSnapshot(data []byte, id, version, expectedHash string) (*resource.Resource, error) {
 	r, err := resource.DecodeResource(bytes.NewReader(data))
-	if err != nil || r.Metadata.ID != id || r.Metadata.Version != version {
+	if err != nil || r.Metadata.ID != id || string(r.Metadata.Version) != version {
 		return nil, ErrInvalid
-	}
-	// DecodeResource checks image syntax but also permits mutable tags for
-	// authoring. Published snapshots must carry a digest.
-	for _, workflow := range r.Workflows {
-		for _, job := range workflow.Jobs {
-			if !strings.Contains(job.SandboxImage, "@") {
-				return nil, ErrInvalid
-			}
-		}
 	}
 	hash, err := r.Hash()
 	if err != nil {

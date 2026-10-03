@@ -77,17 +77,20 @@ type Request struct {
 	AttemptCount     int32        `bun:"attempt_count,notnull,default:0"`
 	AttemptStartedAt *time.Time   `bun:"attempt_started_at"`
 	DurationMS       *int64       `bun:"duration_ms"`
-	Error            *string      `bun:"error"`
+
+	WorkflowResults []WorkflowResult `bun:"rel:has-many,join:id=request_id"`
 }
 
 type WorkflowResult struct {
 	bun.BaseModel `bun:"table:workflow_results"`
 
-	RequestID  uuid.UUID       `bun:"request_id,pk"`
-	WorkflowID string          `bun:"workflow_id,pk"`
-	Status     Status          `bun:"status"`
-	DurationMS int64           `bun:"duration_ms"`
-	Details    WorkflowDetails `bun:"details,type:jsonb,notnull"`
+	RequestID         uuid.UUID       `bun:"request_id,pk"`
+	WorkflowID        string          `bun:"workflow_id,pk"`
+	Status            Status          `bun:"status"`
+	DurationMS        int64           `bun:"duration_ms"`
+	MaxStepDurationMS *int64          `bun:"max_step_duration_ms"`
+	PeakMemoryBytes   *int64          `bun:"peak_memory_bytes"`
+	Details           WorkflowDetails `bun:"details,type:jsonb,notnull"`
 }
 
 type WorkflowDetails struct {
@@ -95,21 +98,43 @@ type WorkflowDetails struct {
 }
 
 type JobResult struct {
-	ID         string       `json:"id"`
-	Status     Status       `json:"status"`
-	SkipReason string       `json:"skip_reason"`
-	Steps      []StepResult `json:"steps"`
+	ID         string           `json:"id"`
+	Status     Status           `json:"status"`
+	StartedAt  time.Time        `json:"started_at"`
+	FinishedAt time.Time        `json:"finished_at"`
+	SkipReason string           `json:"skip_reason,omitempty"`
+	StopReason string           `json:"stop_reason,omitempty"`
+	Artifacts  []ArtifactResult `json:"artifacts"`
+	Steps      []StepResult     `json:"steps"`
 }
 
 type StepResult struct {
-	ID              string `json:"id"`
-	Status          Status `json:"status"`
-	ExitCode        int    `json:"exit_code"`
-	DurationMS      int64  `json:"duration_ms"`
-	Stdout          string `json:"stdout"`
-	Stderr          string `json:"stderr"`
-	StdoutTruncated bool   `json:"stdout_truncated"`
-	StderrTruncated bool   `json:"stderr_truncated"`
+	ID            string       `json:"id"`
+	Status        Status       `json:"status"`
+	StartedAt     time.Time    `json:"started_at"`
+	FinishedAt    time.Time    `json:"finished_at"`
+	ExitCode      int          `json:"exit_code"` // -1 means unavailable.
+	DurationMS    *int64       `json:"duration_ms"`
+	MemoryBytes   *int64       `json:"memory_bytes"`
+	TLE           bool         `json:"tle"`
+	MLE           bool         `json:"mle"`
+	OLE           bool         `json:"ole"`
+	OOMKilled     bool         `json:"oom_killed"`
+	ContainerLost bool         `json:"container_lost"`
+	Stdout        OutputResult `json:"stdout"`
+	Stderr        OutputResult `json:"stderr"`
+}
+
+type OutputResult struct {
+	Data      []byte `json:"data"` // JSON encodes the original bytes as base64.
+	Truncated bool   `json:"truncated"`
+}
+
+type ArtifactResult struct {
+	Name   string `json:"name"`
+	Path   string `json:"path"`
+	Status Status `json:"status"`
+	Error  string `json:"error,omitempty"`
 }
 
 type RequestStore struct{ db *bun.DB }
@@ -264,14 +289,17 @@ func (s *RequestStore) ClaimNext(
 
 			// 最終試行で停止したRequestは、再取得せずIEで確定する。
 			if req.AttemptCount >= 3 {
+				slog.WarnContext(ctx, "request attempt limit reached",
+					"request_id", req.ID,
+					"attempt_count", req.AttemptCount,
+				)
 				return tx.NewRaw(`
 			  UPDATE requests
 				SET state = 'completed',
 				    status = 'IE',
 						lease_owner = NULL,
 						lease_expires_at = NULL,
-						duration_ms = NULL,
-						error = 'request attempt limit reached'
+						duration_ms = NULL
 				WHERE id = ?
 				RETURNING *
 			`, req.ID).Scan(ctx, req)
@@ -286,8 +314,7 @@ func (s *RequestStore) ClaimNext(
 					    statement_timestamp() + INTERVAL '60 seconds',
 					attempt_count = attempt_count + 1,
 					attempt_started_at = statement_timestamp(),
-					duration_ms = NULL,
-					error = NULL
+					duration_ms = NULL
 			WHERE id = ?
 			RETURNING *
 		`, ownerID, req.ID).Scan(ctx, req)
@@ -340,53 +367,9 @@ func (s *RequestStore) FinishAttempt(
 	requestID, ownerID uuid.UUID,
 	attemptCount int32,
 	results []WorkflowResult,
-	executionErr error,
+	state RequestState,
+	status *Status,
 ) error {
-	state := CompletedState
-	var status *Status
-	var message *string
-
-	if executionErr != nil && attemptCount < 3 {
-		state = RetryingState
-		// status = nil
-		// message = nil
-	} else {
-		finalStatus := AC
-
-		if executionErr != nil {
-			// attemptCount >= 3
-			finalStatus = IE
-			text := executionErr.Error()
-			message = &text
-		} else {
-			// executionErr == nil && attemptCount >= 3
-			// or
-			// executionErr == nil && attemptCount < 3
-
-			// state = CompletedState
-			// message = nil
-
-			// executeは正常終了後、対象Workflowの全ての結果を返す
-			if len(results) == 0 {
-				return errors.New("cannot complete request without workflow results")
-			}
-
-			for _, result := range results {
-				rank := result.Status.Rank()
-				if rank < 0 {
-					return fmt.Errorf(
-						"invalid workflow status %q", result.Status,
-					)
-				}
-				if rank > finalStatus.Rank() {
-					finalStatus = result.Status
-				}
-			}
-		}
-
-		status = &finalStatus
-	}
-
 	return s.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
 		// ロックは結果保存・状態更新が完了するまで保持する
 		var lockID uuid.UUID
@@ -409,7 +392,8 @@ func (s *RequestStore) FinishAttempt(
 		}
 
 		if state == CompletedState && len(results) > 0 {
-			// 呼び出し元のsliceは変更せず、保存先Requesetをここで設定する
+			// 集計と詳細を、Request の完了状態と同じトランザクションで保存する。
+			// 再試行待ちでは保存せず、最終試行の結果だけを確定する。
 			rows := slices.Clone(results)
 			for i := range rows {
 				rows[i].RequestID = requestID
@@ -423,7 +407,6 @@ func (s *RequestStore) FinishAttempt(
 		  UPDATE requests
 			SET state = ?,
 			    status = ?,
-			    error = ?,
 			    duration_ms = CASE
 			        WHEN ? = 'completed' THEN
 					        GREATEST(
@@ -441,7 +424,7 @@ func (s *RequestStore) FinishAttempt(
 				AND lease_owner = ?
 				AND attempt_count = ?
 				AND lease_expires_at > clock_timestamp()
-		`, state, status, message, state,
+		`, state, status, state,
 			requestID, ownerID, attemptCount)
 		if err != nil {
 			return fmt.Errorf("finish request: %w", err)
@@ -499,7 +482,7 @@ func (s *RequestStore) LoadExecutionInput(
 	return input, nil
 }
 
-func (s *RequestStore) DeletePreviousArtifacts(
+func (s *RequestStore) DeletePreviousExecution(
 	ctx context.Context,
 	requestID, ownerID uuid.UUID,
 	attemptCount int32,
@@ -524,12 +507,11 @@ func (s *RequestStore) DeletePreviousArtifacts(
 		}
 
 		_, err = tx.ExecContext(ctx, `
-		  DELETE FROM artifacts
-			WHERE request_id = ?
-			  AND attempt_count < ?
+			DELETE FROM artifacts
+			WHERE request_id = ? AND attempt_count < ?
 		`, requestID, attemptCount)
 		if err != nil {
-			return fmt.Errorf("delete artifacts: %w", err)
+			return fmt.Errorf("delete previous artifacts: %w", err)
 		}
 
 		return nil

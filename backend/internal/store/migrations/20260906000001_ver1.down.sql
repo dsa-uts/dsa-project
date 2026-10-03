@@ -1,3 +1,4 @@
+DROP TABLE IF EXISTS artifacts;
 DROP TABLE IF EXISTS workflow_results;
 DROP TABLE IF EXISTS requests;
 DROP TABLE IF EXISTS submission_files;

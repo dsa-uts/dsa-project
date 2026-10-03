@@ -48,7 +48,6 @@ func run() error {
 
 	dockerClient, err := client.New(
 		client.FromEnv,
-		client.WithTimeout(2*time.Second),
 	)
 	if err != nil {
 		return fmt.Errorf("create Docker client: %w", err)
@@ -65,20 +64,22 @@ func run() error {
 	ownerID := uuid.New()
 	log.Printf("judge started: owner=%s", ownerID)
 
-	return judge.Run(ctx, db, ownerID)
+	return judge.Run(ctx, db, ownerID, dockerClient)
 }
 
 func waitForDocker(ctx context.Context, cli *client.Client) error {
 	var pingErr error
 	for ctx.Err() == nil {
-		_, pingErr = cli.Ping(ctx, client.PingOptions{})
+		pingCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
+		_, pingErr = cli.Ping(pingCtx, client.PingOptions{})
+		cancel()
 		if pingErr == nil {
 			return ctx.Err()
 		}
 
 		select {
-		case <- ctx.Done():
-		case <- time.After(500 * time.Millisecond):
+		case <-ctx.Done():
+		case <-time.After(500 * time.Millisecond):
 		}
 	}
 	return fmt.Errorf(
