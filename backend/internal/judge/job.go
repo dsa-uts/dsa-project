@@ -10,7 +10,14 @@ import (
 	resource "github.com/dsa-uts/dsa-resource-spec"
 )
 
-func (w *worker) executeJob(ctx context.Context, req *store.Request, input *store.ExecutionInput, workflowID string, workflow resource.Workflow, jobID string) (result store.JobResult, executionErr error) {
+func (w *worker) executeJob(
+	ctx context.Context,
+	req *store.Request,
+	input *store.ExecutionInput,
+	workflowID string,
+	workflow resource.Workflow,
+	jobID string,
+) (result store.JobResult, executionErr error) {
 	job := workflow.Jobs[jobID]
 	result = store.JobResult{
 		ID:        jobID,
@@ -65,7 +72,7 @@ func (w *worker) executeJob(ctx context.Context, req *store.Request, input *stor
 			result.Status = stepResult.Status
 		}
 		if stepErr != nil {
-			return result, fmt.Errorf("execute step %s: %w", stepResult.ID, stepErr)
+			return result, fmt.Errorf("execute step %d: %w", stepResult.Index, stepErr)
 		}
 		if stepResult.ContainerLost {
 			result.StopReason = "OOM terminated the sandbox; remaining steps were not executed"
@@ -86,7 +93,12 @@ type jobArtifactInput struct {
 	artifact *store.Artifact
 }
 
-func (w *worker) loadJobArtifacts(ctx context.Context, req *store.Request, workflowID string, job resource.Job) ([]jobArtifactInput, string, error) {
+func (w *worker) loadJobArtifacts(
+	ctx context.Context,
+	req *store.Request,
+	workflowID string,
+	job resource.Job,
+) ([]jobArtifactInput, string, error) {
 	if job.Artifacts == nil {
 		return nil, "", nil
 	}
@@ -110,7 +122,14 @@ func (w *worker) loadJobArtifacts(ctx context.Context, req *store.Request, workf
 	return inputs, "", nil
 }
 
-func prepareJobFiles(ctx context.Context, ws *workspace, input *store.ExecutionInput, workflow resource.Workflow, job resource.Job, artifacts []jobArtifactInput) error {
+func prepareJobFiles(
+	ctx context.Context,
+	ws *workspace,
+	input *store.ExecutionInput,
+	workflow resource.Workflow,
+	job resource.Job,
+	artifacts []jobArtifactInput,
+) error {
 	placementCtx, cancel := context.WithTimeout(ctx, placementTimeout)
 	defer cancel()
 	if err := ws.mount(placementCtx, job.Limits.WorkspaceSize); err != nil {
@@ -122,7 +141,16 @@ func prepareJobFiles(ctx context.Context, ws *workspace, input *store.ExecutionI
 		}
 		for _, input := range artifacts {
 			artifact := input.artifact
-			if err := placeFile(placementCtx, ws.dataPath("workspace"), input.path, artifact.Content, fileOptions{executable: artifact.Executable, replace: true, uid: submissionUID}); err != nil {
+			if err := placeFile(
+				placementCtx,
+				ws.workspacePath(),
+				input.path,
+				artifact.Content,
+				fileOptions{
+					executable: artifact.Executable,
+					replace:    true,
+					uid:        submissionUID,
+				}); err != nil {
 				return fmt.Errorf("input artifact %q: %w", input.path, err)
 			}
 		}
@@ -137,7 +165,13 @@ func prepareJobFiles(ctx context.Context, ws *workspace, input *store.ExecutionI
 	return nil
 }
 
-func (w *worker) captureJobArtifacts(ctx context.Context, req *store.Request, ws *workspace, workflowID, jobID string, job resource.Job, result *store.JobResult) error {
+func (w *worker) captureJobArtifacts(
+	ctx context.Context,
+	req *store.Request,
+	ws *workspace, workflowID, jobID string,
+	job resource.Job,
+	result *store.JobResult,
+) error {
 	if job.Artifacts == nil {
 		return nil
 	}

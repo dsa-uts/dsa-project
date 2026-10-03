@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"log"
-	"strconv"
 	"time"
 
 	"github.com/dsa-uts/dsa-project/backend/internal/store"
@@ -34,7 +33,7 @@ func (w *worker) inspectExec(ctx context.Context, id string) (client.ExecInspect
 
 func (w *worker) executeStep(ctx context.Context, sb *sandbox, index int, step resource.Step, limits resource.Limits) (result store.StepResult, executionErr error) {
 	result = store.StepResult{
-		ID:        strconv.Itoa(index),
+		Index:     index,
 		Status:    store.AC,
 		StartedAt: time.Now(),
 		ExitCode:  exitCodeUnavailable,
@@ -89,13 +88,13 @@ func (w *worker) executeStep(ctx context.Context, sb *sandbox, index int, step r
 	cleanupCtx, cancelCleanup := context.WithTimeout(context.WithoutCancel(ctx), cleanupTimeout)
 	if err := w.cleanupSubmission(cleanupCtx, sb); err != nil {
 		log.Printf(
-			"sandbox %s step %s: cleanup submission: %v",
-			sb.id, result.ID, err,
+			"sandbox %s step %d: cleanup submission: %v",
+			sb.id, result.Index, err,
 		)
 	}
 	cancelCleanup()
 
-	outputErr := streams.finish(ctx, sb.id, result.ID)
+	outputErr := streams.finish(ctx, sb.id, result.Index)
 	result.Stdout = streams.stdout.result()
 	result.Stderr = streams.stderr.result()
 	observed.ole = observed.ole || result.Stdout.Truncated || result.Stderr.Truncated

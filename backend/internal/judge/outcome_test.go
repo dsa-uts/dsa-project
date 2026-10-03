@@ -86,14 +86,17 @@ func TestJudgeStep(t *testing.T) {
 	}
 }
 
-func TestSummarizeWorkflowUsage(t *testing.T) {
+func TestSummarizeWorkflow(t *testing.T) {
 	duration, memory := int64(12), int64(300)
 	shorter, larger := int64(4), int64(500)
 	result := store.WorkflowResult{Details: store.WorkflowDetails{Jobs: []store.JobResult{
-		{Steps: []store.StepResult{{DurationMS: &duration, MemoryBytes: &memory}}},
+		{Status: store.AC, Steps: []store.StepResult{{DurationMS: &duration, MemoryBytes: &memory}}},
 		{Status: store.IE, Steps: []store.StepResult{{DurationMS: &shorter, MemoryBytes: &larger}, {Status: store.IE}}},
 	}}}
-	summarizeWorkflowUsage(&result)
+	summarizeWorkflow(&result, errors.New("execute job failed"))
+	if result.Status != store.IE {
+		t.Errorf("status = %q, want IE", result.Status)
+	}
 	if result.MaxStepDurationMS == nil || *result.MaxStepDurationMS != duration {
 		t.Errorf("max duration = %v, want %d", result.MaxStepDurationMS, duration)
 	}
@@ -101,8 +104,36 @@ func TestSummarizeWorkflowUsage(t *testing.T) {
 		t.Errorf("peak memory = %v, want %d", result.PeakMemoryBytes, larger)
 	}
 	empty := store.WorkflowResult{}
-	summarizeWorkflowUsage(&empty)
+	summarizeWorkflow(&empty, nil)
 	if empty.MaxStepDurationMS != nil || empty.PeakMemoryBytes != nil {
 		t.Fatal("unmeasured workflow must retain nil measurements")
+	}
+}
+
+func TestSummarizeWorkflowStatus(t *testing.T) {
+	tests := []struct {
+		name         string
+		statuses     []store.Status
+		executionErr error
+		want         store.Status
+	}{
+		{name: "no jobs", want: store.AC},
+		{name: "accepted", statuses: []store.Status{store.AC}, want: store.AC},
+		{name: "last job fails", statuses: []store.Status{store.AC, store.IE}, want: store.IE},
+		{name: "earlier failure survives", statuses: []store.Status{store.TLE, store.AC}, want: store.TLE},
+		{name: "error before first job", executionErr: errors.New("invalid dependencies"), want: store.IE},
+		{name: "error between jobs", statuses: []store.Status{store.AC}, executionErr: errors.New("canceled"), want: store.IE},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := store.WorkflowResult{}
+			for _, status := range tt.statuses {
+				result.Details.Jobs = append(result.Details.Jobs, store.JobResult{Status: status})
+			}
+			summarizeWorkflow(&result, tt.executionErr)
+			if result.Status != tt.want {
+				t.Errorf("status = %q, want %q", result.Status, tt.want)
+			}
+		})
 	}
 }

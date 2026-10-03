@@ -76,7 +76,13 @@ func (w *worker) cleanupPreviousAttempts(ctx context.Context, req *store.Request
 	return nil
 }
 
-func (w *worker) executeWorkflow(ctx context.Context, req *store.Request, input *store.ExecutionInput, workflowID string, workflow resource.Workflow) (result *store.WorkflowResult, err error) {
+func (w *worker) executeWorkflow(
+	ctx context.Context,
+	req *store.Request,
+	input *store.ExecutionInput,
+	workflowID string,
+	workflow resource.Workflow,
+) (result *store.WorkflowResult, err error) {
 	if req == nil || input == nil {
 		return nil, fmt.Errorf("execute workflow: req and input must not be nil")
 	}
@@ -86,17 +92,13 @@ func (w *worker) executeWorkflow(ctx context.Context, req *store.Request, input 
 	result = &store.WorkflowResult{
 		RequestID:  req.ID,
 		WorkflowID: workflowID,
-		Status:     store.AC,
 		Details: store.WorkflowDetails{
 			Jobs: []store.JobResult{},
 		},
 	}
 	defer func() {
 		result.DurationMS = time.Since(startedAt).Milliseconds()
-		if err != nil {
-			result.Status = store.IE
-		}
-		summarizeWorkflowUsage(result)
+		summarizeWorkflow(result, err)
 	}()
 
 	jobIDs, err := orderedJobIDs(workflow, input.Submission.Kind)
@@ -121,10 +123,6 @@ func (w *worker) executeWorkflow(ctx context.Context, req *store.Request, input 
 
 		if executionErr != nil {
 			return result, fmt.Errorf("execute job %s: %w", jobID, executionErr)
-		}
-
-		if jobResult.Status.Rank() > result.Status.Rank() {
-			result.Status = jobResult.Status
 		}
 	}
 
@@ -171,9 +169,17 @@ func orderedJobIDs(workflow resource.Workflow, kind store.SubmissionKind) ([]str
 	return order, nil
 }
 
-func summarizeWorkflowUsage(result *store.WorkflowResult) {
-	// 打ち切り時も、回収できた Step の計測値を集計する。
+func summarizeWorkflow(result *store.WorkflowResult, executionErr error) {
+	result.Status = store.AC
+	// Job 開始前のエラーや Job 間のキャンセルも Workflow の IE とする。
+	if executionErr != nil {
+		result.Status = store.IE
+	}
+	// 打ち切り時も、最後の Job を含めて Status と Step の計測値を集計する。
 	for _, job := range result.Details.Jobs {
+		if job.Status.Rank() > result.Status.Rank() {
+			result.Status = job.Status
+		}
 		for _, step := range job.Steps {
 			if duration := step.DurationMS; duration != nil {
 				if result.MaxStepDurationMS == nil || *duration > *result.MaxStepDurationMS {

@@ -109,7 +109,7 @@ type JobResult struct {
 }
 
 type StepResult struct {
-	ID            string       `json:"id"`
+	Index         int          `json:"index"` // Zero-based position in the Resource steps array.
 	Status        Status       `json:"status"`
 	StartedAt     time.Time    `json:"started_at"`
 	FinishedAt    time.Time    `json:"finished_at"`
@@ -131,8 +131,11 @@ type OutputResult struct {
 }
 
 type ArtifactResult struct {
-	Name   string `json:"name"`
-	Path   string `json:"path"`
+	Name string `json:"name"`
+	Path string `json:"path"`
+	// AC: File exists, no problem
+	// WA: Something wrong happen e.g., file not found, irregular file type
+	// OLE: File size exceeds limits
 	Status Status `json:"status"`
 	Error  string `json:"error,omitempty"`
 }

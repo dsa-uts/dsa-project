@@ -51,7 +51,7 @@ func sandboxName(ws *workspace) string {
 // particular, Step exec creation/start/attach must never use this helper.
 func retryDocker(ctx context.Context, operation func(context.Context) error) error {
 	var err error
-	for attempt := 0; attempt < 3; attempt++ {
+	for attempt := range 3 {
 		if err := ctx.Err(); err != nil {
 			return err
 		}
@@ -84,7 +84,12 @@ func (w *worker) inspectSandbox(ctx context.Context, id string) (container.Inspe
 	return result.Container, err
 }
 
-func (w *worker) startSandbox(ctx context.Context, req *store.Request, ws *workspace, workflowID, jobID string, job resource.Job) (*sandbox, error) {
+func (w *worker) startSandbox(
+	ctx context.Context,
+	req *store.Request,
+	ws *workspace,
+	workflowID, jobID string,
+	job resource.Job) (*sandbox, error) {
 	ctx, cancel := context.WithTimeout(ctx, startupTimeout)
 	defer cancel()
 
@@ -124,13 +129,15 @@ func (w *worker) startSandbox(ctx context.Context, req *store.Request, ws *works
 }
 
 func sandboxCgroup(pid int) (string, error) {
+	// ex. data := "0::/system.slice/systemd-networkd.service"
 	data, err := os.ReadFile(fmt.Sprintf("/proc/%d/cgroup", pid))
 	if err != nil {
 		return "", err
 	}
 	var cgroup string
-	for _, line := range strings.Split(string(data), "\n") {
+	for line := range strings.SplitSeq(string(data), "\n") {
 		if path, ok := strings.CutPrefix(line, "0::"); ok {
+			// ex. cgroup := "/system.slice/systemd-networkd.service"
 			cgroup = path
 			break
 		}
@@ -142,17 +149,35 @@ func sandboxCgroup(pid int) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	for _, line := range strings.Split(string(mounts), "\n") {
+	for line := range strings.SplitSeq(string(mounts), "\n") {
+		// Looking for a field like this in mountinfo.
+		// -------------------------------------------------------
+		// 160 100 0:32 / /sys/fs/cgroup rw,nosuid,nodev,noexec,relatime shared:57 - cgroup2 none rw,nsdelegate
+		// -------------------------------------------------------
 		fields := strings.Fields(line)
 		separator := slices.Index(fields, "-")
+		// 6 is a number of first mandate fields in mountinfo.
+		// see: https://man7.org/linux/man-pages/man5/proc_pid_mountinfo.5.html#top_of_page.
 		if separator < 6 || separator+1 >= len(fields) || fields[separator+1] != "cgroup2" {
 			continue
 		}
+		// fields[3] := root: the pathname of the directory in the filesystem
+		//              which forms the root of this mount.
+		// ex. fields[3] = "/"]
 		relative, err := filepath.Rel(fields[3], cgroup)
+		// In this example,
+		// relative = filepath.Rel(basePath = "/", targetPath = "/system.slice/systemd-networkd.service")
+		//          = "system.slice/systemd-networkd.service"
 		if err != nil || relative == "." || !filepath.IsLocal(relative) {
 			continue
 		}
+		// fields[4] := mount point: the pathname of the mount point relative
+		//              to the process's root directory.
+		// ex. fields[4] = "/sys/fs/cgroup"
 		path := filepath.Join(fields[4], relative)
+		// In this example,
+		// path = filepath.Join("/sys/fs/cgroup", "system.slice/systemd-networkd.service")
+		//      = "/sys/fs/cgroup/system.slice/systemd-networkd.service"
 		if _, err := os.Stat(filepath.Join(path, "memory.current")); err != nil {
 			return "", err
 		}
@@ -290,6 +315,7 @@ func (w *worker) ensureSandboxImage(ctx context.Context, image string) error {
 		if err == nil || !errdefs.IsNotFound(err) {
 			return err
 		}
+		// TODO: GHCRプライベートレジストリに対応
 		pull, err := w.docker.ImagePull(ctx, image, client.ImagePullOptions{})
 		if err != nil {
 			return err
@@ -331,17 +357,15 @@ func (w *worker) sandboxOptions(req *store.Request, ws *workspace, workflowID, j
 			CapDrop:        []string{"ALL"},
 			SecurityOpt:    []string{"no-new-privileges:true"},
 			LogConfig:      container.LogConfig{Type: "none"},
-			Resources: container.Resources{
-				NanoCPUs:   int64(job.Limits.CPU) * 1_000_000_000,
-				Memory:     hardMemory,
-				MemorySwap: hardMemory,
-				PidsLimit:  &pidLimit,
-			},
+			NanoCPUs:       int64(job.Limits.CPU) * 1_000_000_000,
+			Memory:         hardMemory,
+			MemorySwap:     hardMemory,
+			PidsLimit:      &pidLimit,
 			Mounts: []mount.Mount{
-				{Type: mount.TypeBind, Source: ws.dataPath("workspace"), Target: "/workspace"},
-				{Type: mount.TypeBind, Source: ws.dataPath("tmp"), Target: "/tmp"},
-				{Type: mount.TypeBind, Source: ws.dataPath("shm"), Target: "/dev/shm"},
-				{Type: mount.TypeBind, Source: filepath.Join(ws.path, "preset"), Target: "/preset", ReadOnly: true},
+				{Type: mount.TypeBind, Source: ws.workspacePath(), Target: "/workspace"},
+				{Type: mount.TypeBind, Source: ws.tmpPath(), Target: "/tmp"},
+				{Type: mount.TypeBind, Source: ws.shmPath(), Target: "/dev/shm"},
+				{Type: mount.TypeBind, Source: ws.presetPath(), Target: "/preset", ReadOnly: true},
 			},
 		},
 	}
@@ -391,7 +415,7 @@ func sampleMemory(sb *sandbox) (memorySample, error) {
 	if err != nil {
 		return memorySample{}, err
 	}
-	for _, line := range strings.Split(string(events), "\n") {
+	for line := range strings.SplitSeq(string(events), "\n") {
 		fields := strings.Fields(line)
 		if len(fields) == 2 && fields[0] == "oom_kill" {
 			kills, err := strconv.ParseInt(fields[1], 10, 64)
@@ -414,6 +438,9 @@ func (w *worker) runControlExec(ctx context.Context, sb *sandbox, command []stri
 		return err
 	}
 	defer stream.Close()
+	// StdCopy does not observe ctx, so cancellation must close the connection
+	// to unblock its reads. The deferred Close also runs on error; closing the
+	// underlying network connection again (or concurrently) is safe.
 	stopClosing := context.AfterFunc(ctx, stream.Close)
 	defer stopClosing()
 	if _, err := stdcopy.StdCopy(stdout, io.Discard, stream.Reader); err != nil {
@@ -454,8 +481,70 @@ func (w *worker) verifySubmissionUser(ctx context.Context, sb *sandbox) error {
 	if err := w.runControlExec(ctx, sb, command, &output); err != nil {
 		return err
 	}
+	/* output of command (just pring /proc/self/status) looks like:
+
+	~$ while IFS= read -r line; do printf '%s\n' "$line"; done < /proc/self/status
+	Name:   bash
+	Umask:  0022
+	State:  R (running)
+	Tgid:   360237
+	Ngid:   0
+	Pid:    360237
+	PPid:   7
+	TracerPid:      0
+	Uid:    501     501     501     501
+	Gid:    501     501     501     501
+	FDSize: 256
+	Groups: 4 10 20 27 29 44 46 50 501 994 67278
+	NStgid: 360237
+	NSpid:  360237
+	NSpgid: 360237
+	NSsid:  360237
+	Kthread:        0
+	VmPeak:    11092 kB
+	VmSize:    11092 kB
+	VmLck:         0 kB
+	VmPin:         0 kB
+	VmHWM:      5004 kB
+	VmRSS:      3824 kB
+	RssAnon:            1448 kB
+	RssFile:            2376 kB
+	RssShmem:              0 kB
+	VmData:     1540 kB
+	VmStk:       132 kB
+	VmExe:      1468 kB
+	VmLib:      2072 kB
+	VmPTE:        52 kB
+	VmSwap:        0 kB
+	CoreDumping:    0
+	THP_enabled:    1
+	untag_mask:     0xffffffffffffff
+	Threads:        1
+	SigQ:   0/64281
+	SigPnd: 0000000000000000
+	ShdPnd: 0000000000000000
+	SigBlk: 0000000000000000
+	SigIgn: 0000000000384004
+	SigCgt: 000000004b813efb
+	CapInh: 0000000000000000
+	CapPrm: 0000000000000000
+	CapEff: 0000000000000000
+	CapBnd: 000001ffffffffff
+	CapAmb: 0000000000000000
+	NoNewPrivs:     0
+	Seccomp:        0
+	Seccomp_filters:        0
+	Speculation_Store_Bypass:       vulnerable
+	SpeculationIndirectBranch:      unknown
+	Cpus_allowed:   1ff
+	Cpus_allowed_list:      0-8
+	Mems_allowed:   1
+	Mems_allowed_list:      0
+	voluntary_ctxt_switches:        87
+	nonvoluntary_ctxt_switches:     36
+	*/
 	fields := make(map[string][]string)
-	for _, line := range strings.Split(output.String(), "\n") {
+	for line := range strings.SplitSeq(output.String(), "\n") {
 		key, value, ok := strings.Cut(line, ":")
 		if ok {
 			fields[key] = strings.Fields(value)

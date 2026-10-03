@@ -62,7 +62,7 @@ func TestStepIOFinish(t *testing.T) {
 				streams.outputErr = <-streams.outputDone
 				streams.outputFinished = true
 			}
-			if err := streams.finish(context.Background(), "sandbox", "step"); err != nil {
+			if err := streams.finish(context.Background(), "sandbox", 0); err != nil {
 				t.Fatal(err)
 			}
 			stdout, stderr := streams.stdout.result(), streams.stderr.result()

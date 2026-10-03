@@ -32,8 +32,21 @@ func newWorkspace() (*workspace, error) {
 	return &workspace{path: path}, nil
 }
 
-func (ws *workspace) dataPath(name string) string {
-	return filepath.Join(ws.path, "data", name)
+func (ws *workspace) workspacePath() string {
+	return filepath.Join(ws.path, "data", "workspace")
+}
+
+func (ws *workspace) tmpPath() string {
+	return filepath.Join(ws.path, "data", "tmp")
+}
+
+func (ws *workspace) shmPath() string {
+	return filepath.Join(ws.path, "data", "shm")
+}
+
+// Presets are outside the tmpfs so they do not consume the Job's workspace limit.
+func (ws *workspace) presetPath() string {
+	return filepath.Join(ws.path, "preset")
 }
 
 func (ws *workspace) mount(ctx context.Context, size int64) error {
@@ -45,8 +58,7 @@ func (ws *workspace) mount(ctx context.Context, size int64) error {
 	if err := filesystemCommand(ctx, "mount", "-t", "tmpfs", "-o", options, "tmpfs", data); err != nil {
 		return err
 	}
-	for _, name := range []string{"workspace", "tmp", "shm"} {
-		path := ws.dataPath(name)
+	for _, path := range []string{ws.workspacePath(), ws.tmpPath(), ws.shmPath()} {
 		if err := os.Mkdir(path, 0755); err != nil {
 			return err
 		}
@@ -54,7 +66,7 @@ func (ws *workspace) mount(ctx context.Context, size int64) error {
 			return err
 		}
 	}
-	return os.Mkdir(filepath.Join(ws.path, "preset"), 0755)
+	return os.Mkdir(ws.presetPath(), 0755)
 }
 
 func filesystemCommand(ctx context.Context, command string, args ...string) error {
@@ -72,7 +84,7 @@ func (ws *workspace) remove(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	for _, line := range strings.Split(string(mounts), "\n") {
+	for line := range strings.SplitSeq(string(mounts), "\n") {
 		fields := strings.Fields(line)
 		if len(fields) > 4 && fields[4] == data {
 			if err := filesystemCommand(ctx, "umount", data); err != nil {
@@ -96,15 +108,21 @@ type fileOptions struct {
 
 // Placement happens before the Sandbox starts, so all existing entries were
 // created by the Judge. Artifact inputs may replace submission files/directories.
-func placeFile(ctx context.Context, root, name string, content []byte, options fileOptions) error {
+func placeFile(ctx context.Context, directory, name string, content []byte, options fileOptions) error {
 	if !validFilePath(name) {
 		return fmt.Errorf("invalid relative path %q", name)
 	}
+	root, err := os.OpenRoot(directory)
+	if err != nil {
+		return err
+	}
+	defer root.Close()
+
 	parts := strings.Split(name, "/")
-	parent := root
+	parent := "."
 	for _, part := range parts[:len(parts)-1] {
 		parent = filepath.Join(parent, part)
-		info, err := os.Lstat(parent)
+		info, err := root.Lstat(parent)
 		if err != nil && !errors.Is(err, fs.ErrNotExist) {
 			return err
 		}
@@ -112,24 +130,24 @@ func placeFile(ctx context.Context, root, name string, content []byte, options f
 			if !options.replace {
 				return fmt.Errorf("file blocks directory %q", parent)
 			}
-			if err := os.Remove(parent); err != nil {
+			if err := root.Remove(parent); err != nil {
 				return err
 			}
 		}
-		if err := os.MkdirAll(parent, 0755); err != nil {
+		if err := root.MkdirAll(parent, 0755); err != nil {
 			return err
 		}
-		if err := os.Chown(parent, options.uid, options.uid); err != nil {
+		if err := root.Chown(parent, options.uid, options.uid); err != nil {
 			return err
 		}
 	}
-	path := filepath.Join(root, filepath.FromSlash(name))
+	path := filepath.FromSlash(name)
 	if options.replace {
-		if err := os.RemoveAll(path); err != nil {
+		if err := root.RemoveAll(path); err != nil {
 			return err
 		}
 	}
-	file, err := os.OpenFile(path, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0600)
+	file, err := root.OpenFile(path, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0600)
 	if err != nil {
 		return err
 	}
@@ -164,7 +182,14 @@ func placeFile(ctx context.Context, root, name string, content []byte, options f
 
 func (ws *workspace) placeSubmission(ctx context.Context, files []store.SubmissionFile) error {
 	for _, file := range files {
-		if err := placeFile(ctx, ws.dataPath("workspace"), file.Path, file.Content, fileOptions{uid: submissionUID}); err != nil {
+		if err := placeFile(
+			ctx,
+			ws.workspacePath(),
+			file.Path,
+			file.Content,
+			fileOptions{
+				uid: submissionUID,
+			}); err != nil {
 			return fmt.Errorf("submission file %q: %w", file.Path, err)
 		}
 	}
@@ -179,7 +204,14 @@ func (ws *workspace) placePresets(ctx context.Context, presets []resource.Preset
 		if total > maxPresetBytes {
 			return errors.New("preset files exceed 64 MiB")
 		}
-		if err := placeFile(ctx, filepath.Join(ws.path, "preset"), string(preset.Path), preset.Content, fileOptions{executable: preset.Executable}); err != nil {
+		if err := placeFile(
+			ctx,
+			ws.presetPath(),
+			string(preset.Path),
+			preset.Content,
+			fileOptions{
+				executable: preset.Executable,
+			}); err != nil {
 			return fmt.Errorf("preset file %q: %w", preset.Path, err)
 		}
 	}
@@ -189,7 +221,12 @@ func (ws *workspace) placePresets(ctx context.Context, presets []resource.Preset
 func (ws *workspace) captureArtifact(ctx context.Context, output resource.ArtifactOutput, limit int64) (store.Artifact, store.ArtifactResult, error) {
 	artifact := store.Artifact{Name: output.Name}
 	result := store.ArtifactResult{Name: output.Name, Path: string(output.Path), Status: store.AC}
-	content, executable, err := readArtifact(ctx, ws.dataPath("workspace"), string(output.Path), limit)
+	content, executable, err := readArtifact(
+		ctx,
+		ws.workspacePath(),
+		string(output.Path),
+		limit,
+	)
 	if err != nil {
 		if !errors.Is(err, fs.ErrNotExist) && !errors.Is(err, errArtifactInvalid) && !errors.Is(err, errArtifactTooLarge) {
 			return artifact, result, err
@@ -220,7 +257,9 @@ func readArtifact(ctx context.Context, directory, name string, limit int64) ([]b
 	}
 	defer root.Close()
 
-	// os.Root confines traversal; Lstat also rejects in-root symlinks and FIFOs.
+	// os.Root confines traversal. Inspect each component without following its
+	// final symlink; the checks below require directories and a regular file,
+	// rejecting even in-root symlinks and special files such as FIFOs.
 	parts := strings.Split(name, "/")
 	for i := range parts {
 		info, err := root.Lstat(strings.Join(parts[:i+1], "/"))

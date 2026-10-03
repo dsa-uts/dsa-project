@@ -85,7 +85,7 @@ func startStepIO(stream client.ExecAttachResult, stdin []byte, limits resource.L
 
 // finish drains output after UID cleanup, then closes stdin and joins its writer.
 // A timeout here is logged but does not invalidate an already completed exec.
-func (s *stepIO) finish(ctx context.Context, sandboxID, stepID string) error {
+func (s *stepIO) finish(ctx context.Context, sandboxID string, stepIndex int) error {
 	if !s.outputFinished {
 		drainCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), cleanupTimeout)
 		defer cancel()
@@ -95,7 +95,7 @@ func (s *stepIO) finish(ctx context.Context, sandboxID, stepID string) error {
 			s.stream.Close()
 			<-s.outputDone
 			s.outputErr = nil
-			log.Printf("sandbox %s step %s: output stream did not close after UID cleanup", sandboxID, stepID)
+			log.Printf("sandbox %s step %d: output stream did not close after UID cleanup", sandboxID, stepIndex)
 		}
 	}
 	s.stream.Close()
