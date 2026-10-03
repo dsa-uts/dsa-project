@@ -8,7 +8,7 @@ import (
 	resource "github.com/dsa-uts/dsa-resource-spec"
 )
 
-func TestOrderedJobIdDs(t *testing.T) {
+func TestOrderedJobIDs(t *testing.T) {
 	workflow := resource.Workflow{
 		Jobs: map[string]resource.Job{
 			"a-test": {

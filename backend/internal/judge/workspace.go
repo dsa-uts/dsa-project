@@ -14,12 +14,22 @@ import (
 
 	"github.com/dsa-uts/dsa-project/backend/internal/store"
 	resource "github.com/dsa-uts/dsa-resource-spec"
+	"github.com/google/uuid"
 )
 
 const workspaceDirectory = "/var/lib/dsa-judge/workspaces"
 
 type workspace struct {
 	path string
+}
+
+func newWorkspace() (*workspace, error) {
+	name := uuid.NewString()
+	path := filepath.Join(workspaceDirectory, name)
+	if err := os.Mkdir(path, 0700); err != nil {
+		return nil, err
+	}
+	return &workspace{path: path}, nil
 }
 
 func (ws *workspace) dataPath(name string) string {
@@ -78,15 +88,15 @@ func validFilePath(name string) bool {
 	return name != "." && fs.ValidPath(name) && !strings.ContainsAny(name, "\\\x00:")
 }
 
+type fileOptions struct {
+	executable bool
+	replace    bool
+	uid        int
+}
+
 // Placement happens before the Sandbox starts, so all existing entries were
 // created by the Judge. Artifact inputs may replace submission files/directories.
-func placeFile(
-	ctx context.Context,
-	root, name string,
-	content []byte,
-	executable, replace bool,
-	uid int,
-) error {
+func placeFile(ctx context.Context, root, name string, content []byte, options fileOptions) error {
 	if !validFilePath(name) {
 		return fmt.Errorf("invalid relative path %q", name)
 	}
@@ -99,7 +109,7 @@ func placeFile(
 			return err
 		}
 		if err == nil && !info.IsDir() {
-			if !replace {
+			if !options.replace {
 				return fmt.Errorf("file blocks directory %q", parent)
 			}
 			if err := os.Remove(parent); err != nil {
@@ -109,12 +119,12 @@ func placeFile(
 		if err := os.MkdirAll(parent, 0755); err != nil {
 			return err
 		}
-		if err := os.Chown(parent, uid, uid); err != nil {
+		if err := os.Chown(parent, options.uid, options.uid); err != nil {
 			return err
 		}
 	}
 	path := filepath.Join(root, filepath.FromSlash(name))
-	if replace {
+	if options.replace {
 		if err := os.RemoveAll(path); err != nil {
 			return err
 		}
@@ -139,11 +149,11 @@ func placeFile(
 		}
 		content = content[n:]
 	}
-	if err := file.Chown(uid, uid); err != nil {
+	if err := file.Chown(options.uid, options.uid); err != nil {
 		return err
 	}
 	mode := fs.FileMode(0644)
-	if executable {
+	if options.executable {
 		mode = 0755
 	}
 	if err := file.Chmod(mode); err != nil {
@@ -154,7 +164,7 @@ func placeFile(
 
 func (ws *workspace) placeSubmission(ctx context.Context, files []store.SubmissionFile) error {
 	for _, file := range files {
-		if err := placeFile(ctx, ws.dataPath("workspace"), file.Path, file.Content, false, false, submissionUID); err != nil {
+		if err := placeFile(ctx, ws.dataPath("workspace"), file.Path, file.Content, fileOptions{uid: submissionUID}); err != nil {
 			return fmt.Errorf("submission file %q: %w", file.Path, err)
 		}
 	}
@@ -169,18 +179,14 @@ func (ws *workspace) placePresets(ctx context.Context, presets []resource.Preset
 		if total > maxPresetBytes {
 			return errors.New("preset files exceed 64 MiB")
 		}
-		if err := placeFile(ctx, filepath.Join(ws.path, "preset"), string(preset.Path), preset.Content, preset.Executable, false, 0); err != nil {
+		if err := placeFile(ctx, filepath.Join(ws.path, "preset"), string(preset.Path), preset.Content, fileOptions{executable: preset.Executable}); err != nil {
 			return fmt.Errorf("preset file %q: %w", preset.Path, err)
 		}
 	}
 	return ctx.Err()
 }
 
-func (ws *workspace) captureArtifact(
-	ctx context.Context,
-	output resource.ArtifactOutput,
-	limit int64,
-) (store.Artifact, store.ArtifactResult, error) {
+func (ws *workspace) captureArtifact(ctx context.Context, output resource.ArtifactOutput, limit int64) (store.Artifact, store.ArtifactResult, error) {
 	artifact := store.Artifact{Name: output.Name}
 	result := store.ArtifactResult{Name: output.Name, Path: string(output.Path), Status: store.AC}
 	content, executable, err := readArtifact(ctx, ws.dataPath("workspace"), string(output.Path), limit)
