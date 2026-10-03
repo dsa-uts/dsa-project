@@ -16,6 +16,7 @@ const (
 	exitCodeUnavailable = -1
 	maxOutputBytes      = 128 << 10
 	execPollInterval    = 10 * time.Millisecond
+	stepTimeoutBuffer   = 200 * time.Millisecond
 )
 
 // Callers read ExitCode only after a started exec reports Running=false.
@@ -31,6 +32,7 @@ func (w *worker) inspectExec(ctx context.Context, id string) (client.ExecInspect
 	return result, err
 }
 
+// TODO: OLEやMLEの検出経路が複数あったり結果判定のロジックが複雑で気持ち悪いので、リファクタリング検討
 func (w *worker) executeStep(ctx context.Context, sb *sandbox, index int, step resource.Step, limits resource.Limits) (result store.StepResult, executionErr error) {
 	result = store.StepResult{
 		Index:     index,
@@ -68,19 +70,24 @@ func (w *worker) executeStep(ctx context.Context, sb *sandbox, index int, step r
 
 	// ExecAttach starts the command. Use the same start for duration and TLE.
 	execStartedAt := time.Now()
-	stepCtx, cancel := context.WithDeadline(ctx, execStartedAt.Add(step.Timeout))
+	// Allow slightly over-limit commands to finish so their duration is recorded.
+	stepCtx, cancel := context.WithDeadline(ctx, execStartedAt.Add(step.Timeout).Add(stepTimeoutBuffer))
 	defer cancel()
 	stream, err := w.docker.ExecAttach(stepCtx, created.ID, client.ExecAttachOptions{})
 	if err != nil {
 		return result, fmt.Errorf("start step exec: %w", err)
 	}
 	defer stream.Close()
+	// StdCopy does not observe ctx, so cancellation must close the connection
+	// to unblock its reads. The deferred Close also runs on error; closing the
+	// underlying network connection again (or concurrently) is safe.
 	stopClosing := context.AfterFunc(stepCtx, stream.Close)
 	defer stopClosing()
 
 	streams := startStepIO(stream, step.Stdin, limits)
 	observed, runErr := w.monitorStep(ctx, stepCtx, sb, created.ID, baseline, limits.Memory, streams)
-	durationMS := time.Since(execStartedAt).Milliseconds()
+	elapsed := time.Since(execStartedAt)
+	durationMS := elapsed.Milliseconds()
 	result.DurationMS = &durationMS
 
 	// A lost exec connection does not kill its processes. Always try the UID
@@ -105,7 +112,8 @@ func (w *worker) executeStep(ctx context.Context, sb *sandbox, index int, step r
 	}
 	result.ExitCode = observed.exitCode
 	result.MemoryBytes = &observed.peakMemory
-	result.TLE = observed.tle
+	// Compare before millisecond truncation and before handling execution errors.
+	result.TLE = elapsed > step.Timeout
 	result.MLE = observed.mle
 	result.OLE = observed.ole
 	result.OOMKilled = observed.oomKilled
@@ -113,6 +121,9 @@ func (w *worker) executeStep(ctx context.Context, sb *sandbox, index int, step r
 	if err := ctx.Err(); err != nil {
 		return result, err
 	}
+	// Limit violations take precedence over execution/observation errors and a
+	// missing exit code. Stopping a Step can close its streams or remove its
+	// cgroup, so those errors must not turn a limit verdict into IE.
 	if !result.TLE && !result.MLE && !result.OLE {
 		if runErr != nil {
 			return result, runErr
@@ -130,17 +141,20 @@ func (w *worker) executeStep(ctx context.Context, sb *sandbox, index int, step r
 
 func judgeStep(step resource.Step, result store.StepResult) (store.Status, error) {
 	status := store.AC
-	switch {
-	case result.OLE:
-		status = store.OLE
-	case result.MLE:
-		status = store.MLE
-	case result.TLE:
-		status = store.TLE
-	default:
-		if expected := step.Expected.ExitCode; expected != nil && result.ExitCode != *expected {
-			status = store.RE
+	for _, check := range []struct {
+		failed bool
+		status store.Status
+	}{
+		{result.OLE, store.OLE},
+		{result.MLE, store.MLE},
+		{result.TLE, store.TLE},
+		{step.Expected.ExitCode != nil && result.ExitCode != *step.Expected.ExitCode, store.RE},
+	} {
+		if check.failed && check.status.Rank() > status.Rank() {
+			status = check.status
 		}
+	}
+	if status == store.AC {
 		for _, output := range []struct {
 			actual   []byte
 			expected *resource.OutputExpectation
@@ -155,7 +169,7 @@ func judgeStep(step resource.Step, result store.StepResult) (store.Status, error
 			if err != nil {
 				return store.IE, err
 			}
-			if !matched && status.Rank() < store.WA.Rank() {
+			if !matched {
 				status = store.WA
 			}
 		}

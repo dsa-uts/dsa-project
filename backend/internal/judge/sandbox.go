@@ -33,7 +33,6 @@ const (
 	removalTimeout       = 20 * time.Second
 	cleanupTimeout       = 2 * time.Second
 	apiTimeout           = 2 * time.Second
-	memoryInterval       = 10 * time.Millisecond
 	memoryHardMultiplier = 2
 	workspaceLabel       = "dsa.workspace"
 )
@@ -411,6 +410,18 @@ func sampleMemory(sb *sandbox) (memorySample, error) {
 	if err != nil {
 		return memorySample{}, err
 	}
+	/*
+		memory.events looks like:
+
+		/sys/fs/cgroup$ cat memory.events
+		low 0
+		high 0
+		max 0
+		oom 0
+		oom_kill 0
+		oom_group_kill 0
+		sock_throttled 0
+	*/
 	events, err := os.ReadFile(filepath.Join(sb.cgroupPath, "memory.events"))
 	if err != nil {
 		return memorySample{}, err

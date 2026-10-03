@@ -86,6 +86,27 @@ func TestJudgeStep(t *testing.T) {
 	}
 }
 
+func TestJudgeStepSkipsOutputComparisonAfterExecutionFailure(t *testing.T) {
+	zero := 0
+	step := resource.Step{Expected: resource.Expected{
+		ExitCode: &zero,
+		Stdout:   &resource.OutputExpectation{Match: "invalid"},
+	}}
+	for _, compile := range []bool{false, true} {
+		step.Compile = compile
+		want := store.RE
+		if compile {
+			want = store.CE
+		}
+		if got, err := judgeStep(step, store.StepResult{ExitCode: 1}); got != want || err != nil {
+			t.Errorf("judgeStep(compile=%v) = %q, %v; want %q, nil", compile, got, err, want)
+		}
+		if got, err := judgeStep(step, store.StepResult{}); got != store.IE || err == nil {
+			t.Errorf("judgeStep(compile=%v) = %q, %v; want IE and comparison error", compile, got, err)
+		}
+	}
+}
+
 func TestSummarizeWorkflow(t *testing.T) {
 	duration, memory := int64(12), int64(300)
 	shorter, larger := int64(4), int64(500)

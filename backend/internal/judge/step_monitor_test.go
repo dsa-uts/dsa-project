@@ -9,7 +9,7 @@ import (
 
 func TestMonitorStepCancellation(t *testing.T) {
 	for _, parentCanceled := range []bool{false, true} {
-		name := "step deadline is TLE"
+		name := "step deadline stops monitoring without error"
 		if parentCanceled {
 			name = "request cancellation is an error"
 		}
@@ -24,11 +24,11 @@ func TestMonitorStepCancellation(t *testing.T) {
 			worker := &worker{}
 			observed, err := worker.monitorStep(ctx, stepCtx, nil, "", memorySample{bytes: 123}, 1000, &stepIO{})
 			if parentCanceled {
-				if !errors.Is(err, context.Canceled) || observed.tle {
-					t.Fatalf("monitor = %+v, %v; want cancellation without TLE", observed, err)
+				if !errors.Is(err, context.Canceled) {
+					t.Fatalf("monitor = %+v, %v; want cancellation error", observed, err)
 				}
-			} else if err != nil || !observed.tle {
-				t.Fatalf("monitor = %+v, %v; want TLE without error", observed, err)
+			} else if err != nil {
+				t.Fatalf("monitor = %+v, %v; want no error", observed, err)
 			}
 			if observed.peakMemory != 123 || observed.exitCode != exitCodeUnavailable {
 				t.Errorf("initial measurements lost: %+v", observed)

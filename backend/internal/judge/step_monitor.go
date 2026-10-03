@@ -13,7 +13,7 @@ import (
 type stepObservation struct {
 	exitCode                 int
 	peakMemory               int64
-	tle, mle, ole            bool
+	mle, ole                 bool
 	oomKilled, containerLost bool
 }
 
@@ -22,27 +22,22 @@ func (w *worker) monitorStep(ctx, stepCtx context.Context, sb *sandbox, execID s
 	inputDone, outputDone := streams.inputDone, streams.outputDone
 	ticker := time.NewTicker(execPollInterval)
 	defer ticker.Stop()
-	nextMemory := time.Now()
 	for {
 		if err := stepCtx.Err(); err != nil {
 			if ctx.Err() != nil {
 				return observed, ctx.Err()
 			}
-			observed.tle = true
 			return observed, nil
 		}
-		if !time.Now().Before(nextMemory) {
-			sample, err := sampleMemory(sb)
-			if err != nil {
-				return observed, fmt.Errorf("monitor memory: %w", err)
-			}
-			observed.peakMemory = max(observed.peakMemory, sample.bytes)
-			observed.oomKilled = sample.oomKills > baseline.oomKills
-			observed.mle = observed.oomKilled || sample.bytes > softMemory
-			if observed.mle {
-				return observed, nil
-			}
-			nextMemory = time.Now().Add(memoryInterval)
+		sample, err := sampleMemory(sb)
+		if err != nil {
+			return observed, fmt.Errorf("monitor memory: %w", err)
+		}
+		observed.peakMemory = max(observed.peakMemory, sample.bytes)
+		observed.oomKilled = sample.oomKills > baseline.oomKills
+		observed.mle = observed.oomKilled || sample.bytes > softMemory
+		if observed.mle {
+			return observed, nil
 		}
 		state, err := w.inspectExec(stepCtx, execID)
 		if err != nil {
@@ -70,10 +65,6 @@ func (w *worker) monitorStep(ctx, stepCtx context.Context, sb *sandbox, execID s
 			streams.outputFinished = true
 			outputDone = nil
 			if streams.outputErr != nil {
-				if stepCtx.Err() != nil && ctx.Err() == nil {
-					observed.tle = true
-					return observed, nil
-				}
 				return observed, streams.outputErr
 			}
 		case <-ticker.C:

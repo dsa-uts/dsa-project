@@ -63,10 +63,10 @@ func startStepIO(stream client.ExecAttachResult, stdin []byte, limits resource.L
 		stream:       stream,
 		stdout:       &outputBuffer{limit: int(min(limits.StdoutSize, maxOutputBytes)), overflow: overflow, once: once},
 		stderr:       &outputBuffer{limit: int(min(limits.StderrSize, maxOutputBytes)), overflow: overflow, once: once},
-		overflow:     overflow,
-		inputDone:    make(chan error, 1),
-		inputStopped: make(chan struct{}),
-		outputDone:   make(chan error, 1),
+		overflow:     overflow, // When either stdout or stderr exceeds limits, signal is sent to this channel **just once**.
+		inputDone:    make(chan error, 1), // After sending all inputs, signal (error) is sent to this channel.
+		inputStopped: make(chan struct{}), // After closing an input connection, signal is sent to this channel.
+		outputDone:   make(chan error, 1), // After processing all outputs, signal (error) is sent to this channel.
 	}
 	go func() {
 		defer close(streams.inputStopped)
