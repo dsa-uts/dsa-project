@@ -52,7 +52,7 @@ test('dashboard links to a Workflow; detail renders safe Markdown, real heading 
   expect(screen.queryByRole('img')).toBeNull()
   expect(within(screen.getByRole('list', { name: '提出が求められているファイル' })).getAllByRole('listitem').map(item => item.textContent)).toEqual(project.required_files)
   expect(screen.getByRole('button', { name: '提出する' })).toHaveProperty('disabled', true)
-  expect(screen.getByRole('button', { name: 'ファイルを選択' })).toHaveProperty('disabled', true)
+  expect(screen.getByRole('button', { name: 'ファイルを選択' })).toHaveProperty('disabled', false)
   fireEvent.click(outline.getByRole('link', { name: '発展課題' }))
   expect(await screen.findByText('課題説明はまだ登録されていません。')).toBeDefined()
   expect(fetchDetail).toHaveBeenCalledTimes(1)

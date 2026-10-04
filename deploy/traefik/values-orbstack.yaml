@@ -1,0 +1,5 @@
+# OrbStack provides HTTPS on port 443; keep CI on HTTP.
+additionalArguments:
+  - --entryPoints.web.http.redirections.entryPoint.to=:443
+  - --entryPoints.web.http.redirections.entryPoint.scheme=https
+  - --entryPoints.web.http.redirections.entryPoint.permanent=true

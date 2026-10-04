@@ -6,6 +6,9 @@ def 'main setup' [--k3d-cluster: string] {
   require-cluster $context
   let config = $env.FILE_PWD | path join .. deploy traefik | path expand
   let version = open --raw ($config | path join chart-version) | str trim
+  let extra_values = if $k3d_cluster == null {
+    [--values ($config | path join values-orbstack.yaml)]
+  } else { [] }
   stage ingress 'Applying Traefik CRDs for application routes and middleware ...'
   let crds = run-checked 'failed to fetch Traefik CRDs' [
     helm show crds traefik --repo https://traefik.github.io/charts --version $version
@@ -18,6 +21,7 @@ def 'main setup' [--k3d-cluster: string] {
     helm upgrade --install traefik traefik
     --repo https://traefik.github.io/charts
     --version $version --values ($config | path join values.yaml)
+    ...$extra_values
     --kube-context $context --namespace dsa-ingress --create-namespace
     --skip-crds --wait --timeout 5m
   ] | print
