@@ -14,6 +14,64 @@ function multipart(files: { path: string; content: Buffer }[], metadata = JSON.s
   return { data: Buffer.concat(chunks), contentType: `multipart/form-data; boundary=${boundary}` }
 }
 
+test('Judge completes repeated correct submissions and enforces runtime limits', async ({ request }) => {
+  test.setTimeout(300_000)
+  expect((await request.post('/api/session', { data: { userid: 'admin', password: 'admin' } })).status()).toBe(200)
+  const imported = await request.post('/api/admin/resource-imports', { data: { resource_id: 'ex1', version: 'v1.0.0' } })
+  expect(imported.status(), await imported.text()).toBe(200)
+  const projectID = (await imported.json()).project_id
+  const files = await Promise.all(['Makefile', 'gcd_euclid.c', 'gcd_recursive.c', 'main_euclid.c', 'main_recursive.c'].map(async path => ({
+    path, content: await readFile(new URL(`../fixtures/validation-ex1/${path}`, import.meta.url)),
+  })))
+  const cases = [
+    ...Array.from({ length: 12 }, (_, i) => ({ name: `correct ${i}`, status: 'AC', main: '' })),
+    { name: 'timeout with buffered diagnostics', status: 'TLE', main: 'puts("before timeout"); fprintf(stderr, "timeout diagnostic\\n"); sleep(30);' },
+    { name: 'closed standard streams', status: 'TLE', main: 'close(0); close(1); close(2); sleep(30);' },
+    { name: 'child holding stdout', status: 'TLE', main: 'if (fork() == 0) sleep(30);' },
+    { name: 'stdout overflow', status: 'OLE', main: 'for (;;) puts("stdout overflow");' },
+    { name: 'stderr overflow', status: 'OLE', main: 'for (;;) fputs("stderr overflow\\n", stderr);' },
+    { name: 'memory with buffered diagnostics', status: 'MLE', main: 'puts("before memory limit"); fprintf(stderr, "memory diagnostic\\n"); for (;;) { volatile char *p = malloc(16 * 1024 * 1024); if (!p) return 2; for (int i = 0; i < 16 * 1024 * 1024; i += 4096) p[i] = 1; usleep(10000); }' },
+    // Both parent and child keep forking until the Sandbox PID limit rejects it.
+    // Stay alive without output afterward so the Step must time out.
+    { name: 'fork bomb', status: 'TLE', main: 'while (fork() >= 0) {} sleep(30);' },
+  ]
+  const submitted: { name: string; status: string; id: string }[] = []
+  for (const scenario of cases) {
+    const body = multipart(files.map(file => file.path === 'main_euclid.c' && scenario.main
+      ? { ...file, content: Buffer.from(`#include <stdio.h>\n#include <stdlib.h>\n#include <unistd.h>\nint main(void) { ${scenario.main} return 0; }\n`) }
+      : file))
+    const response = await request.post(`/api/projects/${projectID}/validation`, { data: body.data, headers: { 'Content-Type': body.contentType } })
+    expect(response.status(), await response.text()).toBe(201)
+    submitted.push({ ...scenario, id: (await response.json()).id })
+  }
+  let results: components['schemas']['ValidationSummary'][] = []
+  await expect(async () => {
+    const response = await request.get('/api/validation', { params: { project_id: projectID } })
+    expect(response.status()).toBe(200)
+    const page: components['schemas']['ValidationPage'] = await response.json()
+    results = page.requests
+    for (const scenario of submitted) {
+      const row = page.requests.find(row => row.id === scenario.id)
+      expect(row, `${scenario.name}: ${scenario.id}`).toMatchObject({ state: 'completed', duration_ms: expect.any(Number) })
+    }
+  }).toPass({ timeout: 240_000, intervals: [5_000] })
+  for (const scenario of submitted) {
+    expect(results.find(row => row.id === scenario.id)?.status, `${scenario.name}: ${scenario.id}`).toBe(scenario.status)
+  }
+
+  // Submit only after the fork bomb completes to check that the Judge recovers.
+  const recoveryBody = multipart(files)
+  const recovery = await request.post(`/api/projects/${projectID}/validation`, { data: recoveryBody.data, headers: { 'Content-Type': recoveryBody.contentType } })
+  expect(recovery.status(), await recovery.text()).toBe(201)
+  const recoveryID = (await recovery.json()).id
+  await expect(async () => {
+    const response = await request.get('/api/validation', { params: { project_id: projectID } })
+    expect(response.status()).toBe(200)
+    const page: components['schemas']['ValidationPage'] = await response.json()
+    expect(page.requests.find(row => row.id === recoveryID)).toMatchObject({ state: 'completed', status: 'AC' })
+  }).toPass({ timeout: 30_000, intervals: [1_000] })
+})
+
 test('Validation upload, concurrent requests, scope and input limits', async ({ request }) => {
   test.setTimeout(120_000)
   const login = await request.post('/api/session', { data: { userid: 'admin', password: 'admin' } })
