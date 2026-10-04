@@ -323,6 +323,117 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
         "500": { $ref: "#/components/responses/InternalError" }
+  /api/requests/{request_id}/validation:
+    get:
+      operationId: getValidation
+      security: [{ sessionAuth: [] }]
+      description: |
+        Students see their own Validation Requests in currently published Projects.
+        Managers and Admins see all Validation Requests. Missing, invisible and
+        non-validation Requests return 404. All definitions use the pinned Version.
+        Unfinished Requests return result null; poll every five seconds until completed.
+        Completed results include definitions even when execution results were not
+        saved. A missing result does not prove non-execution. Private Jobs are excluded.
+      parameters:
+        - name: request_id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Success; Cache-Control is no-store
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ValidationDetail' }
+        "400": { $ref: '#/components/responses/BadRequest' }
+        "401": { $ref: '#/components/responses/Unauthorized' }
+        "404":
+          description: Request missing or invisible
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        "500": { $ref: '#/components/responses/InternalError' }
+  /api/requests/{request_id}/validation/files:
+    get:
+      operationId: getValidationFiles
+      security: [{ sessionAuth: [] }]
+      description: |
+        Students see their own Validation Requests in currently published Projects.
+        Managers and Admins see all Validation Requests. Missing, invisible and
+        non-validation Requests return 404. All definitions use the pinned Version.
+        metadata is an application/json text part; referenced fileN parts contain
+        raw bytes. Paths come from metadata, not multipart filenames.
+        Available before completion. Includes all Workflow Presets regardless of visibility.
+      parameters:
+        - name: request_id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Success; Cache-Control is no-store
+          content:
+            multipart/form-data:
+              schema:
+                type: object
+                required: [metadata]
+                properties:
+                  metadata: { $ref: '#/components/schemas/ValidationFilesMetadata' }
+                additionalProperties: { type: string, format: binary }
+              encoding:
+                metadata:
+                  contentType: application/json
+        "400": { $ref: '#/components/responses/BadRequest' }
+        "401": { $ref: '#/components/responses/Unauthorized' }
+        "404":
+          description: Request missing or invisible
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        "500": { $ref: '#/components/responses/InternalError' }
+  /api/requests/{request_id}/validation/artifacts:
+    get:
+      operationId: getValidationArtifacts
+      security: [{ sessionAuth: [] }]
+      description: |
+        Students see their own Validation Requests in currently published Projects.
+        Managers and Admins see all Validation Requests. Missing, invisible and
+        non-validation Requests return 404. All definitions use the pinned Version.
+        metadata is an application/json text part; referenced fileN parts contain
+        raw bytes. Paths come from metadata, not multipart filenames.
+        Only final-attempt public outputs of public Jobs are included. Empty is successful.
+      parameters:
+        - name: request_id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Success; Cache-Control is no-store
+          content:
+            multipart/form-data:
+              schema:
+                type: object
+                required: [metadata]
+                properties:
+                  metadata: { $ref: '#/components/schemas/ValidationArtifactsMetadata' }
+                additionalProperties: { type: string, format: binary }
+              encoding:
+                metadata:
+                  contentType: application/json
+        "400": { $ref: '#/components/responses/BadRequest' }
+        "401": { $ref: '#/components/responses/Unauthorized' }
+        "404":
+          description: Request missing or invisible
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        "409":
+          description: Request has not completed
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        "500": { $ref: '#/components/responses/InternalError' }
   /api/validation:
     get:
       operationId: listValidation
@@ -452,6 +563,181 @@ components:
       required: false
       schema: { type: string }
   schemas:
+    ValidationDetail:
+      type: object
+      required: [id, project, subject_user, version, state, status, content_hash, duration_ms, requested_at, submission_id, result]
+      properties:
+        id: { type: string, format: uuid }
+        project:
+          type: object
+          required: [id, name]
+          properties:
+            id: { type: string, format: uuid }
+            name: { type: string, description: Current Project display name }
+        subject_user:
+          type: object
+          required: [id, userid, name]
+          properties:
+            id: { type: string, format: uuid }
+            userid: { type: string }
+            name: { type: string }
+        version: { type: string }
+        state: { type: string, enum: [pending, running, retrying, completed] }
+        status: { $ref: '#/components/schemas/NullableStatus' }
+        content_hash: { type: string, pattern: '^sha256:[0-9a-f]{64}$' }
+        duration_ms:
+          allOf: [{ $ref: '#/components/schemas/NullableMeasurement' }]
+          description: Final attempt elapsed time including preparation and saving, excluding queue time and discarded attempts
+        requested_at: { type: string, format: date-time }
+        submission_id: { type: string, format: uuid }
+        result:
+          anyOf: [{ $ref: '#/components/schemas/ValidationResult' }, { type: 'null' }]
+    NullableMeasurement:
+      type: [integer, 'null']
+      format: int64
+      minimum: 0
+      description: Null when unavailable; durations are milliseconds and memory is bytes
+    ValidationResult:
+      type: object
+      required: [peak_memory_bytes, workflows]
+      properties:
+        peak_memory_bytes: { $ref: '#/components/schemas/NullableMeasurement' }
+        workflows:
+          type: array
+          description: Workflow ID order; definitions from the pinned Version
+          items: { $ref: '#/components/schemas/ValidationWorkflow' }
+    ValidationWorkflow:
+      type: object
+      required: [id, name, status, duration_ms, jobs]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        status: { $ref: '#/components/schemas/NullableStatus' }
+        duration_ms: { $ref: '#/components/schemas/NullableMeasurement' }
+        jobs:
+          type: array
+          description: Public Jobs in dependency order, breaking ties by ID
+          items: { $ref: '#/components/schemas/ValidationJob' }
+    ValidationJob:
+      type: object
+      required: [id, name, status, duration_ms, peak_memory_bytes, skip_reason, stop_reason, steps, artifacts]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        status: { $ref: '#/components/schemas/NullableStatus' }
+        duration_ms:
+          allOf: [{ $ref: '#/components/schemas/NullableMeasurement' }]
+          description: Elapsed Job time including preparation and cleanup, not the sum of Step durations
+        peak_memory_bytes: { $ref: '#/components/schemas/NullableMeasurement' }
+        skip_reason: { type: [string, 'null'] }
+        stop_reason: { type: [string, 'null'] }
+        steps:
+          type: array
+          items: { $ref: '#/components/schemas/ValidationStep' }
+        artifacts:
+          type: array
+          description: Public declarations, including failed and unrecorded captures
+          items: { $ref: '#/components/schemas/ValidationArtifact' }
+    ValidationStep:
+      type: object
+      required: [index, name, run, compile, timeout_ms, stdin, expected, status, exit_code, duration_ms, memory_bytes, stdout, stderr]
+      properties:
+        index: { type: integer, minimum: 0, description: Zero-based position in the pinned Job steps array }
+        name: { type: string }
+        run: { type: string, description: Bash source from the Resource }
+        compile: { type: boolean }
+        timeout_ms: { type: integer, format: int64, minimum: 0 }
+        stdin: { type: string, description: Base64-encoded input bytes; empty string means no input }
+        expected: { $ref: '#/components/schemas/StepExpectation' }
+        status: { $ref: '#/components/schemas/NullableStatus' }
+        exit_code: { type: [integer, 'null'], description: Null when unavailable; never the internal -1 sentinel }
+        duration_ms: { $ref: '#/components/schemas/NullableMeasurement' }
+        memory_bytes:
+          allOf: [{ $ref: '#/components/schemas/NullableMeasurement' }]
+          description: Maximum sampled Sandbox memory during this Step, not isolated process RSS
+        stdout:
+          anyOf: [{ $ref: '#/components/schemas/StepOutput' }, { type: 'null' }]
+        stderr:
+          anyOf: [{ $ref: '#/components/schemas/StepOutput' }, { type: 'null' }]
+    StepOutput:
+      type: object
+      required: [data, truncated]
+      properties:
+        data: { type: string, description: Base64-encoded original bytes; empty output is an empty string }
+        truncated: { type: boolean, description: Only the allowed prefix was saved }
+    StepExpectation:
+      type: object
+      required: [exit_code, stdout, stderr]
+      properties:
+        exit_code: { type: [integer, 'null'], description: Null means unchecked }
+        stdout:
+          anyOf: [{ $ref: '#/components/schemas/ExpectedOutput' }, { type: 'null' }]
+        stderr:
+          anyOf: [{ $ref: '#/components/schemas/ExpectedOutput' }, { type: 'null' }]
+    ExpectedOutput:
+      type: object
+      description: Null means unchecked; an empty data string means expect empty output
+      required: [data, match]
+      properties:
+        data: { type: string, description: Base64-encoded expected bytes }
+        match: { type: string, enum: [exact, easy, sorted] }
+    ValidationArtifact:
+      type: object
+      required: [name, path, content_type, status, available, size_bytes, error]
+      properties:
+        name: { type: string }
+        path: { type: string }
+        content_type: { type: string }
+        status:
+          anyOf: [{ $ref: '#/components/schemas/ValidationArtifactStatus' }, { type: 'null' }]
+          description: Saved capture verdict; null when unrecorded
+        available: { type: boolean, description: Final-attempt bytes exist even if the capture verdict was not saved }
+        size_bytes: { $ref: '#/components/schemas/NullableMeasurement' }
+        error: { type: [string, 'null'], description: Safe failure message without internal paths }
+    ValidationArtifactStatus:
+      type: string
+      enum: [AC, WA, OLE]
+    FilePart:
+      type: object
+      required: [part, path]
+      properties:
+        part: { type: string, description: Binary multipart field name }
+        path: { type: string, description: Stored relative path }
+    ValidationFilesMetadata:
+      type: object
+      required: [submission_files, presets]
+      properties:
+        submission_files:
+          type: array
+          items: { $ref: '#/components/schemas/FilePart' }
+        presets:
+          type: array
+          items: { $ref: '#/components/schemas/PresetFiles' }
+    PresetFiles:
+      type: object
+      required: [workflow_id, files]
+      properties:
+        workflow_id: { type: string }
+        files:
+          type: array
+          items: { $ref: '#/components/schemas/FilePart' }
+    ValidationArtifactsMetadata:
+      type: object
+      required: [files]
+      properties:
+        files:
+          type: array
+          items: { $ref: '#/components/schemas/ArtifactPart' }
+    ArtifactPart:
+      allOf:
+        - $ref: '#/components/schemas/FilePart'
+        - type: object
+          required: [workflow_id, job_id, name, content_type]
+          properties:
+            workflow_id: { type: string }
+            job_id: { type: string }
+            name: { type: string }
+            content_type: { type: string }
     ValidationPage:
       type: object
       additionalProperties: false

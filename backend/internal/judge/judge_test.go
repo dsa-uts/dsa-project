@@ -20,7 +20,7 @@ func TestOrderedJobIDs(t *testing.T) {
 		},
 	}
 
-	got, err := orderedJobIDs(workflow, store.ValidationKind)
+	got, err := store.OrderedJobIDs(workflow, store.ValidationKind)
 	want := []string{"z-build", "a-test"}
 	if err != nil || !slices.Equal(got, want) {
 		t.Fatalf("got %v, %v; want %v", got, err, want)
@@ -29,7 +29,7 @@ func TestOrderedJobIDs(t *testing.T) {
 	job := workflow.Jobs["z-build"]
 	job.Depends = []string{"a-test"}
 	workflow.Jobs["z-build"] = job
-	if _, err := orderedJobIDs(workflow, store.ValidationKind); err == nil {
+	if _, err := store.OrderedJobIDs(workflow, store.ValidationKind); err == nil {
 		t.Fatal("cyclic dependencies must fail")
 	}
 }

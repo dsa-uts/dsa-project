@@ -14,6 +14,117 @@ function multipart(files: { path: string; content: Buffer }[], metadata = JSON.s
   return { data: Buffer.concat(chunks), contentType: `multipart/form-data; boundary=${boundary}` }
 }
 
+test('Validation detail and binary files share ownership and Project visibility rules', async ({ request }) => {
+  test.setTimeout(120_000)
+  const cookies: Record<string, string> = {}
+  for (const role of ['admin', 'manager', 'student']) {
+    const login = await request.post('/api/session', { data: { userid: role, password: 'admin' } })
+    expect(login.status()).toBe(200)
+    cookies[role] = login.headers()['set-cookie'].split(';')[0]
+  }
+  const admin = { Cookie: cookies.admin }
+  const student = { Cookie: cookies.student }
+  const imported = await request.post('/api/admin/resource-imports', { headers: admin, data: { resource_id: 'ex1', version: 'v1.0.0' } })
+  expect(imported.status(), await imported.text()).toBe(200)
+  const projectID: string = (await imported.json()).project_id
+  const projects: components['schemas']['Project'][] = (await (await request.get('/api/projects', { headers: admin })).json()).projects
+  const original = projects.map(({ id, published_at, deadline }) => ({ id, published_at, deadline }))
+  const visibility = (published_at: string | null) => request.patch('/api/admin/projects', {
+    headers: admin, data: { projects: original.map(p => p.id === projectID ? { ...p, published_at } : p) },
+  })
+  const files = [{ path: '日本語/answer.bin', content: Buffer.from([0, 255, 10]) }, { path: 'empty', content: Buffer.alloc(0) }]
+  const upload = multipart(files)
+  const create = async (headers: { Cookie: string }) => {
+    const response = await request.post(`/api/projects/${projectID}/validation`, {
+      headers: { ...headers, 'Content-Type': upload.contentType }, data: upload.data,
+    })
+    expect(response.status(), await response.text()).toBe(201)
+    return (await response.json()).id as string
+  }
+  const read = async (id: string, headers = student): Promise<components['schemas']['ValidationDetail']> => {
+    const response = await request.get(`/api/requests/${id}/validation`, { headers })
+    expect(response.status(), await response.text()).toBe(200)
+    expect(response.headers()['cache-control']).toBe('no-store')
+    return response.json()
+  }
+  try {
+    expect((await visibility('2020-01-01T00:00:00Z')).status()).toBe(204)
+    const id = await create(student)
+    const url = `/api/requests/${id}/validation`
+    const first = await read(id)
+    expect(first).toMatchObject({
+      id, project: { id: projectID }, subject_user: { userid: 'student' },
+      version: 'v1.0.0', submission_id: expect.any(String),
+      content_hash: expect.stringMatching(/^sha256:[0-9a-f]{64}$/),
+    })
+    if (first.state !== 'completed') {
+      expect(first).toMatchObject({ result: null, status: null, duration_ms: null })
+      const response = await request.get(`${url}/artifacts`, { headers: student })
+      // Completion can race this request; 200 is allowed only if it has completed.
+      if (response.status() === 409) await expectAPIError(response, 409)
+      else {
+        expect(response.status(), await response.text()).toBe(200)
+        expect((await read(id)).state).toBe('completed')
+      }
+    }
+    const fileResponse = await request.get(`${url}/files`, { headers: student })
+    expect(fileResponse.status(), await fileResponse.text()).toBe(200)
+    expect(fileResponse.headers()['cache-control']).toBe('no-store')
+    const form = await new Response(new Uint8Array(await fileResponse.body()), { headers: { 'Content-Type': fileResponse.headers()['content-type'] } }).formData()
+    expect(typeof form.get('metadata')).toBe('string')
+    const metadata: components['schemas']['ValidationFilesMetadata'] = JSON.parse(form.get('metadata') as string)
+    expect(metadata.submission_files.map(file => file.path).sort()).toEqual(files.map(file => file.path).sort())
+    for (const file of files) {
+      const entry = metadata.submission_files.find(entry => entry.path === file.path)!
+      const part = form.get(entry.part) as File
+      expect(Buffer.from(await part.arrayBuffer())).toEqual(file.content)
+    }
+    expect(metadata.presets.map(group => group.workflow_id)).toEqual(['ex1-1', 'ex1-2'])
+    for (const group of metadata.presets) {
+      expect(group.files.length).toBeGreaterThan(0)
+      for (const file of group.files) expect((form.get(file.part) as File).size).toBeGreaterThan(0)
+    }
+    await expect.poll(async () => (await read(id)).state, { timeout: 60_000, intervals: [1_000] }).toBe('completed')
+    const detail = await read(id)
+    expect(detail.status).toBe('CE')
+    expect(detail.result!.workflows.map(workflow => workflow.id)).toEqual(['ex1-1', 'ex1-2'])
+    for (const workflow of detail.result!.workflows) {
+      expect(workflow.jobs.map(job => job.id)).toEqual(['build', 'public'])
+      expect(workflow.jobs[0].status).toBe('CE')
+      expect(workflow.jobs[1]).toMatchObject({ status: 'SKIP', skip_reason: expect.any(String) })
+      expect(workflow.jobs[1].steps.every(step => step.status === null && step.stdout === null)).toBe(true)
+      expect(workflow.jobs.every(job => job.artifacts.length === 0)).toBe(true)
+    }
+    const artifactResponse = await request.get(`${url}/artifacts`, { headers: student })
+    expect(artifactResponse.status(), await artifactResponse.text()).toBe(200)
+    const artifacts = await new Response(new Uint8Array(await artifactResponse.body()), { headers: { 'Content-Type': artifactResponse.headers()['content-type'] } }).formData()
+    expect(JSON.parse(artifacts.get('metadata') as string)).toEqual({ files: [] })
+    // Resubmission uses the exposed immutable Submission and creates a new Request.
+    const rerun = await request.post(`/api/projects/${projectID}/validation`, { headers: student, data: { submission_id: first.submission_id } })
+    expect(rerun.status(), await rerun.text()).toBe(201)
+    const rerunID = (await rerun.json()).id
+    expect(rerunID).not.toBe(id)
+    expect((await read(rerunID)).submission_id).toBe(first.submission_id)
+    const otherID = await create(admin)
+    for (const suffix of ['', '/files', '/artifacts']) {
+      await expectAPIError(await request.get(`${url}${suffix}`, { headers: { Cookie: '' } }), 401)
+      await expectAPIError(await request.get(`/api/requests/${randomUUID()}/validation${suffix}`, { headers: admin }), 404)
+      await expectAPIError(await request.get(`/api/requests/${otherID}/validation${suffix}`, { headers: student }), 404)
+      await expectAPIError(await request.get(`/api/requests/not-a-uuid/validation${suffix}`, { headers: admin }), 400)
+    }
+    expect((await visibility(null)).status()).toBe(204)
+    for (const suffix of ['', '/files', '/artifacts']) {
+      await expectAPIError(await request.get(`${url}${suffix}`, { headers: student }), 404)
+      for (const role of ['admin', 'manager']) {
+        const response = await request.get(`${url}${suffix}`, { headers: { Cookie: cookies[role] } })
+        expect(response.status(), await response.text()).toBe(200)
+      }
+    }
+  } finally {
+    expect((await request.patch('/api/admin/projects', { headers: admin, data: { projects: original } })).status()).toBe(204)
+  }
+})
+
 test('Judge completes repeated correct submissions and enforces runtime limits', async ({ request }) => {
   test.setTimeout(300_000)
   expect((await request.post('/api/session', { data: { userid: 'admin', password: 'admin' } })).status()).toBe(200)
@@ -57,6 +168,17 @@ test('Judge completes repeated correct submissions and enforces runtime limits',
   }).toPass({ timeout: 240_000, intervals: [5_000] })
   for (const scenario of submitted) {
     expect(results.find(row => row.id === scenario.id)?.status, `${scenario.name}: ${scenario.id}`).toBe(scenario.status)
+    const response = await request.get(`/api/requests/${scenario.id}/validation`)
+    expect(response.status(), await response.text()).toBe(200)
+    const detail: components['schemas']['ValidationDetail'] = await response.json()
+    expect(detail).toMatchObject({ state: 'completed', status: scenario.status, result: { workflows: expect.any(Array) } })
+    const steps = detail.result!.workflows.flatMap(workflow => workflow.jobs.flatMap(job => job.steps))
+    if (scenario.name === 'timeout with buffered diagnostics' || scenario.name === 'memory with buffered diagnostics') {
+      expect(steps.some(step => Buffer.from(step.stdout?.data ?? '', 'base64').toString().includes(scenario.status === 'TLE' ? 'before timeout' : 'before memory limit'))).toBe(true)
+      expect(steps.some(step => Buffer.from(step.stderr?.data ?? '', 'base64').toString().includes('diagnostic'))).toBe(true)
+    }
+    if (scenario.name === 'stdout overflow') expect(steps.some(step => step.stdout?.truncated)).toBe(true)
+    if (scenario.name === 'stderr overflow') expect(steps.some(step => step.stderr?.truncated)).toBe(true)
   }
 
   // Submit only after the fork bomb completes to check that the Judge recovers.

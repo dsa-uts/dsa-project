@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"maps"
 	"slices"
-	"strings"
 	"time"
 
 	"github.com/dsa-uts/dsa-project/backend/internal/store"
@@ -101,7 +100,7 @@ func (w *worker) executeWorkflow(
 		summarizeWorkflow(result, err)
 	}()
 
-	jobIDs, err := orderedJobIDs(workflow, input.Submission.Kind)
+	jobIDs, err := store.OrderedJobIDs(workflow, input.Submission.Kind)
 	if err != nil {
 		return result, err
 	}
@@ -121,46 +120,6 @@ func (w *worker) executeWorkflow(
 	}
 
 	return result, nil
-}
-
-func orderedJobIDs(workflow resource.Workflow, kind store.SubmissionKind) ([]string, error) {
-	if kind != store.ValidationKind && kind != store.EvaluationKind {
-		return nil, fmt.Errorf("unknown submission kind %q", kind)
-	}
-
-	pending := slices.Sorted(maps.Keys(workflow.Jobs))
-	if kind == store.ValidationKind {
-		pending = slices.DeleteFunc(pending, func(id string) bool {
-			return workflow.Jobs[id].Visibility != "public"
-		})
-	}
-
-	order := make([]string, 0, len(pending))
-	done := make(map[string]bool, len(pending))
-
-	for len(pending) > 0 {
-		ready := -1
-		for i, id := range pending {
-			if slices.ContainsFunc(workflow.Jobs[id].Depends, func(dep string) bool {
-				return !done[dep]
-			}) {
-				continue
-			}
-			ready = i
-			break
-		}
-
-		if ready < 0 {
-			return nil, fmt.Errorf("unresolvable job dependencies: %s", strings.Join(pending, ","))
-		}
-
-		id := pending[ready]
-		order = append(order, id)
-		done[id] = true
-		pending = slices.Delete(pending, ready, ready+1)
-	}
-
-	return order, nil
 }
 
 func summarizeWorkflow(result *store.WorkflowResult, executionErr error) {

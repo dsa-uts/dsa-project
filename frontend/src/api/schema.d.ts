@@ -199,6 +199,78 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/requests/{request_id}/validation": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description Students see their own Validation Requests in currently published Projects.
+         *     Managers and Admins see all Validation Requests. Missing, invisible and
+         *     non-validation Requests return 404. All definitions use the pinned Version.
+         *     Unfinished Requests return result null; poll every five seconds until completed.
+         *     Completed results include definitions even when execution results were not
+         *     saved. A missing result does not prove non-execution. Private Jobs are excluded.
+         */
+        get: operations["getValidation"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/requests/{request_id}/validation/files": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description Students see their own Validation Requests in currently published Projects.
+         *     Managers and Admins see all Validation Requests. Missing, invisible and
+         *     non-validation Requests return 404. All definitions use the pinned Version.
+         *     metadata is an application/json text part; referenced fileN parts contain
+         *     raw bytes. Paths come from metadata, not multipart filenames.
+         *     Available before completion. Includes all Workflow Presets regardless of visibility.
+         */
+        get: operations["getValidationFiles"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/requests/{request_id}/validation/artifacts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description Students see their own Validation Requests in currently published Projects.
+         *     Managers and Admins see all Validation Requests. Missing, invisible and
+         *     non-validation Requests return 404. All definitions use the pinned Version.
+         *     metadata is an application/json text part; referenced fileN parts contain
+         *     raw bytes. Paths come from metadata, not multipart filenames.
+         *     Only final-attempt public outputs of public Jobs are included. Empty is successful.
+         */
+        get: operations["getValidationArtifacts"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/validation": {
         parameters: {
             query?: never;
@@ -257,6 +329,142 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        ValidationDetail: {
+            /** Format: uuid */
+            id: string;
+            project: {
+                /** Format: uuid */
+                id: string;
+                /** @description Current Project display name */
+                name: string;
+            };
+            subject_user: {
+                /** Format: uuid */
+                id: string;
+                userid: string;
+                name: string;
+            };
+            version: string;
+            /** @enum {string} */
+            state: "pending" | "running" | "retrying" | "completed";
+            status: components["schemas"]["NullableStatus"];
+            content_hash: string;
+            /** @description Final attempt elapsed time including preparation and saving, excluding queue time and discarded attempts */
+            duration_ms: components["schemas"]["NullableMeasurement"];
+            /** Format: date-time */
+            requested_at: string;
+            /** Format: uuid */
+            submission_id: string;
+            result: components["schemas"]["ValidationResult"] | null;
+        };
+        /**
+         * Format: int64
+         * @description Null when unavailable; durations are milliseconds and memory is bytes
+         */
+        NullableMeasurement: number | null;
+        ValidationResult: {
+            peak_memory_bytes: components["schemas"]["NullableMeasurement"];
+            /** @description Workflow ID order; definitions from the pinned Version */
+            workflows: components["schemas"]["ValidationWorkflow"][];
+        };
+        ValidationWorkflow: {
+            id: string;
+            name: string;
+            status: components["schemas"]["NullableStatus"];
+            duration_ms: components["schemas"]["NullableMeasurement"];
+            /** @description Public Jobs in dependency order, breaking ties by ID */
+            jobs: components["schemas"]["ValidationJob"][];
+        };
+        ValidationJob: {
+            id: string;
+            name: string;
+            status: components["schemas"]["NullableStatus"];
+            /** @description Elapsed Job time including preparation and cleanup, not the sum of Step durations */
+            duration_ms: components["schemas"]["NullableMeasurement"];
+            peak_memory_bytes: components["schemas"]["NullableMeasurement"];
+            skip_reason: string | null;
+            stop_reason: string | null;
+            steps: components["schemas"]["ValidationStep"][];
+            /** @description Public declarations, including failed and unrecorded captures */
+            artifacts: components["schemas"]["ValidationArtifact"][];
+        };
+        ValidationStep: {
+            /** @description Zero-based position in the pinned Job steps array */
+            index: number;
+            name: string;
+            /** @description Bash source from the Resource */
+            run: string;
+            compile: boolean;
+            /** Format: int64 */
+            timeout_ms: number;
+            /** @description Base64-encoded input bytes; empty string means no input */
+            stdin: string;
+            expected: components["schemas"]["StepExpectation"];
+            status: components["schemas"]["NullableStatus"];
+            /** @description Null when unavailable; never the internal -1 sentinel */
+            exit_code: number | null;
+            duration_ms: components["schemas"]["NullableMeasurement"];
+            /** @description Maximum sampled Sandbox memory during this Step, not isolated process RSS */
+            memory_bytes: components["schemas"]["NullableMeasurement"];
+            stdout: components["schemas"]["StepOutput"] | null;
+            stderr: components["schemas"]["StepOutput"] | null;
+        };
+        StepOutput: {
+            /** @description Base64-encoded original bytes; empty output is an empty string */
+            data: string;
+            /** @description Only the allowed prefix was saved */
+            truncated: boolean;
+        };
+        StepExpectation: {
+            /** @description Null means unchecked */
+            exit_code: number | null;
+            stdout: components["schemas"]["ExpectedOutput"] | null;
+            stderr: components["schemas"]["ExpectedOutput"] | null;
+        };
+        /** @description Null means unchecked; an empty data string means expect empty output */
+        ExpectedOutput: {
+            /** @description Base64-encoded expected bytes */
+            data: string;
+            /** @enum {string} */
+            match: "exact" | "easy" | "sorted";
+        };
+        ValidationArtifact: {
+            name: string;
+            path: string;
+            content_type: string;
+            /** @description Saved capture verdict; null when unrecorded */
+            status: components["schemas"]["ValidationArtifactStatus"] | null;
+            /** @description Final-attempt bytes exist even if the capture verdict was not saved */
+            available: boolean;
+            size_bytes: components["schemas"]["NullableMeasurement"];
+            /** @description Safe failure message without internal paths */
+            error: string | null;
+        };
+        /** @enum {string} */
+        ValidationArtifactStatus: "AC" | "WA" | "OLE";
+        FilePart: {
+            /** @description Binary multipart field name */
+            part: string;
+            /** @description Stored relative path */
+            path: string;
+        };
+        ValidationFilesMetadata: {
+            submission_files: components["schemas"]["FilePart"][];
+            presets: components["schemas"]["PresetFiles"][];
+        };
+        PresetFiles: {
+            workflow_id: string;
+            files: components["schemas"]["FilePart"][];
+        };
+        ValidationArtifactsMetadata: {
+            files: components["schemas"]["ArtifactPart"][];
+        };
+        ArtifactPart: components["schemas"]["FilePart"] & {
+            workflow_id: string;
+            job_id: string;
+            name: string;
+            content_type: string;
+        };
         ValidationPage: {
             requests: components["schemas"]["ValidationSummary"][];
             /**
@@ -921,6 +1129,125 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
+        };
+    };
+    getValidation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                request_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success; Cache-Control is no-store */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ValidationDetail"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            /** @description Request missing or invisible */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            500: components["responses"]["InternalError"];
+        };
+    };
+    getValidationFiles: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                request_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success; Cache-Control is no-store */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "multipart/form-data": {
+                        metadata: components["schemas"]["ValidationFilesMetadata"];
+                    } & {
+                        [key: string]: string;
+                    };
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            /** @description Request missing or invisible */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            500: components["responses"]["InternalError"];
+        };
+    };
+    getValidationArtifacts: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                request_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success; Cache-Control is no-store */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "multipart/form-data": {
+                        metadata: components["schemas"]["ValidationArtifactsMetadata"];
+                    } & {
+                        [key: string]: string;
+                    };
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            /** @description Request missing or invisible */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Request has not completed */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            500: components["responses"]["InternalError"];
         };
     };
     listValidation: {
