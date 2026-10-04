@@ -102,13 +102,13 @@ func (w *worker) loadJobArtifacts(
 	if job.Artifacts == nil {
 		return nil, "", nil
 	}
-	loadCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 
 	inputs := make([]jobArtifactInput, 0, len(job.Artifacts.Inputs))
 
 	for _, input := range job.Artifacts.Inputs {
-		artifact, err := w.requests.LoadArtifact(loadCtx, req, workflowID, input.FromJob, input.Name)
+		artifact, err := w.requests.LoadArtifact(ctx, req, workflowID, input.FromJob, input.Name)
 		if err != nil {
 			return nil, "", fmt.Errorf("load input artifact %s/%s: %w",
 				input.FromJob, input.Name, err)
@@ -175,22 +175,22 @@ func (w *worker) captureJobArtifacts(
 	if job.Artifacts == nil {
 		return nil
 	}
-	captureCtx, cancel := context.WithTimeout(ctx, captureTimeout)
+	ctx, cancel := context.WithTimeout(ctx, captureTimeout)
 	defer cancel()
 	for _, output := range job.Artifacts.Outputs {
-		if err := captureCtx.Err(); err != nil {
+		if err := ctx.Err(); err != nil {
 			return err
 		}
-		artifact, captured, err := ws.captureArtifact(captureCtx, output, job.Limits.ArtifactSize)
+		artifact, captured, err := ws.captureArtifact(ctx, output, job.Limits.ArtifactSize)
 		if err != nil {
 			return fmt.Errorf("capture artifact %q: %w", output.Name, err)
 		}
-		if err := captureCtx.Err(); err != nil {
+		if err := ctx.Err(); err != nil {
 			return err
 		}
 		artifact.WorkflowID = workflowID
 		artifact.JobID = jobID
-		if err := w.requests.SaveArtifact(captureCtx, req, w.ownerID, artifact); err != nil {
+		if err := w.requests.SaveArtifact(ctx, req, w.ownerID, artifact); err != nil {
 			return fmt.Errorf("save artifact %q: %w", output.Name, err)
 		}
 		result.Artifacts = append(result.Artifacts, captured)

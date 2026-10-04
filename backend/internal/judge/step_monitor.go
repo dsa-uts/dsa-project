@@ -38,8 +38,8 @@ func (w *worker) monitorStep(ctx context.Context, sb *sandbox, execID string, ba
 		}
 		state, err := w.inspectExec(ctx, execID)
 		if err != nil {
-			if ctx.Err() != nil {
-				continue
+			if err := ctx.Err(); err != nil {
+				return observed, err
 			}
 			return observed, fmt.Errorf("inspect step exec: %w", err)
 		}
@@ -49,6 +49,7 @@ func (w *worker) monitorStep(ctx context.Context, sb *sandbox, execID string, ba
 		}
 		select {
 		case <-ctx.Done():
+			return observed, ctx.Err()
 		case <-streams.overflow:
 			return observed, nil
 		case err := <-inputDone:

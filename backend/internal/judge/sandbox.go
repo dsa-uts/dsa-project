@@ -46,40 +46,10 @@ func sandboxName(ws *workspace) string {
 	return "dsa-sandbox-" + filepath.Base(ws.path)
 }
 
-// Retry only operations that can be reconciled or safely repeated. In
-// particular, Step exec creation/start/attach must never use this helper.
-func retryDocker(ctx context.Context, operation func(context.Context) error) error {
-	var err error
-	for attempt := range 3 {
-		if err := ctx.Err(); err != nil {
-			return err
-		}
-		err = operation(ctx)
-		if err == nil {
-			return nil
-		}
-		if errdefs.IsNotFound(err) || errdefs.IsInvalidArgument(err) ||
-			errdefs.IsPermissionDenied(err) || errdefs.IsUnauthorized(err) {
-			return err
-		}
-		if attempt < 2 {
-			if err := wait(ctx, time.Second); err != nil {
-				return err
-			}
-		}
-	}
-	return err
-}
-
 func (w *worker) inspectSandbox(ctx context.Context, id string) (container.InspectResponse, error) {
-	var result client.ContainerInspectResult
-	err := retryDocker(ctx, func(ctx context.Context) error {
-		callCtx, cancel := context.WithTimeout(ctx, apiTimeout)
-		defer cancel()
-		var err error
-		result, err = w.docker.ContainerInspect(callCtx, id, client.ContainerInspectOptions{})
-		return err
-	})
+	ctx, cancel := context.WithTimeout(ctx, apiTimeout)
+	defer cancel()
+	result, err := w.docker.ContainerInspect(ctx, id, client.ContainerInspectOptions{})
 	return result.Container, err
 }
 
@@ -96,17 +66,13 @@ func (w *worker) startSandbox(
 		return nil, err
 	}
 
-	options := w.sandboxOptions(req, ws, workflowID, jobID, job)
-
-	id, err := w.createSandbox(ctx, ws, options)
+	// Keep a fixed name so cleanup can remove a container even if create times out.
+	created, err := w.docker.ContainerCreate(ctx, w.sandboxOptions(req, ws, workflowID, jobID, job))
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("create sandbox: %w", err)
 	}
-
-	if err := retryDocker(ctx, func(ctx context.Context) error {
-		_, err := w.docker.ContainerStart(ctx, id, client.ContainerStartOptions{})
-		return err
-	}); err != nil {
+	id := created.ID
+	if _, err := w.docker.ContainerStart(ctx, id, client.ContainerStartOptions{}); err != nil {
 		return nil, fmt.Errorf("start sandbox: %w", err)
 	}
 	state, err := w.inspectSandbox(ctx, id)
@@ -188,20 +154,17 @@ func sandboxCgroup(pid int) (string, error) {
 func (w *worker) stopSandbox(ctx context.Context, sb *sandbox) error {
 	ctx, cancel := context.WithTimeout(ctx, removalTimeout)
 	defer cancel()
-	if err := retryDocker(ctx, func(ctx context.Context) error {
-		state, err := w.inspectSandbox(ctx, sb.id)
-		if err != nil {
-			return err
-		}
-		if state.State == nil {
-			return errors.New("sandbox has no state")
-		}
-		if !state.State.Running {
-			return nil
-		}
-		_, err = w.docker.ContainerKill(ctx, sb.id, client.ContainerKillOptions{Signal: "SIGKILL"})
+	state, err := w.inspectSandbox(ctx, sb.id)
+	if err != nil {
 		return err
-	}); err != nil {
+	}
+	if state.State == nil {
+		return errors.New("sandbox has no state")
+	}
+	if !state.State.Running {
+		return nil
+	}
+	if _, err := w.docker.ContainerKill(ctx, sb.id, client.ContainerKillOptions{Signal: "SIGKILL"}); err != nil {
 		return err
 	}
 	for {
@@ -219,13 +182,10 @@ func (w *worker) stopSandbox(ctx context.Context, sb *sandbox) error {
 }
 
 func (w *worker) removeContainer(ctx context.Context, id string) error {
-	err := retryDocker(ctx, func(ctx context.Context) error {
-		_, err := w.docker.ContainerRemove(ctx, id, client.ContainerRemoveOptions{Force: true, RemoveVolumes: true})
-		if errdefs.IsNotFound(err) {
-			return nil
-		}
-		return err
-	})
+	_, err := w.docker.ContainerRemove(ctx, id, client.ContainerRemoveOptions{Force: true, RemoveVolumes: true})
+	if errdefs.IsNotFound(err) {
+		return nil
+	}
 	if err != nil {
 		return err
 	}
@@ -237,7 +197,7 @@ func (w *worker) removeContainer(ctx context.Context, id string) error {
 		if err != nil {
 			return err
 		}
-		if err := wait(ctx, 2*time.Second); err != nil {
+		if err := wait(ctx, 1*time.Second); err != nil {
 			return err
 		}
 	}
@@ -253,14 +213,8 @@ func (w *worker) releaseSandbox(ctx context.Context, ws *workspace) error {
 func (w *worker) reapSandboxes(ctx context.Context) error {
 	ctx, cancel := context.WithTimeout(ctx, removalTimeout)
 	defer cancel()
-	var containers client.ContainerListResult
-	if err := retryDocker(ctx, func(ctx context.Context) error {
-		var err error
-		containers, err = w.docker.ContainerList(ctx, client.ContainerListOptions{
-			All: true,
-		})
-		return err
-	}); err != nil {
+	containers, err := w.docker.ContainerList(ctx, client.ContainerListOptions{All: true})
+	if err != nil {
 		return err
 	}
 	for _, item := range containers.Items {
@@ -309,19 +263,20 @@ func (w *worker) sandboxOOM(ctx context.Context, sb *sandbox, since time.Time) (
 }
 
 func (w *worker) ensureSandboxImage(ctx context.Context, image string) error {
-	if err := retryDocker(ctx, func(ctx context.Context) error {
-		_, err := w.docker.ImageInspect(ctx, image)
-		if err == nil || !errdefs.IsNotFound(err) {
-			return err
-		}
-		// TODO: GHCRプライベートレジストリに対応
-		pull, err := w.docker.ImagePull(ctx, image, client.ImagePullOptions{})
-		if err != nil {
-			return err
-		}
-		defer pull.Close()
-		return pull.Wait(ctx)
-	}); err != nil {
+	_, err := w.docker.ImageInspect(ctx, image)
+	if err == nil {
+		return nil
+	}
+	if !errdefs.IsNotFound(err) {
+		return fmt.Errorf("inspect sandbox image: %w", err)
+	}
+	// TODO: GHCRプライベートレジストリに対応
+	pull, err := w.docker.ImagePull(ctx, image, client.ImagePullOptions{})
+	if err != nil {
+		return fmt.Errorf("pull sandbox image: %w", err)
+	}
+	defer pull.Close()
+	if err := pull.Wait(ctx); err != nil {
 		return fmt.Errorf("pull sandbox image: %w", err)
 	}
 
@@ -369,31 +324,6 @@ func (w *worker) sandboxOptions(req *store.Request, ws *workspace, workflowID, j
 		},
 	}
 
-}
-
-// createSandbox reconciles a timed-out create by looking up the fixed name.
-func (w *worker) createSandbox(ctx context.Context, ws *workspace, options client.ContainerCreateOptions) (string, error) {
-	var id string
-	if err := retryDocker(ctx, func(ctx context.Context) error {
-		// A timed-out create may have succeeded. Resolve its fixed name first.
-		existing, err := w.docker.ContainerInspect(ctx, options.Name, client.ContainerInspectOptions{})
-		if err == nil {
-			if existing.Container.Config == nil || existing.Container.Config.Labels[workspaceLabel] != filepath.Base(ws.path) {
-				return errdefs.ErrInvalidArgument.WithMessage("sandbox name belongs to another workspace")
-			}
-			id = existing.Container.ID
-			return nil
-		}
-		if !errdefs.IsNotFound(err) {
-			return err
-		}
-		created, err := w.docker.ContainerCreate(ctx, options)
-		id = created.ID
-		return err
-	}); err != nil {
-		return "", fmt.Errorf("create sandbox: %w", err)
-	}
-	return id, nil
 }
 
 type memorySample struct {

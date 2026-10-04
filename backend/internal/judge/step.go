@@ -22,18 +22,11 @@ const (
 
 // Callers read ExitCode only after a started exec reports Running=false.
 func (w *worker) inspectExec(ctx context.Context, id string) (client.ExecInspectResult, error) {
-	var result client.ExecInspectResult
-	err := retryDocker(ctx, func(ctx context.Context) error {
-		callCtx, cancel := context.WithTimeout(ctx, apiTimeout)
-		defer cancel()
-		var err error
-		result, err = w.docker.ExecInspect(callCtx, id, client.ExecInspectOptions{})
-		return err
-	})
-	return result, err
+	ctx, cancel := context.WithTimeout(ctx, apiTimeout)
+	defer cancel()
+	return w.docker.ExecInspect(ctx, id, client.ExecInspectOptions{})
 }
 
-// TODO: OLEやMLEの検出経路が複数あったり結果判定のロジックが複雑で気持ち悪いので、リファクタリング検討
 func (w *worker) executeStep(ctx context.Context, sb *sandbox, index int, step resource.Step, limits resource.Limits) (result store.StepResult, executionErr error) {
 	result = store.StepResult{
 		Index:     index,
@@ -94,7 +87,9 @@ func (w *worker) executeStep(ctx context.Context, sb *sandbox, index int, step r
 	// A lost exec connection does not kill its processes. Always try the UID
 	// cleanup, including on success, before moving on to another Step.
 	// Cleanup, output draining, and final observation share one time budget.
-	finishCtx, cancelFinish := context.WithTimeout(context.WithoutCancel(ctx), stepFinishTimeout)
+	// Request cancellation stops this work; a Step timeout alone does not.
+	// Leftover sandboxes are reaped before the next claim.
+	finishCtx, cancelFinish := context.WithTimeout(ctx, stepFinishTimeout)
 	defer cancelFinish()
 	if err := w.cleanupSubmission(finishCtx, sb); err != nil {
 		log.Printf(

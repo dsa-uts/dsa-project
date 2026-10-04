@@ -66,10 +66,10 @@ func (w *worker) cleanupPreviousAttempts(ctx context.Context, req *store.Request
 	if req.AttemptCount <= 1 {
 		return nil
 	}
-	deleteCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 
-	if err := w.requests.DeletePreviousExecution(deleteCtx, req.ID, w.ownerID, req.AttemptCount); err != nil {
+	if err := w.requests.DeletePreviousExecution(ctx, req.ID, w.ownerID, req.AttemptCount); err != nil {
 		return fmt.Errorf("delete previous execution: %w", err)
 	}
 

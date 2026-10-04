@@ -83,14 +83,30 @@ func TestStepIOFinish(t *testing.T) {
 }
 
 func TestStepIOFinishExpiredBudget(t *testing.T) {
+	for _, canceled := range []bool{false, true} {
+		t.Run(fmt.Sprintf("requestCanceled=%v", canceled), func(t *testing.T) {
+			testStepIOFinishInterrupted(t, canceled)
+		})
+	}
+}
+
+func testStepIOFinishInterrupted(t *testing.T, canceled bool) {
+	t.Helper()
 	conn, peer := net.Pipe()
 	defer conn.Close()
 	defer peer.Close()
 	stream := client.ExecAttachResult{HijackedResponse: client.HijackedResponse{Conn: conn, Reader: bufio.NewReader(conn)}}
 	streams := startStepIO(stream, []byte("unread input"), resource.Limits{StdoutSize: 3, StderrSize: 10})
-	// Earlier cleanup used the entire budget; neither copy may keep waiting.
-	ctx, cancel := context.WithDeadline(t.Context(), time.Now().Add(-time.Second))
+	// Both an exhausted finish budget and Request cancellation must join the copies.
+	deadline := time.Now().Add(-time.Second)
+	if canceled {
+		deadline = time.Now().Add(time.Hour)
+	}
+	ctx, cancel := context.WithDeadline(t.Context(), deadline)
 	defer cancel()
+	if canceled {
+		cancel()
+	}
 	done := make(chan error, 1)
 	go func() { done <- streams.finish(ctx, "sandbox", 0) }()
 	select {
