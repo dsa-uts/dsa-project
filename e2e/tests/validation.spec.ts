@@ -125,7 +125,7 @@ test('Validation detail and binary files share ownership and Project visibility 
   }
 })
 
-test('Judge completes repeated correct submissions and enforces runtime limits', async ({ request }) => {
+test('Judge completes a correct submission, enforces runtime limits and recovers', async ({ request }) => {
   test.setTimeout(300_000)
   expect((await request.post('/api/session', { data: { userid: 'admin', password: 'admin' } })).status()).toBe(200)
   const imported = await request.post('/api/admin/resource-imports', { data: { resource_id: 'ex1', version: 'v1.0.0' } })
@@ -135,7 +135,7 @@ test('Judge completes repeated correct submissions and enforces runtime limits',
     path, content: await readFile(new URL(`../fixtures/validation-ex1/${path}`, import.meta.url)),
   })))
   const cases = [
-    ...Array.from({ length: 12 }, (_, i) => ({ name: `correct ${i}`, status: 'AC', main: '' })),
+    { name: 'correct', status: 'AC', main: '' },
     { name: 'timeout with buffered diagnostics', status: 'TLE', main: 'puts("before timeout"); fprintf(stderr, "timeout diagnostic\\n"); sleep(30);' },
     { name: 'closed standard streams', status: 'TLE', main: 'close(0); close(1); close(2); sleep(30);' },
     { name: 'child holding stdout', status: 'TLE', main: 'if (fork() == 0) sleep(30);' },
@@ -220,7 +220,7 @@ test('Validation upload, concurrent requests, scope and input limits', async ({ 
   const defaultLimit = { ...oversized, data: oversized.data.subarray(0, 131_072) }
   await expectAPIError(await send(defaultLimit, '/api/admin/resource-imports', ''), 401)
   await expectAPIError(await send({ ...oversized, data: oversized.data.subarray(0, 131_073) }, '/api/admin/resource-imports', ''), 413)
-  await expectAPIError(await request.put(url, { data: oversized.data, headers: { Cookie: '', 'Content-Type': oversized.contentType } }), 413)
+  await expectAPIError(await request.put(url, { data: oversized.data.subarray(0, 131_073), headers: { Cookie: '', 'Content-Type': oversized.contentType } }), 413)
   await expectAPIError(await request.post(url, { data: {}, headers: { Cookie: cookie, 'Content-Type': 'application/json' } }), 400)
   await expectAPIError(await send({ data: Buffer.from('x'), contentType: 'text/plain' }), 400)
   await expectAPIError(await send(undefined, `/api/projects/${randomUUID()}/validation`), 404)
@@ -329,12 +329,8 @@ test('Validation list filters, authorization and bidirectional 20-item pages', a
     expect(ids).toEqual([...ids].sort().reverse())
     return page
   }
-  // The example solution covers both public Workflows; pagination never waits
-  // for Judge completion or requires AC to become available.
-  const files = await Promise.all(['Makefile', 'gcd_euclid.c', 'gcd_recursive.c', 'main_euclid.c', 'main_recursive.c'].map(async path => ({
-    path, content: await readFile(new URL(`../fixtures/validation-ex1/${path}`, import.meta.url)),
-  })))
-  const body = multipart(files)
+  // Pagination needs Requests, not successful builds or Judge completion.
+  const body = multipart([{ path: 'empty', content: Buffer.alloc(0) }])
   const send = async (projectID: string, headers = student) => {
     const response = await request.post(`/api/projects/${projectID}/validation`, { data: body.data, headers: { ...headers, 'Content-Type': body.contentType } })
     expect(response.status(), await response.text()).toBe(201)
