@@ -422,6 +422,10 @@ func (w *worker) verifySubmissionUser(ctx context.Context, sb *sandbox) error {
 	if err := w.runControlExec(ctx, sb, command, &output); err != nil {
 		return err
 	}
+	return validateSubmissionUser(output.String())
+}
+
+func validateSubmissionUser(status string) error {
 	/* output of command (just pring /proc/self/status) looks like:
 
 	~$ while IFS= read -r line; do printf '%s\n' "$line"; done < /proc/self/status
@@ -485,7 +489,7 @@ func (w *worker) verifySubmissionUser(ctx context.Context, sb *sandbox) error {
 	nonvoluntary_ctxt_switches:     36
 	*/
 	fields := make(map[string][]string)
-	for line := range strings.SplitSeq(output.String(), "\n") {
+	for line := range strings.SplitSeq(status, "\n") {
 		key, value, ok := strings.Cut(line, ":")
 		if ok {
 			fields[key] = strings.Fields(value)
@@ -502,8 +506,15 @@ func (w *worker) verifySubmissionUser(ctx context.Context, sb *sandbox) error {
 			}
 		}
 	}
-	if groups, ok := fields["Groups"]; !ok || len(groups) != 0 {
-		return errors.New("submission process has supplementary groups")
+	groups, ok := fields["Groups"]
+	if !ok {
+		return errors.New("missing Groups in process status")
+	}
+	// Docker exec may repeat the primary GID in supplementary groups.
+	for _, group := range groups {
+		if group != strconv.Itoa(submissionUID) {
+			return fmt.Errorf("submission process has unexpected supplementary groups: %v", groups)
+		}
 	}
 	for _, key := range []string{"CapInh", "CapPrm", "CapEff", "CapBnd", "CapAmb"} {
 		values := fields[key]
