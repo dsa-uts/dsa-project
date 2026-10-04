@@ -6,7 +6,7 @@ on:
       - 'docs/**'
       - 'README.md'
       - 'CONTEXT.md'
-      - 'CLAUDE.md'
+      - 'AGENTS.md'
       - 'LICENSE'
   push:
     branches: [main]
@@ -14,7 +14,7 @@ on:
       - 'docs/**'
       - 'README.md'
       - 'CONTEXT.md'
-      - 'CLAUDE.md'
+      - 'AGENTS.md'
       - 'LICENSE'
 
 # 同一 ref の実行は 1 つに絞り、PR への連続 push では古い実行をキャンセルする
