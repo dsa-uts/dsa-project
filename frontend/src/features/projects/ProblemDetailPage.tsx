@@ -4,11 +4,12 @@ import Markdown, { type Components } from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import type { Element, Root } from 'hast'
 import { Accordion, Tooltip } from 'radix-ui'
-import { ChevronRight, Upload } from 'lucide-react'
+import { ChevronRight } from 'lucide-react'
 import { $api } from '@/api/client'
 import { Button } from '@/components/ui/button'
 import { MarkdownContent } from '@/components/MarkdownContent'
 import { SubmissionSummary } from './SubmissionSummary'
+import { ValidationSubmitForm } from './ValidationSubmitForm'
 
 const heading: Components['h2'] = ({ children, node }) => createElement(node?.tagName === 'h1' ? 'h2' : node?.tagName ?? 'h2', { id: `section-${node?.position?.start.offset}`, className: 'scroll-mt-6', tabIndex: -1 }, children)
 const outlineHeading: Components['h2'] = ({ children, node }) => <a href={`#section-${node?.position?.start.offset}`} className="block rounded-sm py-1.5 hover:text-link focus-visible:ring-2 focus-visible:ring-ring">{children}</a>
@@ -84,20 +85,7 @@ export function ProblemDetailPage() {
         </Accordion.Item>)}
         </Accordion.Root>
       </nav>
-      <section aria-labelledby="upload-title" className="mt-8 space-y-4 rounded-md border bg-card p-4">
-        <h2 id="upload-title" className="text-xl font-bold">課題を提出</h2>
-        {project.required_files.length > 0 && <ul aria-label="提出が求められているファイル" className="rounded-md bg-muted p-3 font-mono text-sm">
-          {project.required_files.map((file, index) => <li key={index} className="break-words whitespace-pre-wrap">{file}</li>)}
-        </ul>}
-        <div className="flex flex-col items-center gap-3 rounded-md border-2 border-dashed p-4 text-muted-foreground">
-          <Upload className="size-8" aria-hidden="true" />
-          <span className="text-sm">ファイルをドロップ</span><span className="text-sm">または</span>
-          <Button variant="outline" disabled>ファイルを選択</Button>
-        </div>
-        <p className="text-sm text-muted-foreground">未選択</p>
-        <Button className="w-full" disabled>提出する</Button>
-        <p className="text-sm text-muted-foreground">提出機能は準備中です。</p>
-      </section>
+      <ValidationSubmitForm key={project.id} projectId={project.id} requiredFiles={project.required_files} />
     </aside>
     <div className="min-w-0 space-y-5 bg-card p-5 sm:p-8">
       <nav aria-label="パンくずリスト"><ol className="flex flex-wrap items-center gap-2 text-sm">

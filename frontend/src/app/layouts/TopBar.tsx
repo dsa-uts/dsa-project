@@ -1,10 +1,13 @@
 import { useNavigationGuard } from '@/components/navigation-guard'
-import { Link } from 'react-router-dom'
+import { Link, NavLink, useMatch } from 'react-router-dom'
 import { $api } from '@/api/client'
 import { useAuth } from '@/lib/auth'
 import { Button } from '@/components/ui/button'
 
+const navClass = 'rounded-sm px-2 py-2 outline-none hover:bg-top-bar-hover focus-visible:ring-2 focus-visible:ring-top-bar-foreground aria-[current=page]:bg-top-bar-hover'
+
 export function TopBar() {
+  const adminPage = useMatch('/admin/*')
   const { canLeave } = useNavigationGuard()
   const { user, setUser } = useAuth()
   const logout = $api.useMutation('delete', '/api/session', {
@@ -17,12 +20,13 @@ export function TopBar() {
         <Link to="/about" className="rounded-sm px-2 py-1 text-3xl font-bold outline-none transition-opacity hover:bg-top-bar-hover hover:opacity-80 focus-visible:ring-2 focus-visible:ring-top-bar-foreground">
           DSA
         </Link>
-        <Link to="/projects" className="mr-auto rounded-sm px-2 py-2 outline-none hover:bg-top-bar-hover focus-visible:ring-2 focus-visible:ring-top-bar-foreground">
+        <NavLink to="/projects" className={navClass}>
           Dashboard
-        </Link>
+        </NavLink>
+        <NavLink to="/results" className={`mr-auto ${navClass}`}>Results</NavLink>
         <div className="flex items-center gap-2 sm:gap-4">
           {user?.role === 'admin' && (
-            <Link to="/admin/list" className="rounded-sm px-2 py-2 outline-none transition-colors hover:bg-top-bar-hover focus-visible:ring-2 focus-visible:ring-top-bar-foreground sm:px-4">
+            <Link to="/admin/list" aria-current={adminPage ? 'page' : undefined} className={`${navClass} sm:px-4`}>
               Admin
             </Link>
           )}

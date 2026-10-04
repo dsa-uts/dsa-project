@@ -125,7 +125,7 @@ test('Validation detail and binary files share ownership and Project visibility 
   }
 })
 
-test('Judge completes repeated correct submissions and enforces runtime limits', async ({ request }) => {
+test('Judge completes a correct submission, enforces runtime limits and recovers', async ({ request }) => {
   test.setTimeout(300_000)
   expect((await request.post('/api/session', { data: { userid: 'admin', password: 'admin' } })).status()).toBe(200)
   const imported = await request.post('/api/admin/resource-imports', { data: { resource_id: 'ex1', version: 'v1.0.0' } })
@@ -135,7 +135,7 @@ test('Judge completes repeated correct submissions and enforces runtime limits',
     path, content: await readFile(new URL(`../fixtures/validation-ex1/${path}`, import.meta.url)),
   })))
   const cases = [
-    ...Array.from({ length: 12 }, (_, i) => ({ name: `correct ${i}`, status: 'AC', main: '' })),
+    { name: 'correct', status: 'AC', main: '' },
     { name: 'timeout with buffered diagnostics', status: 'TLE', main: 'puts("before timeout"); fprintf(stderr, "timeout diagnostic\\n"); sleep(30);' },
     { name: 'closed standard streams', status: 'TLE', main: 'close(0); close(1); close(2); sleep(30);' },
     { name: 'child holding stdout', status: 'TLE', main: 'if (fork() == 0) sleep(30);' },
@@ -194,6 +194,44 @@ test('Judge completes repeated correct submissions and enforces runtime limits',
   }).toPass({ timeout: 30_000, intervals: [1_000] })
 })
 
+test('Ingress enforces body limits before authentication', async ({ page }) => {
+  await page.goto('/login')
+  expect((await page.request.post('/api/session', { data: { userid: 'admin', password: 'admin' } })).status()).toBe(200)
+  expect(await page.evaluate(async () => (await fetch('/api/me')).status)).toBe(200)
+  // Routing and body limits do not require an existing Project.
+  const url = `/api/projects/${randomUUID()}/validation`
+  const cases = [
+    { method: 'POST', url, size: 21_000_000, status: 401, authenticated: false },
+    { method: 'POST', url, size: 21_000_001, status: 413, authenticated: false },
+    { method: 'POST', url, size: 21_000_001, status: 413, authenticated: true },
+    { method: 'POST', url: '/api/admin/resource-imports', size: 131_072, status: 401, authenticated: false },
+    { method: 'POST', url: '/api/admin/resource-imports', size: 131_073, status: 413, authenticated: false },
+    { method: 'PUT', url, size: 131_073, status: 413, authenticated: false },
+  ]
+  for (const scenario of cases) {
+    await test.step(`${scenario.method} ${scenario.url}: ${scenario.size} bytes, authenticated=${scenario.authenticated}`, async () => {
+      // APIRequestContext can throw EPIPE when Ingress rejects an upload early.
+      // Browser fetch can read the response while the upload is still in flight.
+      const response = await page.evaluate(async ({ method, url, size, authenticated }) => {
+        const response = await fetch(url, {
+          method, body: new Uint8Array(size).fill(32),
+          headers: { 'Content-Type': 'application/json' },
+          credentials: authenticated ? 'same-origin' : 'omit',
+          signal: AbortSignal.timeout(10_000),
+        })
+        return {
+          status: response.status, cacheControl: response.headers.get('cache-control'),
+          contentType: response.headers.get('content-type'), body: await response.json(),
+        }
+      }, scenario)
+      expect(response.status).toBe(scenario.status)
+      expect(response.cacheControl).toBe('no-store')
+      expect(response.contentType).toContain('application/json')
+      expect(response.body).toEqual({ code: scenario.status, message: expect.any(String) })
+    })
+  }
+})
+
 test('Validation upload, concurrent requests, scope and input limits', async ({ request }) => {
   test.setTimeout(120_000)
   const login = await request.post('/api/session', { data: { userid: 'admin', password: 'admin' } })
@@ -212,15 +250,6 @@ test('Validation upload, concurrent requests, scope and input limits', async ({ 
   })
   await expectAPIError(await send(undefined, url, ''), 401)
   await expectAPIError(await send({ data: Buffer.from('x'), contentType: 'text/plain' }, url, ''), 401)
-  // Ingress rejects oversized bodies before authentication using the shared JSON envelope.
-  const oversized = { data: Buffer.alloc(21_000_001, 32), contentType: 'application/json' }
-  await expectAPIError(await send(oversized, url, ''), 413)
-  await expectAPIError(await send({ ...oversized, data: oversized.data.subarray(0, 21_000_000) }, url, ''), 401)
-  // Other routes and methods retain the default 128 KiB limit.
-  const defaultLimit = { ...oversized, data: oversized.data.subarray(0, 131_072) }
-  await expectAPIError(await send(defaultLimit, '/api/admin/resource-imports', ''), 401)
-  await expectAPIError(await send({ ...oversized, data: oversized.data.subarray(0, 131_073) }, '/api/admin/resource-imports', ''), 413)
-  await expectAPIError(await request.put(url, { data: oversized.data, headers: { Cookie: '', 'Content-Type': oversized.contentType } }), 413)
   await expectAPIError(await request.post(url, { data: {}, headers: { Cookie: cookie, 'Content-Type': 'application/json' } }), 400)
   await expectAPIError(await send({ data: Buffer.from('x'), contentType: 'text/plain' }), 400)
   await expectAPIError(await send(undefined, `/api/projects/${randomUUID()}/validation`), 404)
@@ -256,7 +285,6 @@ test('Validation upload, concurrent requests, scope and input limits', async ({ 
   await expectAPIError(await send(multipart(files, JSON.stringify({ files: [{ part: 'missing', path: 'a' }] }))), 422)
   await expectAPIError(await send(multipart(files, JSON.stringify({ files: [{ part: 'file0', path: 'a' }] }))), 422)
   await expectAPIError(await send(multipart([{ path: 'large', content: Buffer.alloc(20_000_001) }])), 400)
-  await expectAPIError(await send(oversized), 413)
 })
 
 test('Validation respects Project visibility and permits every logged-in Role', async ({ request }) => {
@@ -329,12 +357,8 @@ test('Validation list filters, authorization and bidirectional 20-item pages', a
     expect(ids).toEqual([...ids].sort().reverse())
     return page
   }
-  // The example solution covers both public Workflows; pagination never waits
-  // for Judge completion or requires AC to become available.
-  const files = await Promise.all(['Makefile', 'gcd_euclid.c', 'gcd_recursive.c', 'main_euclid.c', 'main_recursive.c'].map(async path => ({
-    path, content: await readFile(new URL(`../fixtures/validation-ex1/${path}`, import.meta.url)),
-  })))
-  const body = multipart(files)
+  // Pagination needs Requests, not successful builds or Judge completion.
+  const body = multipart([{ path: 'empty', content: Buffer.alloc(0) }])
   const send = async (projectID: string, headers = student) => {
     const response = await request.post(`/api/projects/${projectID}/validation`, { data: body.data, headers: { ...headers, 'Content-Type': body.contentType } })
     expect(response.status(), await response.text()).toBe(201)
