@@ -13,7 +13,7 @@ import (
 type stepObservation struct {
 	exitCode                 int
 	peakMemory               int64
-	mle, ole                 bool
+	mle                      bool
 	oomKilled, containerLost bool
 }
 
@@ -53,7 +53,6 @@ func (w *worker) monitorStep(ctx, stepCtx context.Context, sb *sandbox, execID s
 		select {
 		case <-stepCtx.Done():
 		case <-streams.overflow:
-			observed.ole = true
 			return observed, nil
 		case err := <-inputDone:
 			inputDone = nil
@@ -86,7 +85,7 @@ func (w *worker) observeStepExit(ctx context.Context, sb *sandbox, execID string
 	}
 	if !observed.oomKilled {
 		oom, err := w.sandboxOOM(finalCtx, sb, startedAt)
-		if err != nil && observationErr == nil {
+		if err != nil {
 			observationErr = fmt.Errorf("check OOM events: %w", err)
 		}
 		observed.oomKilled = oom

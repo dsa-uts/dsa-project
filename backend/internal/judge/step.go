@@ -104,7 +104,6 @@ func (w *worker) executeStep(ctx context.Context, sb *sandbox, index int, step r
 	outputErr := streams.finish(ctx, sb.id, result.Index)
 	result.Stdout = streams.stdout.result()
 	result.Stderr = streams.stderr.result()
-	observed.ole = observed.ole || result.Stdout.Truncated || result.Stderr.Truncated
 
 	finalErr := w.observeStepExit(ctx, sb, created.ID, baseline, result.StartedAt, &observed)
 	if runErr == nil {
@@ -115,25 +114,21 @@ func (w *worker) executeStep(ctx context.Context, sb *sandbox, index int, step r
 	// Compare before millisecond truncation and before handling execution errors.
 	result.TLE = elapsed > step.Timeout
 	result.MLE = observed.mle
-	result.OLE = observed.ole
+	result.OLE = result.Stdout.Truncated || result.Stderr.Truncated
 	result.OOMKilled = observed.oomKilled
 	result.ContainerLost = observed.containerLost
-	if err := ctx.Err(); err != nil {
-		return result, err
-	}
-	// Limit violations take precedence over execution/observation errors and a
-	// missing exit code. Stopping a Step can close its streams or remove its
-	// cgroup, so those errors must not turn a limit verdict into IE.
-	if !result.TLE && !result.MLE && !result.OLE {
-		if runErr != nil {
-			return result, runErr
-		}
-		if outputErr != nil {
-			return result, fmt.Errorf("read step output: %w", outputErr)
-		}
-		if result.ExitCode == exitCodeUnavailable {
-			return result, errors.New("step exit code unavailable")
-		}
+	switch {
+	case ctx.Err() != nil:
+		return result, ctx.Err()
+	case result.TLE || result.MLE || result.OLE:
+		// Stopping a Step can close its streams or remove its cgroup. These
+		// errors and a missing exit code must not turn a limit verdict into IE.
+	case runErr != nil:
+		return result, runErr
+	case outputErr != nil:
+		return result, fmt.Errorf("read step output: %w", outputErr)
+	case result.ExitCode == exitCodeUnavailable:
+		return result, errors.New("step exit code unavailable")
 	}
 	result.Status, err = judgeStep(step, result)
 	return result, err
