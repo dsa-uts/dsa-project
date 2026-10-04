@@ -26,7 +26,7 @@ func (b *outputBuffer) Write(data []byte) (int, error) {
 	_, _ = b.data.Write(data[:min(len(data), remaining)])
 	if len(data) > remaining {
 		b.truncated = true
-		b.once.Do(func() { b.overflow <- struct{}{} })
+		b.once.Do(func() { close(b.overflow) })
 	}
 	// Keep draining until the Judge kills the Step. Memory stays bounded even
 	// when the stream contains a large frame or cleanup cannot start.
@@ -49,36 +49,34 @@ type stepIO struct {
 	stream         client.ExecAttachResult
 	stdout, stderr *outputBuffer
 	overflow       chan struct{}
-	inputDone      chan error
-	inputStopped   chan struct{}
-	outputDone     chan error
-	outputFinished bool
+	inputDone      chan struct{}
+	inputErr       error
+	outputDone     chan struct{}
 	outputErr      error
 }
 
 func startStepIO(stream client.ExecAttachResult, stdin []byte, limits resource.Limits) *stepIO {
-	overflow := make(chan struct{}, 1)
+	overflow := make(chan struct{})
 	once := new(sync.Once)
 	streams := &stepIO{
-		stream:       stream,
-		stdout:       &outputBuffer{limit: int(min(limits.StdoutSize, maxOutputBytes)), overflow: overflow, once: once},
-		stderr:       &outputBuffer{limit: int(min(limits.StderrSize, maxOutputBytes)), overflow: overflow, once: once},
-		overflow:     overflow,            // When either stdout or stderr exceeds limits, signal is sent to this channel **just once**.
-		inputDone:    make(chan error, 1), // After sending all inputs, signal (error) is sent to this channel.
-		inputStopped: make(chan struct{}), // After closing an input connection, signal is sent to this channel.
-		outputDone:   make(chan error, 1), // After processing all outputs, signal (error) is sent to this channel.
+		stream:     stream,
+		stdout:     &outputBuffer{limit: int(min(limits.StdoutSize, maxOutputBytes)), overflow: overflow, once: once},
+		stderr:     &outputBuffer{limit: int(min(limits.StderrSize, maxOutputBytes)), overflow: overflow, once: once},
+		overflow:   overflow,
+		inputDone:  make(chan struct{}),
+		outputDone: make(chan struct{}),
 	}
 	go func() {
-		defer close(streams.inputStopped)
+		defer close(streams.inputDone)
 		_, err := io.Copy(stream.Conn, bytes.NewReader(stdin))
 		if err == nil {
 			err = stream.CloseWrite()
 		}
-		streams.inputDone <- err
+		streams.inputErr = err
 	}()
 	go func() {
-		_, err := stdcopy.StdCopy(streams.stdout, streams.stderr, stream.Reader)
-		streams.outputDone <- err
+		defer close(streams.outputDone)
+		_, streams.outputErr = stdcopy.StdCopy(streams.stdout, streams.stderr, stream.Reader)
 	}()
 	return streams
 }
@@ -86,17 +84,15 @@ func startStepIO(stream client.ExecAttachResult, stdin []byte, limits resource.L
 // finish drains output after UID cleanup, then closes stdin and joins its writer.
 // A timeout here is logged but does not invalidate an already completed exec.
 func (s *stepIO) finish(ctx context.Context, sandboxID string, stepIndex int) error {
-	if !s.outputFinished {
-		select {
-		case s.outputErr = <-s.outputDone:
-		case <-ctx.Done():
-			s.stream.Close()
-			<-s.outputDone
-			s.outputErr = nil
-			log.Printf("sandbox %s step %d: output stream did not close after UID cleanup", sandboxID, stepIndex)
-		}
+	select {
+	case <-s.outputDone:
+	case <-ctx.Done():
+		s.stream.Close()
+		<-s.outputDone
+		s.outputErr = nil
+		log.Printf("sandbox %s step %d: output stream did not close after UID cleanup", sandboxID, stepIndex)
 	}
 	s.stream.Close()
-	<-s.inputStopped
+	<-s.inputDone
 	return s.outputErr
 }

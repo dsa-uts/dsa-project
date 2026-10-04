@@ -15,7 +15,7 @@ import (
 )
 
 func TestOutputBuffer(t *testing.T) {
-	overflow := make(chan struct{}, 1)
+	overflow := make(chan struct{})
 	once := new(sync.Once)
 	stdout := &outputBuffer{limit: 3, overflow: overflow, once: once}
 	stderr := &outputBuffer{limit: 2, overflow: overflow, once: once}
@@ -42,8 +42,15 @@ func TestOutputBuffer(t *testing.T) {
 			t.Errorf("result = %+v, want %q truncated", got, check.want)
 		}
 	}
-	if len(overflow) != 1 {
-		t.Errorf("overflow notifications = %d, want 1", len(overflow))
+	for range 2 {
+		select {
+		case _, open := <-overflow:
+			if open {
+				t.Fatal("overflow notification must close the channel")
+			}
+		default:
+			t.Fatal("overflow notification is not persistent")
+		}
 	}
 }
 
@@ -60,8 +67,7 @@ func TestStepIOFinish(t *testing.T) {
 			stream := client.ExecAttachResult{HijackedResponse: client.HijackedResponse{Conn: conn, Reader: bufio.NewReader(output)}}
 			streams := startStepIO(stream, []byte("unread input"), resource.Limits{StdoutSize: 3, StderrSize: 10})
 			if consumed {
-				streams.outputErr = <-streams.outputDone
-				streams.outputFinished = true
+				<-streams.outputDone
 			}
 			if err := streams.finish(t.Context(), "sandbox", 0); err != nil {
 				t.Fatal(err)
@@ -74,7 +80,7 @@ func TestStepIOFinish(t *testing.T) {
 				t.Errorf("stderr = %+v, want err untruncated", stderr)
 			}
 			select {
-			case <-streams.inputStopped:
+			case <-streams.inputDone:
 			default:
 				t.Fatal("stdin writer still running after finish")
 			}
@@ -118,7 +124,7 @@ func testStepIOFinishInterrupted(t *testing.T, canceled bool) {
 		t.Fatal("finish ignored the exhausted budget")
 	}
 	select {
-	case <-streams.inputStopped:
+	case <-streams.inputDone:
 	default:
 		t.Fatal("stdin writer still running after finish")
 	}

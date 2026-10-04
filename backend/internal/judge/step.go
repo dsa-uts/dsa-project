@@ -16,7 +16,6 @@ const (
 	exitCodeUnavailable = -1
 	maxOutputBytes      = 128 << 10
 	execPollInterval    = 10 * time.Millisecond
-	stepTimeoutBuffer   = 200 * time.Millisecond
 	stepFinishTimeout   = 3 * time.Second
 )
 
@@ -54,7 +53,7 @@ func (w *worker) executeStep(ctx context.Context, sb *sandbox, index int, step r
 	createCtx, cancelCreate := context.WithTimeout(ctx, apiTimeout)
 	created, err := w.docker.ExecCreate(createCtx, sb.id, client.ExecCreateOptions{
 		User: submissionUser, WorkingDir: "/workspace",
-		Cmd:         []string{"/bin/bash", "-e", "-o", "pipefail", "-c", step.Run},
+		Cmd:         []string{"stdbuf", "-oL", "-eL", "/bin/bash", "-e", "-o", "pipefail", "-c", step.Run},
 		AttachStdin: true, AttachStdout: true, AttachStderr: true,
 	})
 	cancelCreate()
@@ -64,25 +63,25 @@ func (w *worker) executeStep(ctx context.Context, sb *sandbox, index int, step r
 
 	// ExecAttach starts the command. Use the same start for duration and TLE.
 	execStartedAt := time.Now()
-	// Allow slightly over-limit commands to finish so their duration is recorded.
-	stepCtx, cancel := context.WithDeadline(ctx, execStartedAt.Add(step.Timeout).Add(stepTimeoutBuffer))
+	stepCtx, cancel := context.WithDeadline(ctx, execStartedAt.Add(step.Timeout))
 	defer cancel()
-	stream, err := w.docker.ExecAttach(stepCtx, created.ID, client.ExecAttachOptions{})
-	if err != nil {
-		return result, fmt.Errorf("start step exec: %w", err)
+	observed := stepObservation{peakMemory: baseline.bytes}
+	var streams *stepIO
+	stream, runErr := w.docker.ExecAttach(stepCtx, created.ID, client.ExecAttachOptions{})
+	if runErr == nil {
+		defer stream.Close()
+		// A Step timeout first kills the process and drains its output. Only
+		// Request cancellation closes the connection immediately.
+		stopClosing := context.AfterFunc(ctx, stream.Close)
+		defer stopClosing()
+		streams = startStepIO(stream, step.Stdin, limits)
+		result.ExitCode, observed, runErr = w.monitorStep(stepCtx, sb, created.ID, baseline, limits.Memory, streams)
 	}
-	defer stream.Close()
-	// StdCopy does not observe ctx, so cancellation must close the connection
-	// to unblock its reads. The deferred Close also runs on error; closing the
-	// underlying network connection again (or concurrently) is safe.
-	stopClosing := context.AfterFunc(stepCtx, stream.Close)
-	defer stopClosing()
-
-	streams := startStepIO(stream, step.Stdin, limits)
-	observed, runErr := w.monitorStep(stepCtx, sb, created.ID, baseline, limits.Memory, streams)
 	elapsed := time.Since(execStartedAt)
 	durationMS := elapsed.Milliseconds()
 	result.DurationMS = &durationMS
+	result.TLE = elapsed > step.Timeout
+	cancel()
 
 	// A lost exec connection does not kill its processes. Always try the UID
 	// cleanup, including on success, before moving on to another Step.
@@ -98,18 +97,25 @@ func (w *worker) executeStep(ctx context.Context, sb *sandbox, index int, step r
 		)
 	}
 
-	outputErr := streams.finish(finishCtx, sb.id, result.Index)
-	result.Stdout = streams.stdout.result()
-	result.Stderr = streams.stderr.result()
+	var outputErr error
+	if streams != nil {
+		outputErr = streams.finish(finishCtx, sb.id, result.Index)
+		result.Stdout = streams.stdout.result()
+		result.Stderr = streams.stderr.result()
+	}
+	// Preserve a normally collected exit code. Interrupted Steps may have no
+	// exit code yet; a known limit verdict does not depend on obtaining one.
+	if result.ExitCode == exitCodeUnavailable {
+		if final, err := w.inspectExec(finishCtx, created.ID); err == nil && final.PID != 0 && !final.Running {
+			result.ExitCode = final.ExitCode
+		}
+	}
 
-	finalErr := w.observeStepExit(finishCtx, sb, created.ID, baseline, result.StartedAt, &observed)
+	finalErr := w.observeStepExit(finishCtx, sb, baseline, result.StartedAt, &observed)
 	if runErr == nil {
 		runErr = finalErr
 	}
-	result.ExitCode = observed.exitCode
 	result.MemoryBytes = &observed.peakMemory
-	// Compare before millisecond truncation and before handling execution errors.
-	result.TLE = elapsed > step.Timeout
 	result.MLE = observed.mle
 	result.OLE = result.Stdout.Truncated || result.Stderr.Truncated
 	result.OOMKilled = observed.oomKilled
