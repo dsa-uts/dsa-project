@@ -9,6 +9,8 @@ resources:
   - frontend-deployment.yaml
   - frontend-service.yaml
   - ingress.yaml
+  - error-handler.yaml
+  - judge-deployment.yaml
 labels:
   - pairs:
       app.kubernetes.io/name: dsa

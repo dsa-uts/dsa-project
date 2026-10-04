@@ -7,8 +7,8 @@
 
   outputs =
     {
-      self,
       nixpkgs,
+      ...
     }:
     let
       lib = nixpkgs.lib;
@@ -18,37 +18,9 @@
         "aarch64-darwin"
       ];
       eachSystem = f: lib.genAttrs systems (system: f nixpkgs.legacyPackages.${system});
-      packagesFor = eachSystem (
-        pkgs:
-        let
-          backend = import ./nix/backend.nix { inherit pkgs; };
-          frontend = import ./nix/frontend.nix { inherit pkgs; };
-          e2e = import ./nix/e2e.nix { inherit pkgs; };
-        in
-        {
-          inherit backend frontend e2e;
-          kustomize-build = import ./nix/kustomize-check.nix { inherit pkgs; };
-        }
-        // lib.optionalAttrs pkgs.stdenv.hostPlatform.isLinux {
-          backend-image = import ./nix/backend-image.nix { inherit pkgs backend; };
-          frontend-image = import ./nix/frontend-image.nix { inherit pkgs frontend; };
-        }
-      );
     in
     {
       devShells = eachSystem (pkgs: import ./nix/devshells.nix { inherit pkgs; });
       formatter = eachSystem (pkgs: pkgs.nixfmt);
-
-      packages = packagesFor;
-
-      apps = lib.genAttrs systems (system: {
-        backend = {
-          type = "app";
-          program = "${self.packages.${system}.backend}/bin/server";
-        };
-      });
-
-      # go test / vitest は各 derivation の checkPhase で走る。
-      checks = eachSystem (pkgs: packagesFor.${pkgs.stdenv.hostPlatform.system});
     };
 }

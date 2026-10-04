@@ -6,16 +6,16 @@ import (
 	"net"
 	"time"
 
-	"github.com/dsa-uts/dsa-project/backend/internal/app"
 	"github.com/dsa-uts/dsa-project/backend/internal/config"
 	"github.com/dsa-uts/dsa-project/backend/internal/resourceimport"
 	"github.com/dsa-uts/dsa-project/backend/internal/server"
+	"github.com/dsa-uts/dsa-project/backend/internal/store"
 )
 
 func main() {
 	startupCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	cfg, err := config.Get()
+	cfg, err := config.LoadServer()
 	if err != nil {
 		log.Fatalf("load configuration: %v", err)
 	}
@@ -24,11 +24,21 @@ func main() {
 		log.Fatalf("configure Resource source: %v", err)
 	}
 
-	db, err := app.ConnectDatabase(startupCtx, cfg.DatabaseURL, cfg.DevelopmentSeed)
+	db, err := store.ConnectDatabase(startupCtx, cfg.DatabaseURL)
 	if err != nil {
 		log.Fatalf("initialize datastores: %v", err)
 	}
 	defer db.Close()
+
+	if err := store.MigrateSchema(startupCtx, db); err != nil {
+		log.Fatalf("migrate database: %v", err)
+	}
+
+	if cfg.DevelopmentSeed {
+		if err := store.SeedDevelopment(startupCtx, db); err != nil {
+			log.Fatalf("seed development: %v", err)
+		}
+	}
 
 	e := server.New(db, source)
 	log.Fatal(e.Start(net.JoinHostPort("", cfg.Port)))

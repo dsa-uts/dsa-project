@@ -2,8 +2,8 @@
 use kubernetes.nu *
 
 def main [component: string = 'all'] {
-  if $component not-in [all backend frontend] {
-    error make { msg: 'expected all, backend, or frontend' }
+  if $component not-in [all backend judge frontend] {
+    error make { msg: 'expected all, backend, judge, or frontend' }
   }
   let selected = if $component == 'all' { $image_specifications } else {
     $image_specifications | where label == $component

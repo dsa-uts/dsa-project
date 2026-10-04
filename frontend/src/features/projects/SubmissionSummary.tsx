@@ -8,6 +8,7 @@ type Status = components['schemas']['Status']
 const statusClass: Record<Status, string> = {
   AC: 'text-status-ac', WA: 'text-status-wa', TLE: 'text-status-tle',
   MLE: 'text-status-mle', RE: 'text-status-re', OLE: 'text-status-ole', IE: 'text-status-ie',
+  CE: 'text-destructive', SKIP: 'text-muted-foreground',
 }
 const relativeTime = new Intl.RelativeTimeFormat('ja', { numeric: 'auto' })
 

@@ -46,7 +46,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List all non-System User Accounts, including disabled accounts, in persisted display order */
+        /** List all User Accounts, including disabled accounts, in persisted display order */
         get: operations["listUserAccounts"];
         put?: never;
         /** Create a User Account at the end of the global display order */
@@ -75,7 +75,6 @@ export interface paths {
         /**
          * Atomically update supplied fields of a User Account
          * @description Userid is immutable. Last-write-wins; supplying existing values succeeds.
-         *     System Accounts cannot be modified (cannot_modify_system_account).
          *     An Admin cannot change their own Role or disable themselves (cannot_modify_self).
          *     Password replacement and transitions to disabled delete all affected sessions
          *     in the same transaction. Other changes retain sessions. Repeated disabling
@@ -100,8 +99,8 @@ export interface paths {
         head?: never;
         /**
          * Save the global User Account display order (Admin only)
-         * @description Supply every non-System User Account ID exactly once, including disabled
-         *     accounts. Missing, duplicate, unknown, or System Account IDs return
+         * @description Supply every User Account ID exactly once, including disabled
+         *     accounts. Missing, duplicate, or unknown IDs return
          *     422 user_ids_mismatch without changing the order.
          *     The saved order drives the Admin list and future roster views.
          */
@@ -200,10 +199,338 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/requests/{request_id}/validation": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description Students see their own Validation Requests in currently published Projects.
+         *     Managers and Admins see all Validation Requests. Missing, invisible and
+         *     non-validation Requests return 404. All definitions use the pinned Version.
+         *     Unfinished Requests return result null; poll every five seconds until completed.
+         *     Completed results include definitions even when execution results were not
+         *     saved. A missing result does not prove non-execution. Private Jobs are excluded.
+         */
+        get: operations["getValidation"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/requests/{request_id}/validation/files": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description Students see their own Validation Requests in currently published Projects.
+         *     Managers and Admins see all Validation Requests. Missing, invisible and
+         *     non-validation Requests return 404. All definitions use the pinned Version.
+         *     metadata is an application/json text part; referenced fileN parts contain
+         *     raw bytes. Paths come from metadata, not multipart filenames.
+         *     Available before completion. Includes all Workflow Presets regardless of visibility.
+         */
+        get: operations["getValidationFiles"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/requests/{request_id}/validation/artifacts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description Students see their own Validation Requests in currently published Projects.
+         *     Managers and Admins see all Validation Requests. Missing, invisible and
+         *     non-validation Requests return 404. All definitions use the pinned Version.
+         *     metadata is an application/json text part; referenced fileN parts contain
+         *     raw bytes. Paths come from metadata, not multipart filenames.
+         *     Only final-attempt public outputs of public Jobs are included. Empty is successful.
+         */
+        get: operations["getValidationArtifacts"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/validation": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List visible Validation Requests
+         * @description Returns up to 20 Requests in UUID v7 ID descending order, across Versions.
+         *     Students see their own Requests in published Projects; Managers and Admins
+         *     see all users and Projects. Omit project_id for all visible Projects.
+         *     next and prev are mutually exclusive, as are status and state.
+         *     next selects older IDs; prev selects the nearest newer IDs. Cursors are
+         *     comparison boundaries and need not identify an existing or matching row.
+         *     Keep filters unchanged when navigating. Results reflect current data,
+         *     not a persistent snapshot. Poll the same query every 5 seconds while
+         *     displayed Requests are incomplete. If a page becomes empty, return to
+         *     the first page. No total count or configurable page size is provided.
+         */
+        get: operations["listValidation"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/projects/{project_id}/validation": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create a Validation Request
+         * @description Creates a Request for the authenticated user against the latest Resource Version.
+         *     Multipart uploads reuse a Submission with the same normalized file tree.
+         *     JSON reruns an existing own validation Submission in this Project.
+         *     Every successful call creates a new Request, including when another run is incomplete.
+         *     The maximum request body size is 21 MB (21,000,000 bytes), including multipart overhead.
+         *     Requests exceeding this limit return HTTP 413.
+         */
+        post: operations["createValidation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        ValidationDetail: {
+            /** Format: uuid */
+            id: string;
+            project: {
+                /** Format: uuid */
+                id: string;
+                /** @description Current Project display name */
+                name: string;
+            };
+            subject_user: {
+                /** Format: uuid */
+                id: string;
+                userid: string;
+                name: string;
+            };
+            version: string;
+            /** @enum {string} */
+            state: "pending" | "running" | "retrying" | "completed";
+            status: components["schemas"]["NullableStatus"];
+            content_hash: string;
+            /** @description Final attempt elapsed time including preparation and saving, excluding queue time and discarded attempts */
+            duration_ms: components["schemas"]["NullableMeasurement"];
+            /** Format: date-time */
+            requested_at: string;
+            /** Format: uuid */
+            submission_id: string;
+            result: components["schemas"]["ValidationResult"] | null;
+        };
+        /**
+         * Format: int64
+         * @description Null when unavailable; durations are milliseconds and memory is bytes
+         */
+        NullableMeasurement: number | null;
+        ValidationResult: {
+            peak_memory_bytes: components["schemas"]["NullableMeasurement"];
+            /** @description Workflow ID order; definitions from the pinned Version */
+            workflows: components["schemas"]["ValidationWorkflow"][];
+        };
+        ValidationWorkflow: {
+            id: string;
+            name: string;
+            status: components["schemas"]["NullableStatus"];
+            duration_ms: components["schemas"]["NullableMeasurement"];
+            /** @description Public Jobs in dependency order, breaking ties by ID */
+            jobs: components["schemas"]["ValidationJob"][];
+        };
+        ValidationJob: {
+            id: string;
+            name: string;
+            status: components["schemas"]["NullableStatus"];
+            /** @description Elapsed Job time including preparation and cleanup, not the sum of Step durations */
+            duration_ms: components["schemas"]["NullableMeasurement"];
+            peak_memory_bytes: components["schemas"]["NullableMeasurement"];
+            skip_reason: string | null;
+            stop_reason: string | null;
+            steps: components["schemas"]["ValidationStep"][];
+            /** @description Public declarations, including failed and unrecorded captures */
+            artifacts: components["schemas"]["ValidationArtifact"][];
+        };
+        ValidationStep: {
+            /** @description Zero-based position in the pinned Job steps array */
+            index: number;
+            name: string;
+            /** @description Bash source from the Resource */
+            run: string;
+            compile: boolean;
+            /** Format: int64 */
+            timeout_ms: number;
+            /** @description Base64-encoded input bytes; empty string means no input */
+            stdin: string;
+            expected: components["schemas"]["StepExpectation"];
+            status: components["schemas"]["NullableStatus"];
+            /** @description Null when unavailable; never the internal -1 sentinel */
+            exit_code: number | null;
+            duration_ms: components["schemas"]["NullableMeasurement"];
+            /** @description Maximum sampled Sandbox memory during this Step, not isolated process RSS */
+            memory_bytes: components["schemas"]["NullableMeasurement"];
+            stdout: components["schemas"]["StepOutput"] | null;
+            stderr: components["schemas"]["StepOutput"] | null;
+        };
+        StepOutput: {
+            /** @description Base64-encoded original bytes; empty output is an empty string */
+            data: string;
+            /** @description Only the allowed prefix was saved */
+            truncated: boolean;
+        };
+        StepExpectation: {
+            /** @description Null means unchecked */
+            exit_code: number | null;
+            stdout: components["schemas"]["ExpectedOutput"] | null;
+            stderr: components["schemas"]["ExpectedOutput"] | null;
+        };
+        /** @description Null means unchecked; an empty data string means expect empty output */
+        ExpectedOutput: {
+            /** @description Base64-encoded expected bytes */
+            data: string;
+            /** @enum {string} */
+            match: "exact" | "easy" | "sorted";
+        };
+        ValidationArtifact: {
+            name: string;
+            path: string;
+            content_type: string;
+            /** @description Saved capture verdict; null when unrecorded */
+            status: components["schemas"]["ValidationArtifactStatus"] | null;
+            /** @description Final-attempt bytes exist even if the capture verdict was not saved */
+            available: boolean;
+            size_bytes: components["schemas"]["NullableMeasurement"];
+            /** @description Safe failure message without internal paths */
+            error: string | null;
+        };
+        /** @enum {string} */
+        ValidationArtifactStatus: "AC" | "WA" | "OLE";
+        FilePart: {
+            /** @description Binary multipart field name */
+            part: string;
+            /** @description Stored relative path */
+            path: string;
+        };
+        ValidationFilesMetadata: {
+            submission_files: components["schemas"]["FilePart"][];
+            presets: components["schemas"]["PresetFiles"][];
+        };
+        PresetFiles: {
+            workflow_id: string;
+            files: components["schemas"]["FilePart"][];
+        };
+        ValidationArtifactsMetadata: {
+            files: components["schemas"]["ArtifactPart"][];
+        };
+        ArtifactPart: components["schemas"]["FilePart"] & {
+            workflow_id: string;
+            job_id: string;
+            name: string;
+            content_type: string;
+        };
+        ValidationPage: {
+            requests: components["schemas"]["ValidationSummary"][];
+            /**
+             * Format: uuid
+             * @description Last returned ID if older matching rows exist, otherwise null
+             */
+            next: string | null;
+            /**
+             * Format: uuid
+             * @description First returned ID if newer matching rows exist, otherwise null
+             */
+            prev: string | null;
+        };
+        ValidationSummary: {
+            /** Format: uuid */
+            id: string;
+            project: {
+                /** Format: uuid */
+                id: string;
+                /** @description Current Project display name */
+                name: string;
+            };
+            subject_user: {
+                /** Format: uuid */
+                id: string;
+                userid: string;
+                name: string;
+            };
+            /** @description Request's pinned Resource Version */
+            version: string;
+            /** @enum {string} */
+            state: "pending" | "running" | "retrying" | "completed";
+            status: components["schemas"]["NullableStatus"];
+            content_hash: string;
+            /**
+             * Format: int64
+             * @description Final attempt elapsed time including preparation and saving, excluding queue time and discarded attempts. Null until completed or when unavailable.
+             */
+            duration_ms: number | null;
+            /** Format: date-time */
+            requested_at: string;
+        };
+        SubmissionMetadata: {
+            files: {
+                part: string;
+                /**
+                 * @description Normalized to a relative path with slash separators. Invalid UTF-8
+                 *     bytes are removed and backslashes become slashes. Dot components,
+                 *     repeated slashes, and parent (..) components are resolved under a
+                 *     virtual root; leading slashes are removed. NUL, drive-letter paths,
+                 *     and paths normalizing to empty are rejected. Normalized duplicate
+                 *     paths and file/directory collisions return 422 with the paths in message.
+                 */
+                path: string;
+            }[];
+        };
+        CreatedRequest: {
+            /**
+             * Format: uuid
+             * @description UUID v7 Request ID
+             */
+            id: string;
+            /** @enum {string} */
+            state: "pending" | "running" | "retrying" | "completed";
+            status: components["schemas"]["NullableStatus"];
+        };
         ProjectUpdate: {
             /** Format: uuid */
             id: string;
@@ -216,7 +543,7 @@ export interface components {
          */
         NullableTimestamp: string | null;
         /** @enum {string} */
-        Status: "AC" | "WA" | "TLE" | "MLE" | "RE" | "OLE" | "IE";
+        Status: "AC" | "WA" | "TLE" | "MLE" | "RE" | "OLE" | "IE" | "CE" | "SKIP";
         NullableStatus: components["schemas"]["Status"] | null;
         Project: {
             /** Format: uuid */
@@ -334,14 +661,26 @@ export interface components {
             disabled?: boolean;
         };
         Error: {
-            error: {
-                code: string;
-                message: string;
-            };
+            /**
+             * @description HTTPレスポンスのステータスコードと同じ値
+             * @example 404
+             */
+            code: number;
+            /** @example Project not found. */
+            message: string;
         };
     };
     responses: {
-        /** @description バリデーション失敗 */
+        /** @description Invalid input, including malformed bodies, unsupported Content-Type, and file size limits */
+        BadRequest: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["Error"];
+            };
+        };
+        /** @description 業務上の制約違反 */
         ValidationError: {
             headers: {
                 [name: string]: unknown;
@@ -396,7 +735,7 @@ export interface components {
                 "application/json": components["schemas"]["Error"];
             };
         };
-        /** @description userid_taken (exact duplicate), cannot_modify_self, or cannot_modify_system_account */
+        /** @description userid_taken (exact duplicate) or cannot_modify_self */
         UserConflict: {
             headers: {
                 [name: string]: unknown;
@@ -438,8 +777,8 @@ export interface operations {
                     "application/json": components["schemas"]["CurrentUser"];
                 };
             };
+            400: components["responses"]["BadRequest"];
             401: components["responses"]["InvalidCredentials"];
-            422: components["responses"]["ValidationError"];
             500: components["responses"]["InternalError"];
         };
     };
@@ -534,10 +873,10 @@ export interface operations {
                     "application/json": components["schemas"]["UserAccount"];
                 };
             };
+            400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             409: components["responses"]["UserConflict"];
-            422: components["responses"]["ValidationError"];
             500: components["responses"]["InternalError"];
         };
     };
@@ -565,11 +904,11 @@ export interface operations {
                     "application/json": components["schemas"]["UserAccount"];
                 };
             };
+            400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
             409: components["responses"]["UserConflict"];
-            422: components["responses"]["ValidationError"];
             500: components["responses"]["InternalError"];
         };
     };
@@ -595,9 +934,10 @@ export interface operations {
                 };
                 content?: never;
             };
+            400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
-            /** @description user_ids_mismatch for an incomplete or incorrect set; validation_failed for malformed input */
+            /** @description user_ids_mismatch for an incomplete or incorrect set */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -654,19 +994,11 @@ export interface operations {
                     "application/json": components["schemas"]["ProjectDetail"];
                 };
             };
+            400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             /** @description Project not found or not visible */
             404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description validation_failed */
-            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -699,9 +1031,19 @@ export interface operations {
                 };
                 content?: never;
             };
+            400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
-            /** @description project_ids_mismatch or validation_failed; nothing is changed */
+            /** @description Project IDs do not match the complete list; nothing is changed */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Deadline precedes publication; nothing is changed */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -747,6 +1089,7 @@ export interface operations {
                     };
                 };
             };
+            400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             /** @description resource_version_not_found (not in index) */
@@ -767,7 +1110,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description invalid_resource_version, invalid_resource, resource_hash_mismatch, or validation_failed */
+            /** @description invalid_resource_version, invalid_resource, or resource_hash_mismatch */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -786,6 +1129,228 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
+        };
+    };
+    getValidation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                request_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success; Cache-Control is no-store */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ValidationDetail"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            /** @description Request missing or invisible */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            500: components["responses"]["InternalError"];
+        };
+    };
+    getValidationFiles: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                request_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success; Cache-Control is no-store */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "multipart/form-data": {
+                        metadata: components["schemas"]["ValidationFilesMetadata"];
+                    } & {
+                        [key: string]: string;
+                    };
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            /** @description Request missing or invisible */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            500: components["responses"]["InternalError"];
+        };
+    };
+    getValidationArtifacts: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                request_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success; Cache-Control is no-store */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "multipart/form-data": {
+                        metadata: components["schemas"]["ValidationArtifactsMetadata"];
+                    } & {
+                        [key: string]: string;
+                    };
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            /** @description Request missing or invisible */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Request has not completed */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            500: components["responses"]["InternalError"];
+        };
+    };
+    listValidation: {
+        parameters: {
+            query?: {
+                project_id?: string;
+                status?: components["schemas"]["Status"];
+                state?: "incomplete";
+                next?: string;
+                prev?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Visible Requests; an empty page has null cursors */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ValidationPage"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            /** @description Specified Project missing or not visible */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            500: components["responses"]["InternalError"];
+        };
+    };
+    createValidation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** Format: uuid */
+                    submission_id: string;
+                };
+                "multipart/form-data": {
+                    metadata: components["schemas"]["SubmissionMetadata"];
+                } & {
+                    [key: string]: unknown;
+                };
+            };
+        };
+        responses: {
+            /** @description New Request created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CreatedRequest"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            /** @description Submission belongs to another user (including for Managers and Admins) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Project missing or not visible; Submission missing */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Request body exceeds 21 MB (21,000,000 bytes) */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/plain": string;
+                };
+            };
+            422: components["responses"]["ValidationError"];
+            500: components["responses"]["InternalError"];
         };
     };
 }

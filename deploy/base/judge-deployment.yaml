@@ -1,0 +1,52 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: dsa-judge
+  labels:
+    app.kubernetes.io/component: judge
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: dsa
+      app.kubernetes.io/component: judge
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: dsa
+        app.kubernetes.io/component: judge
+    spec:
+      containers:
+        - name: judge
+          image: dsa-judge:latest
+          imagePullPolicy: IfNotPresent
+          securityContext:
+            privileged: true
+          env:
+            - name: DATABASE_HOST
+              value: dsa-postgresql
+            - name: DATABASE_PORT
+              value: "5432"
+            - name: DATABASE_USER
+              value: dsa
+            - name: DATABASE_NAME
+              value: dsa
+            - name: DATABASE_PASSWORD_FILE
+              value: /run/secrets/dsa/postgres-password
+          resources: {}
+          volumeMounts:
+            - name: docker-data
+              mountPath: /var/lib/docker
+            - name: judge-workspaces
+              mountPath: /var/lib/dsa-judge/workspaces
+            - name: datastore-secrets
+              mountPath: /run/secrets/dsa
+              readOnly: true
+      volumes:
+        - name: docker-data
+          emptyDir: {}
+        - name: judge-workspaces
+          emptyDir: {}
+        - name: datastore-secrets
+          secret:
+            secretName: dsa-datastore

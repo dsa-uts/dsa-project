@@ -14,17 +14,24 @@ var ErrNotFound = errors.New("not found")
 
 const maxSessionsPerUser = 5
 
+type Role string
+
+const (
+	RoleStudent Role = "student"
+	RoleManager Role = "manager"
+	RoleAdmin   Role = "admin"
+)
+
 type UserAccount struct {
 	bun.BaseModel `bun:"table:user_accounts"`
 
 	ID           uuid.UUID  `bun:"id,pk,default:gen_random_uuid()"`
 	Userid       string     `bun:"userid,notnull"`
 	Name         string     `bun:"name,notnull"`
-	Role         string     `bun:"role,notnull"`
-	PasswordHash *string    `bun:"password_hash"`
+	Role         Role       `bun:"role,notnull"`
+	PasswordHash string     `bun:"password_hash,notnull"`
 	DisabledAt   *time.Time `bun:"disabled_at"`
 	DisplayOrder int64      `bun:"display_order,autoincrement"`
-	IsSystem     bool       `bun:"is_system,notnull"`
 }
 
 type Session struct {
@@ -37,11 +44,11 @@ type Session struct {
 	CreatedAt     time.Time `bun:"created_at,notnull,default:now()"`
 }
 
-type AuthStore struct{ db *bun.DB }
+type AccountStore struct{ db *bun.DB }
 
-func NewAuthStore(db *bun.DB) *AuthStore { return &AuthStore{db: db} }
+func NewAccountStore(db *bun.DB) *AccountStore { return &AccountStore{db: db} }
 
-func (s *AuthStore) FindUserForLogin(ctx context.Context, userid string) (*UserAccount, error) {
+func (s *AccountStore) FindUserForLogin(ctx context.Context, userid string) (*UserAccount, error) {
 	user := new(UserAccount)
 	err := s.db.NewSelect().Model(user).Where("userid = ?", userid).Scan(ctx)
 	if errors.Is(err, sql.ErrNoRows) {
@@ -50,19 +57,19 @@ func (s *AuthStore) FindUserForLogin(ctx context.Context, userid string) (*UserA
 	return user, err
 }
 
-func (s *AuthStore) DeleteSession(ctx context.Context, tokenHash []byte) error {
+func (s *AccountStore) DeleteSession(ctx context.Context, tokenHash []byte) error {
 	_, err := s.db.NewDelete().Model((*Session)(nil)).Where("token_hash = ?", tokenHash).Exec(ctx)
 	return err
 }
 
-func (s *AuthStore) CreateSession(ctx context.Context, verifiedUser *UserAccount, tokenHash []byte, now, expiresAt time.Time) error {
+func (s *AccountStore) CreateSession(ctx context.Context, verifiedUser *UserAccount, tokenHash []byte, now, expiresAt time.Time) error {
 	return s.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
 		lockedUser := new(UserAccount)
 		if err := tx.NewSelect().Model(lockedUser).
 			Where("id = ?", verifiedUser.ID).For("UPDATE").Scan(ctx); err != nil {
 			return err
 		}
-		if lockedUser.IsSystem || lockedUser.DisabledAt != nil || lockedUser.PasswordHash == nil || verifiedUser.PasswordHash == nil || *lockedUser.PasswordHash != *verifiedUser.PasswordHash {
+		if lockedUser.DisabledAt != nil || lockedUser.PasswordHash != verifiedUser.PasswordHash {
 			return ErrNotFound
 		}
 		lockedUserID := lockedUser.ID
@@ -97,7 +104,7 @@ func (s *AuthStore) CreateSession(ctx context.Context, verifiedUser *UserAccount
 	})
 }
 
-func (s *AuthStore) CurrentUser(ctx context.Context, tokenHash []byte, now time.Time) (*UserAccount, error) {
+func (s *AccountStore) CurrentUser(ctx context.Context, tokenHash []byte, now time.Time) (*UserAccount, error) {
 	user := new(UserAccount)
 	err := s.db.NewSelect().Model(user).
 		Join("JOIN sessions AS session ON session.user_account_id = user_account.id").

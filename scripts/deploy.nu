@@ -7,6 +7,7 @@ const application_selector = 'app.kubernetes.io/name=dsa'
 const development_workloads = [
   { resource: 'statefulset/dsa-postgresql', component: 'postgresql' }
   { resource: 'deployment/dsa-backend', component: 'backend' }
+  { resource: 'deployment/dsa-judge', component: 'judge' }
   { resource: 'deployment/dsa-frontend', component: 'frontend' }
 ]
 const components = $development_workloads.component
@@ -54,18 +55,22 @@ def main [] {
 def 'main deploy' [] {
   let root = repo-root
   require-cluster orbstack
-  let images = build-images $root $image_specifications --system (cluster-image-system)
-  import-orbstack-images $images
-  let manifests = render-manifests $root dev $images
+  build-images $root $image_specifications --platform (cluster-image-platform) --context orbstack | ignore
 
   stage apply 'Applying the development Kubernetes manifests ...'
-  let apply = $manifests | ^kubectl apply -f - | complete
+  let apply = do { ^kubectl apply -k ($root | path join deploy overlays dev) } | complete
   if $apply.exit_code != 0 {
     print-command-result $apply
     diagnose-development
     error make { msg: 'failed to apply development Kubernetes manifests' }
   }
   print-command-result $apply
+
+  # latest の参照は変わらないため、ロードしたイメージで Pod を作り直す。
+  run-checked 'failed to restart development applications' [
+    kubectl --namespace $development_namespace rollout restart
+    deployment/dsa-backend deployment/dsa-judge deployment/dsa-frontend
+  ] | print
 
   for workload in $development_workloads {
     stage rollout $"Waiting for ($workload.resource) ..."

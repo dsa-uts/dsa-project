@@ -1,5 +1,6 @@
 import { expect, test, type APIRequestContext, type APIResponse } from '@playwright/test'
 import { baseURL } from '../environment.js'
+import { expectAPIError } from './helpers.js'
 
 const expiredToken = 'expired-development-session'
 
@@ -47,9 +48,7 @@ test('login validates input and makes authentication failures indistinguishable'
   ]
   for (const data of invalidInputs) {
     const response = await request.post('/api/session', { data, headers: presentedSession })
-    expect(response.status()).toBe(422)
-    expect(response.headers()['cache-control']).toBe('no-store')
-    await expect(response.json()).resolves.toMatchObject({ error: { code: 'validation_failed' } })
+    await expectAPIError(response, 400)
   }
 
   const attempts = [
@@ -58,7 +57,6 @@ test('login validates input and makes authentication failures indistinguishable'
     { userid: 'missing', password: 'admin' },
     { userid: 'admin', password: 'wrong' },
     { userid: 'disabled', password: 'admin' },
-    { userid: 'system', password: 'admin' },
   ]
   const bodies = []
   for (const data of attempts) {
@@ -67,7 +65,7 @@ test('login validates input and makes authentication failures indistinguishable'
     expect(response.headers()['cache-control']).toBe('no-store')
     bodies.push(await response.json())
   }
-  expect(bodies).toEqual(attempts.map(() => ({ error: { code: 'invalid_credentials', message: 'Invalid userid or password.' } })))
+  expect(bodies).toEqual(attempts.map(() => ({ code: 401, message: 'Invalid userid or password.' })))
   expect((await request.get('/api/me', { headers: presentedSession })).status()).toBe(200)
 })
 
@@ -114,7 +112,7 @@ test('a User Account retains only its five latest sequential sessions', async ({
   expect(responses.map(response => response.status())).toEqual([401, 200, 200, 200, 200, 200])
   expect(responses[0].headers()['set-cookie']).toContain('Max-Age=0')
   await expect(responses[0].json()).resolves.toEqual({
-    error: { code: 'unauthorized', message: 'Authentication is required.' },
+    code: 401, message: 'Authentication is required.',
   })
 })
 
@@ -158,14 +156,17 @@ test('invalid and expired sessions are rejected and cleared', async ({ request }
   expect(expiredAgain.status()).toBe(401)
 })
 
-test('health and the generic API error envelope remain available', async ({ request }) => {
+test('health and the generic API errors remain available', async ({ request }) => {
   // Exercise connection reuse through the public ingress, not just its first response.
   for (let attempt = 0; attempt < 3; attempt++) {
     expect((await request.get('/health')).status()).toBe(200)
   }
   const wrongMethod = await request.put('/api/me', { headers: { Cookie: '' } })
-  expect(wrongMethod.status()).toBe(405)
+  await expectAPIError(wrongMethod, 405)
   const response = await request.get('/api/unknown')
-  expect(response.status()).toBe(404)
-  await expect(response.json()).resolves.toMatchObject({ error: { code: 'not_found', message: expect.any(String) } })
+  await expectAPIError(response, 404)
+  const head = await request.head('/api/unknown')
+  expect(head.status()).toBe(404)
+  expect(head.headers()['cache-control']).toBe('no-store')
+  expect(await head.body()).toHaveLength(0)
 })

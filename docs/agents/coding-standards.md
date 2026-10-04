@@ -9,8 +9,8 @@
   - `backend/internal/api/generated/gen.go` — oapi-codegen (strict-server + echo-server + models + embedded-spec)
   - `frontend/src/api/schema.d.ts` — openapi-typescript
 - 再生成コマンドは `task codegen:generate` (生成物はコミットする)。
-- spec と生成コードのドリフトは `task codegen:check` が検出する(CI の `codegen-check` job でも実行)。openapi.yaml を変更したら両側を再生成してからコミットすること。
-- backend のハンドラは `StrictServerInterface` の実装として書く。リクエストの形式検証(422)は kin-openapi middleware が spec から自動で行うため、ハンドラ内に手書きの形式チェックを重複させない。
+- spec と生成コードのドリフトは `task codegen:check` が検出する(CI の `check` job でも実行)。openapi.yaml を変更したら両側を再生成してからコミットすること。
+- backend のハンドラは `StrictServerInterface` の実装として書く。リクエストの形式検証(400)は kin-openapi middleware が spec から自動で行うため、ハンドラ内に手書きの形式チェックを重複させない。
 
 ## DB スキーマと migration
 

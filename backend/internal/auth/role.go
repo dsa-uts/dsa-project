@@ -1,19 +1,27 @@
 package auth
 
+type Role string
+
+const (
+	RoleStudent Role = "student"
+	RoleManager Role = "manager"
+	RoleAdmin   Role = "admin"
+)
+
 // AllowsRole reports whether a Role meets the minimum required Role.
 // Admin inherits Manager and Student permissions; unknown Roles are denied.
-func AllowsRole(actual, required string) bool {
+func AllowsRole(actual, required Role) bool {
 	actualRank, requiredRank := roleRank(actual), roleRank(required)
 	return actualRank > 0 && requiredRank > 0 && actualRank >= requiredRank
 }
 
-func roleRank(role string) int {
+func roleRank(role Role) int {
 	switch role {
-	case "student":
+	case RoleStudent:
 		return 1
-	case "manager":
+	case RoleManager:
 		return 2
-	case "admin":
+	case RoleAdmin:
 		return 3
 	default:
 		return 0

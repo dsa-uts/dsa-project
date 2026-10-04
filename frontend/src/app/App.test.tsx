@@ -52,7 +52,7 @@ test('logout prevents duplicate requests while pending and allows retry after fa
   const requestCount = vi.mocked(fetch).mock.calls.length
   fireEvent.click(logout)
   expect(vi.mocked(fetch).mock.calls).toHaveLength(requestCount)
-  finishLogout(response({ error: { code: 'internal_error', message: 'Unavailable' } }, 500))
+  finishLogout(response({ message: 'Unavailable' }, 500))
   expect(await screen.findByRole('alert')).toBeDefined()
   expect(logout).toHaveProperty('disabled', false)
   expect(router.state.location.pathname).toBe('/admin/users')

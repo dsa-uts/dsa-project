@@ -69,8 +69,8 @@ export function UserOrderEditor({ users, onCancel, onSaved, onMismatch }: { user
     try {
       const result = await fetchClient.PATCH('/api/users/order', { body: { user_ids: ids } })
       if (result.error) {
-        if (result.error.error.code === 'user_ids_mismatch') await onMismatch()
-        else setError(result.error.error.message)
+        if (result.error.code === 422) await onMismatch()
+        else setError(result.error.message)
         return
       }
       await onSaved()

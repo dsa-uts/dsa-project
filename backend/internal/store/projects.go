@@ -3,10 +3,10 @@ package store
 import (
 	"context"
 	"database/sql"
-	"encoding/json"
 	"errors"
 	"time"
 
+	resource "github.com/dsa-uts/dsa-resource-spec"
 	"github.com/google/uuid"
 	"github.com/uptrace/bun"
 	"golang.org/x/mod/semver"
@@ -35,8 +35,8 @@ var (
 
 type ProjectLatest struct {
 	Project
-	Version      string          `bun:"version"`
-	ResourceJSON json.RawMessage `bun:"resource_json,type:json"`
+	Version      string            `bun:"version"`
+	ResourceJSON resource.Resource `bun:"resource_json,type:json"`
 }
 
 func (s *ProjectStore) ListProjects(ctx context.Context, publishedOnly bool) ([]ProjectLatest, error) {
@@ -127,7 +127,10 @@ func (s *ProjectStore) UpdateProjects(ctx context.Context, updates []ProjectUpda
 }
 
 // ImportVersion receives an already validated snapshot. Fetching never holds a DB lock.
-func (s *ProjectStore) ImportVersion(ctx context.Context, resourceID, name, version string, snapshot json.RawMessage) (*ProjectLatest, bool, error) {
+func (s *ProjectStore) ImportVersion(ctx context.Context, snapshot resource.Resource) (*ProjectLatest, bool, error) {
+	resourceID := snapshot.Metadata.ID
+	name := snapshot.Metadata.Name
+	version := snapshot.Metadata.Version
 	project := new(ProjectLatest)
 	changed := false
 	err := s.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
@@ -143,7 +146,7 @@ func (s *ProjectStore) ImportVersion(ctx context.Context, resourceID, name, vers
 			return err
 		}
 		if !isNew {
-			switch semver.Compare(version, project.Version) {
+			switch semver.Compare(string(version), project.Version) {
 			case -1:
 				return ErrOlderResourceVersion
 			case 0:
@@ -155,7 +158,7 @@ func (s *ProjectStore) ImportVersion(ctx context.Context, resourceID, name, vers
 		}
 		project.LatestVersionID = uuid.New()
 		project.Name = name
-		project.Version = version
+		project.Version = string(version)
 		if isNew {
 			if _, err := tx.NewInsert().Model(&project.Project).Exec(ctx); err != nil {
 				return err
@@ -165,7 +168,12 @@ func (s *ProjectStore) ImportVersion(ctx context.Context, resourceID, name, vers
 				return err
 			}
 		}
-		v := &ProjectVersion{ID: project.LatestVersionID, ProjectID: project.ID, Version: version, ResourceJSON: snapshot}
+		v := &ProjectVersion{
+			ID:           project.LatestVersionID,
+			ProjectID:    project.ID,
+			Version:      string(version),
+			ResourceJSON: snapshot,
+		}
 		if _, err := tx.NewInsert().Model(v).Exec(ctx); err != nil {
 			return err
 		}
@@ -180,9 +188,9 @@ func (s *ProjectStore) ImportVersion(ctx context.Context, resourceID, name, vers
 type ProjectVersion struct {
 	bun.BaseModel `bun:"table:project_versions"`
 
-	ID           uuid.UUID       `bun:"id,pk,default:gen_random_uuid()"`
-	ProjectID    uuid.UUID       `bun:"project_id,notnull"`
-	Version      string          `bun:"version,notnull"`
-	ResourceJSON json.RawMessage `bun:"resource_json,type:json,notnull"`
-	RegisteredAt time.Time       `bun:"registered_at,notnull,default:now()"`
+	ID           uuid.UUID         `bun:"id,pk,default:gen_random_uuid()"`
+	ProjectID    uuid.UUID         `bun:"project_id,notnull"`
+	Version      string            `bun:"version,notnull"`
+	ResourceJSON resource.Resource `bun:"resource_json,type:json,notnull"`
+	RegisteredAt time.Time         `bun:"registered_at,notnull,default:now()"`
 }

@@ -67,7 +67,7 @@ function BulkUsersScreen() {
         if (!hasUserData(row) || row.created || (row.role !== 'student' && row.role !== 'manager')) continue
         try {
           const result = await fetchClient.POST('/api/admin/users', { body: { userid: row.userid, name: row.username, role: row.role, password: row.password } })
-          next[index] = result.error ? { ...row, error: result.error.error.message } : { ...row, created: true, error: undefined }
+          next[index] = result.error ? { ...row, error: result.error.message } : { ...row, created: true, error: undefined }
         } catch { next[index] = { ...row, error: '通信に失敗しました。再試行してください。' } }
         setRows([...next])
       }

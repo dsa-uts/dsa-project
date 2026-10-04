@@ -3,6 +3,10 @@ openapi: 3.1.0
 info:
   title: dsa-project API
   version: 0.1.0
+  description: |
+    Submission upload requests accept bodies up to 21 MB (21,000,000 bytes).
+    Other requests accept bodies up to 128 KiB (131,072 bytes).
+    Requests exceeding these limits return HTTP 413.
 # Every operation must explicitly declare security:
 # public = []; authenticated = [{ sessionAuth: [] }].
 # sessionAuth accepts one minimum Role: [student], [manager], or [admin].
@@ -30,7 +34,7 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/CurrentUser" }
         "401": { $ref: "#/components/responses/InvalidCredentials" }
-        "422": { $ref: "#/components/responses/ValidationError" }
+        "400": { $ref: "#/components/responses/BadRequest" }
         "500": { $ref: "#/components/responses/InternalError" }
     delete:
       operationId: deleteSession
@@ -62,7 +66,7 @@ paths:
     get:
       operationId: listUserAccounts
       security: [{ sessionAuth: [admin] }]
-      summary: List all non-System User Accounts, including disabled accounts, in persisted display order
+      summary: List all User Accounts, including disabled accounts, in persisted display order
       responses:
         "200":
           description: All User Accounts, without pagination
@@ -94,7 +98,7 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/UserAccount" }
         "409": { $ref: "#/components/responses/UserConflict" }
-        "422": { $ref: "#/components/responses/ValidationError" }
+        "400": { $ref: "#/components/responses/BadRequest" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "500": { $ref: "#/components/responses/InternalError" }
@@ -110,7 +114,6 @@ paths:
       summary: Atomically update supplied fields of a User Account
       description: |
         Userid is immutable. Last-write-wins; supplying existing values succeeds.
-        System Accounts cannot be modified (cannot_modify_system_account).
         An Admin cannot change their own Role or disable themselves (cannot_modify_self).
         Password replacement and transitions to disabled delete all affected sessions
         in the same transaction. Other changes retain sessions. Repeated disabling
@@ -129,7 +132,7 @@ paths:
               schema: { $ref: "#/components/schemas/UserAccount" }
         "404": { $ref: "#/components/responses/NotFound" }
         "409": { $ref: "#/components/responses/UserConflict" }
-        "422": { $ref: "#/components/responses/ValidationError" }
+        "400": { $ref: "#/components/responses/BadRequest" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "500": { $ref: "#/components/responses/InternalError" }
@@ -139,8 +142,8 @@ paths:
       security: [{ sessionAuth: [admin] }]
       summary: Save the global User Account display order (Admin only)
       description: |
-        Supply every non-System User Account ID exactly once, including disabled
-        accounts. Missing, duplicate, unknown, or System Account IDs return
+        Supply every User Account ID exactly once, including disabled
+        accounts. Missing, duplicate, or unknown IDs return
         422 user_ids_mismatch without changing the order.
         The saved order drives the Admin list and future roster views.
       requestBody:
@@ -160,8 +163,9 @@ paths:
           description: Global display order saved
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
+        "400": { $ref: "#/components/responses/BadRequest" }
         "422":
-          description: user_ids_mismatch for an incomplete or incorrect set; validation_failed for malformed input
+          description: user_ids_mismatch for an incomplete or incorrect set
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
@@ -215,11 +219,7 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
-        "422":
-          description: validation_failed
-          content:
-            application/json:
-              schema: { $ref: "#/components/schemas/Error" }
+        "400": { $ref: "#/components/responses/BadRequest" }
         "500": { $ref: "#/components/responses/InternalError" }
   /api/admin/projects:
     patch:
@@ -248,8 +248,14 @@ paths:
         "204": { description: Schedules and order saved; reload GET /api/projects }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "409":
+          description: Project IDs do not match the complete list; nothing is changed
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
         "422":
-          description: project_ids_mismatch or validation_failed; nothing is changed
+          description: Deadline precedes publication; nothing is changed
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
@@ -305,8 +311,9 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
+        "400": { $ref: "#/components/responses/BadRequest" }
         "422":
-          description: invalid_resource_version, invalid_resource, resource_hash_mismatch, or validation_failed
+          description: invalid_resource_version, invalid_resource, or resource_hash_mismatch
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
@@ -316,6 +323,232 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
         "500": { $ref: "#/components/responses/InternalError" }
+  /api/requests/{request_id}/validation:
+    get:
+      operationId: getValidation
+      security: [{ sessionAuth: [] }]
+      description: |
+        Students see their own Validation Requests in currently published Projects.
+        Managers and Admins see all Validation Requests. Missing, invisible and
+        non-validation Requests return 404. All definitions use the pinned Version.
+        Unfinished Requests return result null; poll every five seconds until completed.
+        Completed results include definitions even when execution results were not
+        saved. A missing result does not prove non-execution. Private Jobs are excluded.
+      parameters:
+        - name: request_id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Success; Cache-Control is no-store
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ValidationDetail' }
+        "400": { $ref: '#/components/responses/BadRequest' }
+        "401": { $ref: '#/components/responses/Unauthorized' }
+        "404":
+          description: Request missing or invisible
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        "500": { $ref: '#/components/responses/InternalError' }
+  /api/requests/{request_id}/validation/files:
+    get:
+      operationId: getValidationFiles
+      security: [{ sessionAuth: [] }]
+      description: |
+        Students see their own Validation Requests in currently published Projects.
+        Managers and Admins see all Validation Requests. Missing, invisible and
+        non-validation Requests return 404. All definitions use the pinned Version.
+        metadata is an application/json text part; referenced fileN parts contain
+        raw bytes. Paths come from metadata, not multipart filenames.
+        Available before completion. Includes all Workflow Presets regardless of visibility.
+      parameters:
+        - name: request_id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Success; Cache-Control is no-store
+          content:
+            multipart/form-data:
+              schema:
+                type: object
+                required: [metadata]
+                properties:
+                  metadata: { $ref: '#/components/schemas/ValidationFilesMetadata' }
+                additionalProperties: { type: string, format: binary }
+              encoding:
+                metadata:
+                  contentType: application/json
+        "400": { $ref: '#/components/responses/BadRequest' }
+        "401": { $ref: '#/components/responses/Unauthorized' }
+        "404":
+          description: Request missing or invisible
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        "500": { $ref: '#/components/responses/InternalError' }
+  /api/requests/{request_id}/validation/artifacts:
+    get:
+      operationId: getValidationArtifacts
+      security: [{ sessionAuth: [] }]
+      description: |
+        Students see their own Validation Requests in currently published Projects.
+        Managers and Admins see all Validation Requests. Missing, invisible and
+        non-validation Requests return 404. All definitions use the pinned Version.
+        metadata is an application/json text part; referenced fileN parts contain
+        raw bytes. Paths come from metadata, not multipart filenames.
+        Only final-attempt public outputs of public Jobs are included. Empty is successful.
+      parameters:
+        - name: request_id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Success; Cache-Control is no-store
+          content:
+            multipart/form-data:
+              schema:
+                type: object
+                required: [metadata]
+                properties:
+                  metadata: { $ref: '#/components/schemas/ValidationArtifactsMetadata' }
+                additionalProperties: { type: string, format: binary }
+              encoding:
+                metadata:
+                  contentType: application/json
+        "400": { $ref: '#/components/responses/BadRequest' }
+        "401": { $ref: '#/components/responses/Unauthorized' }
+        "404":
+          description: Request missing or invisible
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        "409":
+          description: Request has not completed
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        "500": { $ref: '#/components/responses/InternalError' }
+  /api/validation:
+    get:
+      operationId: listValidation
+      summary: List visible Validation Requests
+      security: [{ sessionAuth: [] }]
+      description: |
+        Returns up to 20 Requests in UUID v7 ID descending order, across Versions.
+        Students see their own Requests in published Projects; Managers and Admins
+        see all users and Projects. Omit project_id for all visible Projects.
+        next and prev are mutually exclusive, as are status and state.
+        next selects older IDs; prev selects the nearest newer IDs. Cursors are
+        comparison boundaries and need not identify an existing or matching row.
+        Keep filters unchanged when navigating. Results reflect current data,
+        not a persistent snapshot. Poll the same query every 5 seconds while
+        displayed Requests are incomplete. If a page becomes empty, return to
+        the first page. No total count or configurable page size is provided.
+      parameters:
+        - name: project_id
+          in: query
+          schema: { type: string, format: uuid }
+        - name: status
+          in: query
+          schema: { $ref: '#/components/schemas/Status' }
+        - name: state
+          in: query
+          schema: { type: string, enum: [incomplete] }
+        - name: next
+          in: query
+          schema: { type: string, format: uuid }
+        - name: prev
+          in: query
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Visible Requests; an empty page has null cursors
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ValidationPage' }
+        "400": { $ref: '#/components/responses/BadRequest' }
+        "401": { $ref: '#/components/responses/Unauthorized' }
+        "404":
+          description: Specified Project missing or not visible
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        "500": { $ref: '#/components/responses/InternalError' }
+  /api/projects/{project_id}/validation:
+    post:
+      operationId: createValidation
+      summary: Create a Validation Request
+      description: |
+        Creates a Request for the authenticated user against the latest Resource Version.
+        Multipart uploads reuse a Submission with the same normalized file tree.
+        JSON reruns an existing own validation Submission in this Project.
+        Every successful call creates a new Request, including when another run is incomplete.
+        The maximum request body size is 21 MB (21,000,000 bytes), including multipart overhead.
+        Requests exceeding this limit return HTTP 413.
+      security: [{ sessionAuth: [] }]
+      parameters:
+        - name: project_id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [submission_id]
+              properties:
+                submission_id: { type: string, format: uuid }
+          multipart/form-data:
+            schema:
+              type: object
+              required: [metadata]
+              additionalProperties: true
+              description: |
+                Exactly one JSON metadata part and one binary part per files entry.
+                Dynamic binary part names must match metadata exactly; duplicate,
+                missing, or unreferenced parts are rejected. Filenames are ignored.
+                Files total at most 20,000,000 bytes; zero-byte files are allowed.
+                ZIP files must be expanded by the client.
+              properties:
+                metadata: { $ref: '#/components/schemas/SubmissionMetadata' }
+            encoding:
+              metadata:
+                contentType: application/json
+      responses:
+        "201":
+          description: New Request created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CreatedRequest' }
+        "401": { $ref: '#/components/responses/Unauthorized' }
+        "403":
+          description: Submission belongs to another user (including for Managers and Admins)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        "404":
+          description: Project missing or not visible; Submission missing
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        "413":
+          description: Request body exceeds 21 MB (21,000,000 bytes)
+          content:
+            text/plain:
+              schema: { type: string }
+        "400": { $ref: '#/components/responses/BadRequest' }
+        "422": { $ref: '#/components/responses/ValidationError' }
+        "500": { $ref: '#/components/responses/InternalError' }
+
 components:
   securitySchemes:
     sessionAuth:
@@ -330,6 +563,263 @@ components:
       required: false
       schema: { type: string }
   schemas:
+    ValidationDetail:
+      type: object
+      required: [id, project, subject_user, version, state, status, content_hash, duration_ms, requested_at, submission_id, result]
+      properties:
+        id: { type: string, format: uuid }
+        project:
+          type: object
+          required: [id, name]
+          properties:
+            id: { type: string, format: uuid }
+            name: { type: string, description: Current Project display name }
+        subject_user:
+          type: object
+          required: [id, userid, name]
+          properties:
+            id: { type: string, format: uuid }
+            userid: { type: string }
+            name: { type: string }
+        version: { type: string }
+        state: { type: string, enum: [pending, running, retrying, completed] }
+        status: { $ref: '#/components/schemas/NullableStatus' }
+        content_hash: { type: string, pattern: '^sha256:[0-9a-f]{64}$' }
+        duration_ms:
+          allOf: [{ $ref: '#/components/schemas/NullableMeasurement' }]
+          description: Final attempt elapsed time including preparation and saving, excluding queue time and discarded attempts
+        requested_at: { type: string, format: date-time }
+        submission_id: { type: string, format: uuid }
+        result:
+          anyOf: [{ $ref: '#/components/schemas/ValidationResult' }, { type: 'null' }]
+    NullableMeasurement:
+      type: [integer, 'null']
+      format: int64
+      minimum: 0
+      description: Null when unavailable; durations are milliseconds and memory is bytes
+    ValidationResult:
+      type: object
+      required: [peak_memory_bytes, workflows]
+      properties:
+        peak_memory_bytes: { $ref: '#/components/schemas/NullableMeasurement' }
+        workflows:
+          type: array
+          description: Workflow ID order; definitions from the pinned Version
+          items: { $ref: '#/components/schemas/ValidationWorkflow' }
+    ValidationWorkflow:
+      type: object
+      required: [id, name, status, duration_ms, jobs]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        status: { $ref: '#/components/schemas/NullableStatus' }
+        duration_ms: { $ref: '#/components/schemas/NullableMeasurement' }
+        jobs:
+          type: array
+          description: Public Jobs in dependency order, breaking ties by ID
+          items: { $ref: '#/components/schemas/ValidationJob' }
+    ValidationJob:
+      type: object
+      required: [id, name, status, duration_ms, peak_memory_bytes, skip_reason, stop_reason, steps, artifacts]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        status: { $ref: '#/components/schemas/NullableStatus' }
+        duration_ms:
+          allOf: [{ $ref: '#/components/schemas/NullableMeasurement' }]
+          description: Elapsed Job time including preparation and cleanup, not the sum of Step durations
+        peak_memory_bytes: { $ref: '#/components/schemas/NullableMeasurement' }
+        skip_reason: { type: [string, 'null'] }
+        stop_reason: { type: [string, 'null'] }
+        steps:
+          type: array
+          items: { $ref: '#/components/schemas/ValidationStep' }
+        artifacts:
+          type: array
+          description: Public declarations, including failed and unrecorded captures
+          items: { $ref: '#/components/schemas/ValidationArtifact' }
+    ValidationStep:
+      type: object
+      required: [index, name, run, compile, timeout_ms, stdin, expected, status, exit_code, duration_ms, memory_bytes, stdout, stderr]
+      properties:
+        index: { type: integer, minimum: 0, description: Zero-based position in the pinned Job steps array }
+        name: { type: string }
+        run: { type: string, description: Bash source from the Resource }
+        compile: { type: boolean }
+        timeout_ms: { type: integer, format: int64, minimum: 0 }
+        stdin: { type: string, description: Base64-encoded input bytes; empty string means no input }
+        expected: { $ref: '#/components/schemas/StepExpectation' }
+        status: { $ref: '#/components/schemas/NullableStatus' }
+        exit_code: { type: [integer, 'null'], description: Null when unavailable; never the internal -1 sentinel }
+        duration_ms: { $ref: '#/components/schemas/NullableMeasurement' }
+        memory_bytes:
+          allOf: [{ $ref: '#/components/schemas/NullableMeasurement' }]
+          description: Maximum sampled Sandbox memory during this Step, not isolated process RSS
+        stdout:
+          anyOf: [{ $ref: '#/components/schemas/StepOutput' }, { type: 'null' }]
+        stderr:
+          anyOf: [{ $ref: '#/components/schemas/StepOutput' }, { type: 'null' }]
+    StepOutput:
+      type: object
+      required: [data, truncated]
+      properties:
+        data: { type: string, description: Base64-encoded original bytes; empty output is an empty string }
+        truncated: { type: boolean, description: Only the allowed prefix was saved }
+    StepExpectation:
+      type: object
+      required: [exit_code, stdout, stderr]
+      properties:
+        exit_code: { type: [integer, 'null'], description: Null means unchecked }
+        stdout:
+          anyOf: [{ $ref: '#/components/schemas/ExpectedOutput' }, { type: 'null' }]
+        stderr:
+          anyOf: [{ $ref: '#/components/schemas/ExpectedOutput' }, { type: 'null' }]
+    ExpectedOutput:
+      type: object
+      description: Null means unchecked; an empty data string means expect empty output
+      required: [data, match]
+      properties:
+        data: { type: string, description: Base64-encoded expected bytes }
+        match: { type: string, enum: [exact, easy, sorted] }
+    ValidationArtifact:
+      type: object
+      required: [name, path, content_type, status, available, size_bytes, error]
+      properties:
+        name: { type: string }
+        path: { type: string }
+        content_type: { type: string }
+        status:
+          anyOf: [{ $ref: '#/components/schemas/ValidationArtifactStatus' }, { type: 'null' }]
+          description: Saved capture verdict; null when unrecorded
+        available: { type: boolean, description: Final-attempt bytes exist even if the capture verdict was not saved }
+        size_bytes: { $ref: '#/components/schemas/NullableMeasurement' }
+        error: { type: [string, 'null'], description: Safe failure message without internal paths }
+    ValidationArtifactStatus:
+      type: string
+      enum: [AC, WA, OLE]
+    FilePart:
+      type: object
+      required: [part, path]
+      properties:
+        part: { type: string, description: Binary multipart field name }
+        path: { type: string, description: Stored relative path }
+    ValidationFilesMetadata:
+      type: object
+      required: [submission_files, presets]
+      properties:
+        submission_files:
+          type: array
+          items: { $ref: '#/components/schemas/FilePart' }
+        presets:
+          type: array
+          items: { $ref: '#/components/schemas/PresetFiles' }
+    PresetFiles:
+      type: object
+      required: [workflow_id, files]
+      properties:
+        workflow_id: { type: string }
+        files:
+          type: array
+          items: { $ref: '#/components/schemas/FilePart' }
+    ValidationArtifactsMetadata:
+      type: object
+      required: [files]
+      properties:
+        files:
+          type: array
+          items: { $ref: '#/components/schemas/ArtifactPart' }
+    ArtifactPart:
+      allOf:
+        - $ref: '#/components/schemas/FilePart'
+        - type: object
+          required: [workflow_id, job_id, name, content_type]
+          properties:
+            workflow_id: { type: string }
+            job_id: { type: string }
+            name: { type: string }
+            content_type: { type: string }
+    ValidationPage:
+      type: object
+      additionalProperties: false
+      required: [requests, next, prev]
+      properties:
+        requests:
+          type: array
+          maxItems: 20
+          items: { $ref: '#/components/schemas/ValidationSummary' }
+        next:
+          type: [string, "null"]
+          format: uuid
+          description: Last returned ID if older matching rows exist, otherwise null
+        prev:
+          type: [string, "null"]
+          format: uuid
+          description: First returned ID if newer matching rows exist, otherwise null
+    ValidationSummary:
+      type: object
+      additionalProperties: false
+      required: [id, project, subject_user, version, state, status, content_hash, duration_ms, requested_at]
+      properties:
+        id: { type: string, format: uuid }
+        project:
+          type: object
+          required: [id, name]
+          properties:
+            id: { type: string, format: uuid }
+            name: { type: string, description: Current Project display name }
+        subject_user:
+          type: object
+          required: [id, userid, name]
+          properties:
+            id: { type: string, format: uuid }
+            userid: { type: string }
+            name: { type: string }
+        version: { type: string, description: Request's pinned Resource Version }
+        state: { type: string, enum: [pending, running, retrying, completed] }
+        status: { $ref: '#/components/schemas/NullableStatus' }
+        content_hash: { type: string, pattern: '^sha256:[0-9a-f]{64}$' }
+        duration_ms:
+          type: [integer, "null"]
+          format: int64
+          minimum: 0
+          description: Final attempt elapsed time including preparation and saving, excluding queue time and discarded attempts. Null until completed or when unavailable.
+        requested_at: { type: string, format: date-time }
+    SubmissionMetadata:
+      type: object
+      additionalProperties: false
+      required: [files]
+      properties:
+        files:
+          type: array
+          minItems: 1
+          maxItems: 50
+          items:
+            type: object
+            additionalProperties: false
+            required: [part, path]
+            properties:
+              part:
+                type: string
+                minLength: 1
+                not: { const: metadata }
+              path:
+                type: string
+                minLength: 1
+                description: |
+                  Normalized to a relative path with slash separators. Invalid UTF-8
+                  bytes are removed and backslashes become slashes. Dot components,
+                  repeated slashes, and parent (..) components are resolved under a
+                  virtual root; leading slashes are removed. NUL, drive-letter paths,
+                  and paths normalizing to empty are rejected. Normalized duplicate
+                  paths and file/directory collisions return 422 with the paths in message.
+    CreatedRequest:
+      type: object
+      additionalProperties: false
+      required: [id, state, status]
+      properties:
+        id: { type: string, format: uuid, description: UUID v7 Request ID }
+        state: { type: string, enum: [pending, running, retrying, completed] }
+        status: { $ref: '#/components/schemas/NullableStatus' }
     ProjectUpdate:
       type: object
       additionalProperties: false
@@ -345,7 +835,7 @@ components:
       description: RFC 3339 UTC or null
     Status:
       type: string
-      enum: [AC, WA, TLE, MLE, RE, OLE, IE]
+      enum: [AC, WA, TLE, MLE, RE, OLE, IE, CE, SKIP]
     NullableStatus:
       anyOf:
         - $ref: "#/components/schemas/Status"
@@ -510,17 +1000,25 @@ components:
         disabled: { type: boolean }
     Error:
       type: object
-      required: [error]
+      required: [code, message]
       properties:
-        error:
-          type: object
-          required: [code, message]
-          properties:
-            code: { type: string }
-            message: { type: string }
+        code:
+          type: integer
+          description: HTTPレスポンスのステータスコードと同じ値
+          minimum: 400
+          maximum: 599
+          example: 404
+        message:
+          type: string
+          example: Project not found.
   responses:
+    BadRequest:
+      description: Invalid input, including malformed bodies, unsupported Content-Type, and file size limits
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
     ValidationError:
-      description: バリデーション失敗
+      description: 業務上の制約違反
       content:
         application/json:
           schema: { $ref: "#/components/schemas/Error" }
@@ -553,7 +1051,7 @@ components:
         application/json:
           schema: { $ref: "#/components/schemas/Error" }
     UserConflict:
-      description: userid_taken (exact duplicate), cannot_modify_self, or cannot_modify_system_account
+      description: userid_taken (exact duplicate) or cannot_modify_self
       content:
         application/json:
           schema: { $ref: "#/components/schemas/Error" }

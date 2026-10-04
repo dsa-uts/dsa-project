@@ -14,20 +14,15 @@ tasks:
     cmds:
       - go test ./...
 
-  backend:deps:refresh:
-    desc: Refresh the backend Nix dependency hash
-    cmds:
-      - nu scripts/backend-deps.nu refresh
-
-  backend:deps:check:
-    desc: Check the backend Nix dependency hash
-    cmds:
-      - nu scripts/backend-deps.nu check
-
   backend:image:build:
-    desc: Refresh dependencies and build the backend container image
+    desc: Build and load the backend container image
     cmds:
       - nu scripts/images.nu backend
+
+  judge:image:build:
+    desc: Build and load the Judge DinD container image
+    cmds:
+      - nu scripts/images.nu judge
 
   frontend:install:
     desc: Install frontend dependencies from the lockfile
@@ -54,12 +49,12 @@ tasks:
       - npm run lint
 
   frontend:image:build:
-    desc: Build the frontend container image
+    desc: Build and load the frontend container image
     cmds:
       - nu scripts/images.nu frontend
 
   images:build:
-    desc: Build application container images
+    desc: Build and load application container images
     cmds:
       - nu scripts/images.nu
 
@@ -144,6 +139,11 @@ tasks:
       - nu scripts/deploy.nu reset
 
   check:
-    desc: Run all Nix flake checks
+    desc: Run unit tests, type checks, lint, and codegen drift checks
     cmds:
-      - nix flake check -L
+      - task: backend:test
+      - task: frontend:test
+      - task: frontend:typecheck
+      - task: frontend:lint
+      - task: e2e:typecheck
+      - task: codegen:check
