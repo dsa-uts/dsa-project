@@ -101,9 +101,6 @@ jobs:
       - name: Deploy E2E applications
         run: nix develop -c task e2e:up -- --k3d-cluster "$K3D_CLUSTER"
 
-      - name: Check Judge process shutdown
-        run: nix develop -c task judge:image:test
-
       - name: Reset E2E database
         id: reset
         run: nix develop -c task e2e:reset

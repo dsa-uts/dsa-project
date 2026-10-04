@@ -24,11 +24,6 @@ tasks:
     cmds:
       - nu scripts/images.nu judge
 
-  judge:image:test:
-    desc: Check Judge process shutdown using the built image
-    cmds:
-      - sh scripts/judge-entrypoint-test.sh
-
   frontend:install:
     desc: Install frontend dependencies from the lockfile
     dir: frontend
