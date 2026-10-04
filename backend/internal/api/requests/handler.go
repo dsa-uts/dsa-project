@@ -65,3 +65,37 @@ func (h *Handler) CreateValidation(ctx context.Context, req generated.CreateVali
 	}
 	return generated.CreateValidation201JSONResponse(body), nil
 }
+
+func (h *Handler) ListValidation(ctx context.Context, req generated.ListValidationRequestObject) (generated.ListValidationResponseObject, error) {
+	params := req.Params
+	// OpenAPI validates individual values; cross-parameter exclusions live here.
+	if params.Next != nil && params.Prev != nil {
+		return nil, echo.NewHTTPError(http.StatusBadRequest, "Specify only one of next and prev.")
+	}
+	if params.Status != nil && params.State != nil {
+		return nil, echo.NewHTTPError(http.StatusBadRequest, "Specify only one of status and state.")
+	}
+	actor := httpauth.Actor(ctx)
+	page, err := h.requests.ListValidation(ctx, actor.ID, store.Role(actor.Role), store.ValidationFilter{
+		ProjectID: params.ProjectId, Status: (*store.Status)(params.Status),
+		Incomplete: params.State != nil, Next: params.Next, Prev: params.Prev,
+	})
+	if errors.Is(err, store.ErrNotFound) {
+		return nil, echo.NewHTTPError(http.StatusNotFound, "Project not found.")
+	}
+	if err != nil {
+		return nil, fmt.Errorf("list validation: %w", err)
+	}
+	body := generated.ValidationPage{Requests: make([]generated.ValidationSummary, 0, len(page.Requests)), Next: page.Next, Prev: page.Prev}
+	for _, row := range page.Requests {
+		item := generated.ValidationSummary{
+			Id: row.ID, Version: row.Version, State: generated.ValidationSummaryState(row.State),
+			Status: (*generated.NullableStatus)(row.Status), ContentHash: "sha256:" + row.ContentHash,
+			DurationMs: row.DurationMS, RequestedAt: row.RequestedAt,
+		}
+		item.Project.Id, item.Project.Name = row.ProjectID, row.ProjectName
+		item.SubjectUser.Id, item.SubjectUser.Userid, item.SubjectUser.Name = row.SubjectUserID, row.Userid, row.UserName
+		body.Requests = append(body.Requests, item)
+	}
+	return generated.ListValidation200JSONResponse(body), nil
+}

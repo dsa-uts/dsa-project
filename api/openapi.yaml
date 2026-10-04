@@ -323,6 +323,52 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
         "500": { $ref: "#/components/responses/InternalError" }
+  /api/validation:
+    get:
+      operationId: listValidation
+      summary: List visible Validation Requests
+      security: [{ sessionAuth: [] }]
+      description: |
+        Returns up to 20 Requests in UUID v7 ID descending order, across Versions.
+        Students see their own Requests in published Projects; Managers and Admins
+        see all users and Projects. Omit project_id for all visible Projects.
+        next and prev are mutually exclusive, as are status and state.
+        next selects older IDs; prev selects the nearest newer IDs. Cursors are
+        comparison boundaries and need not identify an existing or matching row.
+        Keep filters unchanged when navigating. Results reflect current data,
+        not a persistent snapshot. Poll the same query every 5 seconds while
+        displayed Requests are incomplete. If a page becomes empty, return to
+        the first page. No total count or configurable page size is provided.
+      parameters:
+        - name: project_id
+          in: query
+          schema: { type: string, format: uuid }
+        - name: status
+          in: query
+          schema: { $ref: '#/components/schemas/Status' }
+        - name: state
+          in: query
+          schema: { type: string, enum: [incomplete] }
+        - name: next
+          in: query
+          schema: { type: string, format: uuid }
+        - name: prev
+          in: query
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Visible Requests; an empty page has null cursors
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ValidationPage' }
+        "400": { $ref: '#/components/responses/BadRequest' }
+        "401": { $ref: '#/components/responses/Unauthorized' }
+        "404":
+          description: Specified Project missing or not visible
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        "500": { $ref: '#/components/responses/InternalError' }
   /api/projects/{project_id}/validation:
     post:
       operationId: createValidation
@@ -406,6 +452,52 @@ components:
       required: false
       schema: { type: string }
   schemas:
+    ValidationPage:
+      type: object
+      additionalProperties: false
+      required: [requests, next, prev]
+      properties:
+        requests:
+          type: array
+          maxItems: 20
+          items: { $ref: '#/components/schemas/ValidationSummary' }
+        next:
+          type: [string, "null"]
+          format: uuid
+          description: Last returned ID if older matching rows exist, otherwise null
+        prev:
+          type: [string, "null"]
+          format: uuid
+          description: First returned ID if newer matching rows exist, otherwise null
+    ValidationSummary:
+      type: object
+      additionalProperties: false
+      required: [id, project, subject_user, version, state, status, content_hash, duration_ms, requested_at]
+      properties:
+        id: { type: string, format: uuid }
+        project:
+          type: object
+          required: [id, name]
+          properties:
+            id: { type: string, format: uuid }
+            name: { type: string, description: Current Project display name }
+        subject_user:
+          type: object
+          required: [id, userid, name]
+          properties:
+            id: { type: string, format: uuid }
+            userid: { type: string }
+            name: { type: string }
+        version: { type: string, description: Request's pinned Resource Version }
+        state: { type: string, enum: [pending, running, retrying, completed] }
+        status: { $ref: '#/components/schemas/NullableStatus' }
+        content_hash: { type: string, pattern: '^sha256:[0-9a-f]{64}$' }
+        duration_ms:
+          type: [integer, "null"]
+          format: int64
+          minimum: 0
+          description: Final attempt elapsed time including preparation and saving, excluding queue time and discarded attempts. Null until completed or when unavailable.
+        requested_at: { type: string, format: date-time }
     SubmissionMetadata:
       type: object
       additionalProperties: false

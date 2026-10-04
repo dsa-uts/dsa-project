@@ -199,6 +199,35 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/validation": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List visible Validation Requests
+         * @description Returns up to 20 Requests in UUID v7 ID descending order, across Versions.
+         *     Students see their own Requests in published Projects; Managers and Admins
+         *     see all users and Projects. Omit project_id for all visible Projects.
+         *     next and prev are mutually exclusive, as are status and state.
+         *     next selects older IDs; prev selects the nearest newer IDs. Cursors are
+         *     comparison boundaries and need not identify an existing or matching row.
+         *     Keep filters unchanged when navigating. Results reflect current data,
+         *     not a persistent snapshot. Poll the same query every 5 seconds while
+         *     displayed Requests are incomplete. If a page becomes empty, return to
+         *     the first page. No total count or configurable page size is provided.
+         */
+        get: operations["listValidation"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/projects/{project_id}/validation": {
         parameters: {
             query?: never;
@@ -228,6 +257,48 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        ValidationPage: {
+            requests: components["schemas"]["ValidationSummary"][];
+            /**
+             * Format: uuid
+             * @description Last returned ID if older matching rows exist, otherwise null
+             */
+            next: string | null;
+            /**
+             * Format: uuid
+             * @description First returned ID if newer matching rows exist, otherwise null
+             */
+            prev: string | null;
+        };
+        ValidationSummary: {
+            /** Format: uuid */
+            id: string;
+            project: {
+                /** Format: uuid */
+                id: string;
+                /** @description Current Project display name */
+                name: string;
+            };
+            subject_user: {
+                /** Format: uuid */
+                id: string;
+                userid: string;
+                name: string;
+            };
+            /** @description Request's pinned Resource Version */
+            version: string;
+            /** @enum {string} */
+            state: "pending" | "running" | "retrying" | "completed";
+            status: components["schemas"]["NullableStatus"];
+            content_hash: string;
+            /**
+             * Format: int64
+             * @description Final attempt elapsed time including preparation and saving, excluding queue time and discarded attempts. Null until completed or when unavailable.
+             */
+            duration_ms: number | null;
+            /** Format: date-time */
+            requested_at: string;
+        };
         SubmissionMetadata: {
             files: {
                 part: string;
@@ -850,6 +921,44 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
+        };
+    };
+    listValidation: {
+        parameters: {
+            query?: {
+                project_id?: string;
+                status?: components["schemas"]["Status"];
+                state?: "incomplete";
+                next?: string;
+                prev?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Visible Requests; an empty page has null cursors */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ValidationPage"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            /** @description Specified Project missing or not visible */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            500: components["responses"]["InternalError"];
         };
     };
     createValidation: {
