@@ -8,6 +8,7 @@ import (
 	"net"
 	"sync"
 	"testing"
+	"time"
 
 	resource "github.com/dsa-uts/dsa-resource-spec"
 	"github.com/moby/moby/client"
@@ -62,7 +63,7 @@ func TestStepIOFinish(t *testing.T) {
 				streams.outputErr = <-streams.outputDone
 				streams.outputFinished = true
 			}
-			if err := streams.finish(context.Background(), "sandbox", 0); err != nil {
+			if err := streams.finish(t.Context(), "sandbox", 0); err != nil {
 				t.Fatal(err)
 			}
 			stdout, stderr := streams.stdout.result(), streams.stderr.result()
@@ -78,5 +79,31 @@ func TestStepIOFinish(t *testing.T) {
 				t.Fatal("stdin writer still running after finish")
 			}
 		})
+	}
+}
+
+func TestStepIOFinishExpiredBudget(t *testing.T) {
+	conn, peer := net.Pipe()
+	defer conn.Close()
+	defer peer.Close()
+	stream := client.ExecAttachResult{HijackedResponse: client.HijackedResponse{Conn: conn, Reader: bufio.NewReader(conn)}}
+	streams := startStepIO(stream, []byte("unread input"), resource.Limits{StdoutSize: 3, StderrSize: 10})
+	// Earlier cleanup used the entire budget; neither copy may keep waiting.
+	ctx, cancel := context.WithDeadline(t.Context(), time.Now().Add(-time.Second))
+	defer cancel()
+	done := make(chan error, 1)
+	go func() { done <- streams.finish(ctx, "sandbox", 0) }()
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatalf("finish = %v; drain timeout must not invalidate the exec", err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("finish ignored the exhausted budget")
+	}
+	select {
+	case <-streams.inputStopped:
+	default:
+		t.Fatal("stdin writer still running after finish")
 	}
 }

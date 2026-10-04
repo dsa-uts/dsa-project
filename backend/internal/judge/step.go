@@ -17,6 +17,7 @@ const (
 	maxOutputBytes      = 128 << 10
 	execPollInterval    = 10 * time.Millisecond
 	stepTimeoutBuffer   = 200 * time.Millisecond
+	stepFinishTimeout   = 3 * time.Second
 )
 
 // Callers read ExitCode only after a started exec reports Running=false.
@@ -85,27 +86,28 @@ func (w *worker) executeStep(ctx context.Context, sb *sandbox, index int, step r
 	defer stopClosing()
 
 	streams := startStepIO(stream, step.Stdin, limits)
-	observed, runErr := w.monitorStep(ctx, stepCtx, sb, created.ID, baseline, limits.Memory, streams)
+	observed, runErr := w.monitorStep(stepCtx, sb, created.ID, baseline, limits.Memory, streams)
 	elapsed := time.Since(execStartedAt)
 	durationMS := elapsed.Milliseconds()
 	result.DurationMS = &durationMS
 
 	// A lost exec connection does not kill its processes. Always try the UID
 	// cleanup, including on success, before moving on to another Step.
-	cleanupCtx, cancelCleanup := context.WithTimeout(context.WithoutCancel(ctx), cleanupTimeout)
-	if err := w.cleanupSubmission(cleanupCtx, sb); err != nil {
+	// Cleanup, output draining, and final observation share one time budget.
+	finishCtx, cancelFinish := context.WithTimeout(context.WithoutCancel(ctx), stepFinishTimeout)
+	defer cancelFinish()
+	if err := w.cleanupSubmission(finishCtx, sb); err != nil {
 		log.Printf(
 			"sandbox %s step %d: cleanup submission: %v",
 			sb.id, result.Index, err,
 		)
 	}
-	cancelCleanup()
 
-	outputErr := streams.finish(ctx, sb.id, result.Index)
+	outputErr := streams.finish(finishCtx, sb.id, result.Index)
 	result.Stdout = streams.stdout.result()
 	result.Stderr = streams.stderr.result()
 
-	finalErr := w.observeStepExit(ctx, sb, created.ID, baseline, result.StartedAt, &observed)
+	finalErr := w.observeStepExit(finishCtx, sb, created.ID, baseline, result.StartedAt, &observed)
 	if runErr == nil {
 		runErr = finalErr
 	}

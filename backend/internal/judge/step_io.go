@@ -63,7 +63,7 @@ func startStepIO(stream client.ExecAttachResult, stdin []byte, limits resource.L
 		stream:       stream,
 		stdout:       &outputBuffer{limit: int(min(limits.StdoutSize, maxOutputBytes)), overflow: overflow, once: once},
 		stderr:       &outputBuffer{limit: int(min(limits.StderrSize, maxOutputBytes)), overflow: overflow, once: once},
-		overflow:     overflow, // When either stdout or stderr exceeds limits, signal is sent to this channel **just once**.
+		overflow:     overflow,            // When either stdout or stderr exceeds limits, signal is sent to this channel **just once**.
 		inputDone:    make(chan error, 1), // After sending all inputs, signal (error) is sent to this channel.
 		inputStopped: make(chan struct{}), // After closing an input connection, signal is sent to this channel.
 		outputDone:   make(chan error, 1), // After processing all outputs, signal (error) is sent to this channel.
@@ -87,11 +87,9 @@ func startStepIO(stream client.ExecAttachResult, stdin []byte, limits resource.L
 // A timeout here is logged but does not invalidate an already completed exec.
 func (s *stepIO) finish(ctx context.Context, sandboxID string, stepIndex int) error {
 	if !s.outputFinished {
-		drainCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), cleanupTimeout)
-		defer cancel()
 		select {
 		case s.outputErr = <-s.outputDone:
-		case <-drainCtx.Done():
+		case <-ctx.Done():
 			s.stream.Close()
 			<-s.outputDone
 			s.outputErr = nil

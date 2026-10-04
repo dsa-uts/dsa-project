@@ -85,22 +85,19 @@ func (w *worker) runRequest(ctx context.Context, req *store.Request) error {
 		return fmt.Errorf("runRequest: req must not be nil")
 	}
 
-	runCtx, cancelRun := context.WithCancelCause(ctx)
-	defer cancelRun(nil)
-
-	leaseCtx, stopLease := context.WithCancel(runCtx)
-	defer stopLease()
+	runCtx, cancelRun := context.WithCancel(ctx)
+	defer cancelRun()
 
 	leaseDone := make(chan error, 1)
 	go func() {
-		err := w.maintainLease(leaseCtx, req)
+		err := w.maintainLease(runCtx, req)
 
 		// 明示的な停止・プロセス終了はlease更新失敗にしない
-		if leaseCtx.Err() != nil {
+		if runCtx.Err() != nil {
 			err = nil
 		}
 		if err != nil {
-			cancelRun(err)
+			cancelRun()
 		}
 		leaseDone <- err
 	}()
@@ -109,7 +106,7 @@ func (w *worker) runRequest(ctx context.Context, req *store.Request) error {
 	results, executionErr := w.executeWorkflows(runCtx, req)
 
 	// 完了更新とlease更新が競合しないよう、更新ループを終了させる
-	stopLease()
+	cancelRun()
 	leaseErr := <-leaseDone
 
 	if err := ctx.Err(); err != nil {

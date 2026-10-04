@@ -17,17 +17,14 @@ type stepObservation struct {
 	oomKilled, containerLost bool
 }
 
-func (w *worker) monitorStep(ctx, stepCtx context.Context, sb *sandbox, execID string, baseline memorySample, softMemory int64, streams *stepIO) (stepObservation, error) {
+func (w *worker) monitorStep(ctx context.Context, sb *sandbox, execID string, baseline memorySample, softMemory int64, streams *stepIO) (stepObservation, error) {
 	observed := stepObservation{exitCode: exitCodeUnavailable, peakMemory: baseline.bytes}
 	inputDone, outputDone := streams.inputDone, streams.outputDone
 	ticker := time.NewTicker(execPollInterval)
 	defer ticker.Stop()
 	for {
-		if err := stepCtx.Err(); err != nil {
-			if ctx.Err() != nil {
-				return observed, ctx.Err()
-			}
-			return observed, nil
+		if err := ctx.Err(); err != nil {
+			return observed, err
 		}
 		sample, err := sampleMemory(sb)
 		if err != nil {
@@ -39,9 +36,9 @@ func (w *worker) monitorStep(ctx, stepCtx context.Context, sb *sandbox, execID s
 		if observed.mle {
 			return observed, nil
 		}
-		state, err := w.inspectExec(stepCtx, execID)
+		state, err := w.inspectExec(ctx, execID)
 		if err != nil {
-			if stepCtx.Err() != nil {
+			if ctx.Err() != nil {
 				continue
 			}
 			return observed, fmt.Errorf("inspect step exec: %w", err)
@@ -51,7 +48,7 @@ func (w *worker) monitorStep(ctx, stepCtx context.Context, sb *sandbox, execID s
 			return observed, nil
 		}
 		select {
-		case <-stepCtx.Done():
+		case <-ctx.Done():
 		case <-streams.overflow:
 			return observed, nil
 		case err := <-inputDone:
@@ -74,9 +71,7 @@ func (w *worker) monitorStep(ctx, stepCtx context.Context, sb *sandbox, execID s
 // observeStepExit checks for OOM even when the exec stream failed or was closed.
 func (w *worker) observeStepExit(ctx context.Context, sb *sandbox, execID string, baseline memorySample, startedAt time.Time, observed *stepObservation) error {
 	var observationErr error
-	finalCtx, cancelFinal := context.WithTimeout(context.WithoutCancel(ctx), cleanupTimeout)
-	defer cancelFinal()
-	if final, err := w.inspectExec(finalCtx, execID); err == nil && !final.Running {
+	if final, err := w.inspectExec(ctx, execID); err == nil && !final.Running {
 		observed.exitCode = final.ExitCode
 	}
 	if sample, err := sampleMemory(sb); err == nil {
@@ -84,14 +79,14 @@ func (w *worker) observeStepExit(ctx context.Context, sb *sandbox, execID string
 		observed.oomKilled = observed.oomKilled || sample.oomKills > baseline.oomKills
 	}
 	if !observed.oomKilled {
-		oom, err := w.sandboxOOM(finalCtx, sb, startedAt)
+		oom, err := w.sandboxOOM(ctx, sb, startedAt)
 		if err != nil {
 			observationErr = fmt.Errorf("check OOM events: %w", err)
 		}
 		observed.oomKilled = oom
 	}
 	observed.mle = observed.mle || observed.oomKilled
-	state, err := w.inspectSandbox(finalCtx, sb.id)
+	state, err := w.inspectSandbox(ctx, sb.id)
 	if err != nil {
 		if observationErr == nil {
 			observationErr = fmt.Errorf("inspect sandbox after step: %w", err)
