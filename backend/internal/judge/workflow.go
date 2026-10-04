@@ -113,12 +113,6 @@ func (w *worker) executeWorkflow(
 
 		jobResult, executionErr := w.executeJob(ctx, req, input, workflowID, workflow, jobID)
 
-		if executionErr == nil && jobResult.Status.Rank() < 0 {
-			executionErr = fmt.Errorf("invalid job status %q", jobResult.Status)
-		}
-		if executionErr != nil {
-			jobResult.Status = store.IE
-		}
 		result.Details.Jobs = append(result.Details.Jobs, jobResult)
 
 		if executionErr != nil {

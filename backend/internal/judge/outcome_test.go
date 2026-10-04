@@ -77,9 +77,9 @@ func TestJudgeStep(t *testing.T) {
 				if compile && want != store.AC {
 					want = store.CE
 				}
-				got, err := judgeStep(resource.Step{Expected: expected, Compile: compile}, tt.result)
-				if err != nil || got != want {
-					t.Errorf("judgeStep(compile=%v) = %q, %v; want %q, nil", compile, got, err, want)
+				got := judgeStep(resource.Step{Expected: expected, Compile: compile}, tt.result)
+				if got != want {
+					t.Errorf("judgeStep(compile=%v) = %q, want %q", compile, got, want)
 				}
 			}
 		})
@@ -98,12 +98,51 @@ func TestJudgeStepSkipsOutputComparisonAfterExecutionFailure(t *testing.T) {
 		if compile {
 			want = store.CE
 		}
-		if got, err := judgeStep(step, store.StepResult{ExitCode: 1}); got != want || err != nil {
-			t.Errorf("judgeStep(compile=%v) = %q, %v; want %q, nil", compile, got, err, want)
+		if got := judgeStep(step, store.StepResult{ExitCode: 1}); got != want {
+			t.Errorf("judgeStep(compile=%v) = %q, want %q", compile, got, want)
 		}
-		if got, err := judgeStep(step, store.StepResult{}); got != store.IE || err == nil {
-			t.Errorf("judgeStep(compile=%v) = %q, %v; want IE and comparison error", compile, got, err)
-		}
+	}
+}
+
+func TestJudgeStepOutputComparison(t *testing.T) {
+	tests := []struct {
+		name     string
+		expected *resource.OutputExpectation
+		actual   string
+		want     store.Status
+	}{
+		{"omitted expectation", nil, "anything", store.AC},
+		{"empty expectation", &resource.OutputExpectation{Match: resource.MatchExact}, "unexpected", store.WA},
+		{"easy mode", &resource.OutputExpectation{Content: []byte("a b"), Match: resource.MatchEasy}, "a  b\n", store.AC},
+		{"sorted mode", &resource.OutputExpectation{Content: []byte("a b"), Match: resource.MatchSorted}, "b a", store.AC},
+		{"unknown mode equal", &resource.OutputExpectation{Content: []byte("a b"), Match: "invalid"}, "a b", store.AC},
+		{"unknown mode uses exact", &resource.OutputExpectation{Content: []byte("a b"), Match: "invalid"}, "a  b", store.WA},
+		{"empty mode equal", &resource.OutputExpectation{Content: []byte("a b")}, "a b", store.AC},
+		{"empty mode uses exact", &resource.OutputExpectation{Content: []byte("a b")}, "a  b", store.WA},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			for _, stderr := range []bool{false, true} {
+				for _, compile := range []bool{false, true} {
+					step := resource.Step{Compile: compile}
+					result := store.StepResult{}
+					if stderr {
+						step.Expected.Stderr = tt.expected
+						result.Stderr.Data = []byte(tt.actual)
+					} else {
+						step.Expected.Stdout = tt.expected
+						result.Stdout.Data = []byte(tt.actual)
+					}
+					want := tt.want
+					if compile && want != store.AC {
+						want = store.CE
+					}
+					if got := judgeStep(step, result); got != want {
+						t.Errorf("judgeStep(stderr=%v, compile=%v) = %q, want %q", stderr, compile, got, want)
+					}
+				}
+			}
+		})
 	}
 }
 

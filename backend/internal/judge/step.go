@@ -127,47 +127,42 @@ func (w *worker) executeStep(ctx context.Context, sb *sandbox, index int, step r
 	case result.ExitCode == exitCodeUnavailable:
 		return result, errors.New("step exit code unavailable")
 	}
-	result.Status, err = judgeStep(step, result)
-	return result, err
+	result.Status = judgeStep(step, result)
+	return result, nil
 }
 
-func judgeStep(step resource.Step, result store.StepResult) (store.Status, error) {
+func judgeStep(step resource.Step, result store.StepResult) store.Status {
 	status := store.AC
-	for _, check := range []struct {
-		failed bool
-		status store.Status
-	}{
-		{result.OLE, store.OLE},
-		{result.MLE, store.MLE},
-		{result.TLE, store.TLE},
-		{step.Expected.ExitCode != nil && result.ExitCode != *step.Expected.ExitCode, store.RE},
-	} {
-		if check.failed && check.status.Rank() > status.Rank() {
-			status = check.status
-		}
-	}
-	if status == store.AC {
-		for _, output := range []struct {
-			actual   []byte
-			expected *resource.OutputExpectation
-		}{
-			{result.Stdout.Data, step.Expected.Stdout},
-			{result.Stderr.Data, step.Expected.Stderr},
-		} {
-			if output.expected == nil {
-				continue
-			}
-			matched, err := resource.MatchOutput(output.actual, output.expected.Content, output.expected.Match)
-			if err != nil {
-				return store.IE, err
-			}
-			if !matched {
-				status = store.WA
-			}
-		}
+	switch {
+	case result.OLE:
+		status = store.OLE
+	case result.MLE:
+		status = store.MLE
+	case result.TLE:
+		status = store.TLE
+	case step.Expected.ExitCode != nil && result.ExitCode != *step.Expected.ExitCode:
+		status = store.RE
+	case !matchesExpectedOutput(result.Stdout.Data, step.Expected.Stdout):
+		status = store.WA
+	case !matchesExpectedOutput(result.Stderr.Data, step.Expected.Stderr):
+		status = store.WA
 	}
 	if step.Compile && status != store.AC {
-		status = store.CE
+		return store.CE
 	}
-	return status, nil
+	return status
+}
+
+func matchesExpectedOutput(actual []byte, expected *resource.OutputExpectation) bool {
+	if expected == nil {
+		return true
+	}
+	mode := expected.Match
+	switch mode {
+	case resource.MatchExact, resource.MatchEasy, resource.MatchSorted:
+	default:
+		log.Printf("invalid output match mode %q; falling back to exact", mode)
+		mode = resource.MatchExact
+	}
+	return resource.MatchOutput(actual, expected.Content, mode)
 }
