@@ -76,7 +76,7 @@ flowchart LR
 # デプロイ時
 1. frontendの[.env.production](./dsa-frontend/.env.production)を、実際のドメイン名に合わせて書き換える。
     ```env
-    VITE_API_BASE_URL=https://your.domain.name/api
+    VITE_API_BASE_URL=https://www.kde.cs.tsukuba.ac.jp/dsa/api
     ```
 
 2. backendの[.env.production](./dsa-backend/.env.production)を、実際のドメイン名に合わせて書き換える。
@@ -94,6 +94,11 @@ flowchart LR
 
 4. docker.py prod buildを実行し、コンテナイメージをビルドする。
 
+
+5. Sandboxコンテナイメージのビルド
+    ```bash
+    ./sandbox/build.sh
+
 5. config設定
     ```bash
     cp config/db_root_password.txt.example config/db_root_password.txt
@@ -103,3 +108,5 @@ flowchart LR
     必要に応じて、各ファイルの中身を編集する。
 
 6. docker.py prodを実行し、コンテナを起動する。
+
+7. 終了時は docker.py prod downを実行し，コンテナを終了させる

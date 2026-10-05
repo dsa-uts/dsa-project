@@ -37,14 +37,16 @@ axiosClient.interceptors.response.use(
   },
   (error: AxiosError<ErrorResponse>) => {
     if (error.response?.status === 401) {
-      // save current path
-      const currentPath = window.location.pathname;
+      // save current path (relative to the router basename, since LoginPage navigates within the router)
+      const basePath = import.meta.env.BASE_URL.replace(/\/$/, '');
+      const pathname = window.location.pathname;
+      const currentPath = pathname.startsWith(basePath) ? pathname.slice(basePath.length) || '/' : pathname;
 
       // Clear stored token and expiry time
       localStorage.removeItem(TOKEN_KEY);
       localStorage.removeItem(TOKEN_EXPIRY_KEY);
 
-      window.location.href = `/login?redirect=${encodeURIComponent(currentPath)}`; // Redirect to login page
+      window.location.href = `${import.meta.env.BASE_URL}login?redirect=${encodeURIComponent(currentPath)}`; // Redirect to login page
       return Promise.reject(new Error('Unauthorized'))
     }
 
