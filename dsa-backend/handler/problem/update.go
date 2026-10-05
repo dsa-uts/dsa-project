@@ -338,12 +338,14 @@ func (h *Handler) RegisterProblem(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusInternalServerError, response.NewError("failed to create destination directory: "+err.Error()))
 	}
 
-	osFs := afero.NewOsFs()
-	// restrict access to destDir only, cannot access outside of it
-	jailedFs := afero.NewBasePathFs(osFs, absDestDir)
+	uploadRoot, err := os.OpenRoot(absDestDir)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, response.NewError("failed to open destination directory: "+err.Error()))
+	}
+	defer uploadRoot.Close()
 
 	// Copy contents from in-memory fs to destination directory
-	err = fileutil.CopyContentsBetweenAferoFs(memFs, baseDirInMemFs, jailedFs, "/")
+	err = fileutil.CopyToRoot(memFs, baseDirInMemFs, uploadRoot)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, response.NewError("failed to copy files to destination directory: "+err.Error()))
 	}
