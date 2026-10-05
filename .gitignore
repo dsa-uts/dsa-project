@@ -3,4 +3,4 @@
 logs/*
 nginx/log/*
 CLAUDE.md
-
+/.direnv/
