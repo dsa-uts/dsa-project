@@ -128,9 +128,11 @@ func (h *Handler) RequestValidation(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusInternalServerError, response.NewError("Failed to create upload directory"))
 	}
 
-	osFs := afero.NewOsFs()
-	// restrict access to fileDir only, cannot access outside of fileDir
-	jailedFs := afero.NewBasePathFs(osFs, absFileDir)
+	uploadRoot, err := os.OpenRoot(absFileDir)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, response.NewError("Failed to open upload directory"))
+	}
+	defer uploadRoot.Close()
 
 	// Store files
 	for _, file := range files {
@@ -143,10 +145,9 @@ func (h *Handler) RequestValidation(c echo.Context) error {
 
 		// Sanitize file name to prevent path traversal attacks.
 		cleanedPath := fileutil.SanitizeRelPath(file.Filename) // resolve all "../" to prevent path traversal
-		dstPath := filepath.Join("/", cleanedPath)
 
 		// Copy
-		err = afero.WriteReader(jailedFs, dstPath, src)
+		err = fileutil.WriteToRoot(uploadRoot, cleanedPath, src, 0666)
 		if err != nil {
 			return echo.NewHTTPError(http.StatusInternalServerError, response.NewError("Failed to copy uploaded file"))
 		}
@@ -344,9 +345,11 @@ func (h *Handler) BatchValidation(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusInternalServerError, response.NewError("Failed to create upload directory"))
 	}
 
-	osFs := afero.NewOsFs()
-	// restrict access to fileDir only, cannot access outside of fileDir
-	jailedFs := afero.NewBasePathFs(osFs, absFileDir)
+	uploadRoot, err := os.OpenRoot(absFileDir)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, response.NewError("Failed to open upload directory"))
+	}
+	defer uploadRoot.Close()
 
 	// Open zip file
 	src, err := zipFile.Open()
@@ -398,8 +401,8 @@ func (h *Handler) BatchValidation(c echo.Context) error {
 		baseDirInMemFs = filepath.Join("/", files[0].Name())
 	}
 
-	// Write files from in-memory fs to the jailed fs
-	err = fileutil.CopyContentsBetweenAferoFs(memFs, baseDirInMemFs, jailedFs, "/")
+	// Copy files from memory into the upload root
+	err = fileutil.CopyToRoot(memFs, baseDirInMemFs, uploadRoot)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, response.NewError("Failed to store extracted files: "+err.Error()))
 	}
@@ -644,9 +647,11 @@ func (h *Handler) RequestGrading(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusInternalServerError, response.NewError("Failed to create upload directory"))
 	}
 
-	osFs := afero.NewOsFs()
-	// restrict access to fileDir only, cannot access outside of fileDir
-	jailedFs := afero.NewBasePathFs(osFs, absFileDir)
+	uploadRoot, err := os.OpenRoot(absFileDir)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, response.NewError("Failed to open upload directory"))
+	}
+	defer uploadRoot.Close()
 
 	// Store files
 	for _, file := range files {
@@ -659,10 +664,9 @@ func (h *Handler) RequestGrading(c echo.Context) error {
 
 		// Sanitize file name to prevent path traversal attacks.
 		cleanedPath := fileutil.SanitizeRelPath(file.Filename) // resolve all "../" to prevent path traversal
-		dstPath := filepath.Join("/", cleanedPath)
 
 		// Copy
-		if err = afero.WriteReader(jailedFs, dstPath, src); err != nil {
+		if err = fileutil.WriteToRoot(uploadRoot, cleanedPath, src, 0666); err != nil {
 			return echo.NewHTTPError(http.StatusInternalServerError, response.NewError("Failed to copy uploaded file"))
 		}
 	}
@@ -869,9 +873,11 @@ func (h *Handler) BatchGrading(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusInternalServerError, response.NewError("Failed to create upload directory"))
 	}
 
-	osFs := afero.NewOsFs()
-	// restrict access to fileDir only, cannot access outside of fileDir
-	jailedFs := afero.NewBasePathFs(osFs, absFileDir)
+	uploadRoot, err := os.OpenRoot(absFileDir)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, response.NewError("Failed to open upload directory"))
+	}
+	defer uploadRoot.Close()
 
 	// Open zip file
 	src, err := zipFile.Open()
@@ -923,8 +929,8 @@ func (h *Handler) BatchGrading(c echo.Context) error {
 		baseDirInMemFs = filepath.Join("/", files[0].Name())
 	}
 
-	// Write files from in-memory fs to the jailed fs
-	err = fileutil.CopyContentsBetweenAferoFs(memFs, baseDirInMemFs, jailedFs, "/")
+	// Copy files from memory into the upload root
+	err = fileutil.CopyToRoot(memFs, baseDirInMemFs, uploadRoot)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, response.NewError("Failed to store extracted files: "+err.Error()))
 	}
