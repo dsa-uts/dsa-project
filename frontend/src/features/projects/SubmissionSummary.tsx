@@ -31,7 +31,7 @@ function ResultIcon({ state, status }: { state: string; status: Status | null })
 
 export function SubmissionSummary({ project }: { project: Project }) {
   const result = project.my_result
-  if (!result) return <span className="text-sm text-muted-foreground">実行結果なし</span>
+  if (!result) return null
   const { request } = result
   const completed = request.state === 'completed'
   const outdated = request.version_id !== project.latest_version_id

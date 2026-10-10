@@ -19,7 +19,6 @@ test('Dashboard lists actual Projects and filters them without navigation', asyn
   await page.getByRole('link', { name: 'Dashboard' }).click()
   await expect(page.getByRole('heading', { name: 'Problem List' })).toBeVisible()
   await expect(page.getByRole('heading', { level: 2 })).toHaveText(projects.map((project: { name: string }) => project.name))
-  await expect(page.getByText('実行結果なし', { exact: true })).toHaveCount(projects.length)
   await page.getByRole('tab', { name: projects[0].name, exact: true }).click()
   await expect(page).toHaveURL(/\/projects$/)
   await expect(page.getByRole('heading', { level: 2 })).toHaveText([projects[0].name])

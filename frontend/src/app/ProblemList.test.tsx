@@ -41,7 +41,6 @@ test('filters fetched Projects without navigation and shows no-result Projects w
   expect(screen.getByRole('tab', { name: '課題1' })).toBeDefined()
   expect(within(screen.getByRole('region', { name: '課題1' })).getByText(project.description)).toBeDefined()
   expect(within(screen.getByRole('region', { name: '課題2' })).queryByText(project.description)).toBeNull()
-  expect(screen.getByText('実行結果なし')).toBeDefined()
   expect(screen.queryByRole('button', { name: '課題2 の提出結果' })).toBeNull()
   fireEvent.mouseDown(screen.getByRole('tab', { name: '課題2' }), { button: 0, ctrlKey: false })
   expect(screen.queryByRole('heading', { name: '課題1' })).toBeNull()
