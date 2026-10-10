@@ -139,7 +139,7 @@ test('real Resource import, idempotence, publication and atomic bulk saves', asy
   await expectAPIError(await request.get('/api/projects/invalid', { headers }), 400)
   await expectAPIError(await request.get(`/api/projects/${randomUUID()}`, { headers }), 404)
   expect(project).toMatchObject({ resource_id: 'ex1', latest_version_id: result.version_id, latest_version: 'v1.0.0', my_result: null })
-  expect(Object.keys(project).sort()).toEqual(['id','resource_id','name','latest_version_id','latest_version','display_order','published_at','deadline','workflows','my_result'].sort())
+  expect(Object.keys(project).sort()).toEqual(['id','resource_id','name','description','latest_version_id','latest_version','display_order','published_at','deadline','workflows','my_result'].sort())
   expect(project.workflows.length).toBeGreaterThan(0)
   for (const workflow of project.workflows) expect(Object.keys(workflow).sort()).toEqual(['id', 'name'])
   if (result.changed) {

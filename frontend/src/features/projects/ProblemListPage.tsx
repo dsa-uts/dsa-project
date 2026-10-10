@@ -25,7 +25,7 @@ export function ProblemListPage() {
       <Tabs.Content value={active} className="space-y-12 pt-10 outline-none focus-visible:ring-2 focus-visible:ring-ring">
         {rows.length === 0 && <p className="text-muted-foreground">表示できる課題はありません。</p>}
         <Tooltip.Provider>{rows.filter((project) => active === 'all' || project.id === active).map((project) => <section key={project.id} aria-labelledby={`project-${project.id}`} className="space-y-4">
-          <div className="flex flex-wrap items-center gap-x-6 gap-y-2"><h2 id={`project-${project.id}`} className="text-3xl font-bold">{project.name}</h2><SubmissionSummary project={project} /></div>
+          <div className="flex flex-wrap items-center gap-x-6 gap-y-2"><div className="min-w-0 space-y-1 break-words"><h2 id={`project-${project.id}`} className="text-3xl font-bold">{project.name}</h2>{project.description && <p className="text-sm text-muted-foreground">{project.description}</p>}</div><SubmissionSummary project={project} /></div>
           {project.workflows.length > 0 ? <ul className="divide-y rounded-md border bg-card">{project.workflows.map((workflow) => <li key={workflow.id}><Link to={`/projects/${project.id}/${workflow.id}`} className="block px-6 py-5 font-semibold hover:bg-accent hover:text-link focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring">{workflow.name}</Link></li>)}</ul> : <p className="text-muted-foreground">問題はまだ登録されていません。</p>}
         </section>)}</Tooltip.Provider>
       </Tabs.Content>

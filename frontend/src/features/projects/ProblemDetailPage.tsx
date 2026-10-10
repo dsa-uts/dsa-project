@@ -70,7 +70,7 @@ export function ProblemDetailPage() {
 
   return <main className="mx-auto grid w-full max-w-screen-2xl flex-1 md:grid-cols-[18rem_minmax(0,1fr)] lg:grid-cols-[20rem_minmax(0,1fr)]">
     <aside className="min-w-0 border-b bg-muted/30 p-5 md:border-r md:border-b-0 md:p-6">
-      <h2 className="mb-4 break-words text-xl font-bold">{project.name}</h2>
+      <div className="mb-4 space-y-1 break-words"><h2 className="text-xl font-bold">{project.name}</h2>{project.description && <p className="text-sm text-muted-foreground">{project.description}</p>}</div>
       <nav aria-label="課題の目次" className="space-y-2">
         <Accordion.Root key={workflow?.id} type="single" collapsible defaultValue={workflow?.id}>
         {project.workflows.map((item) => <Accordion.Item key={item.id} value={item.id}>
@@ -93,7 +93,7 @@ export function ProblemDetailPage() {
         <li aria-hidden="true">/</li><li><Link to={`/projects/${project.id}`} className="text-link hover:underline">{project.name}</Link></li>
         {workflow && <><li aria-hidden="true">/</li><li aria-current="page">{workflow.name}</li></>}
       </ol></nav>
-      <div className="flex flex-wrap items-center gap-x-5 gap-y-2"><span>{project.name}</span><Tooltip.Provider><SubmissionSummary project={project} /></Tooltip.Provider></div>
+      <div className="flex flex-wrap items-center gap-x-5 gap-y-2"><div className="min-w-0 space-y-1 break-words"><span>{project.name}</span>{project.description && <p className="text-sm text-muted-foreground">{project.description}</p>}</div><Tooltip.Provider><SubmissionSummary project={project} /></Tooltip.Provider></div>
       {workflow ? <article key={workflow.id} lang="ja" className="markdown-content min-w-0">
         <h1 className="!mb-6 !text-4xl sm:!text-5xl">{workflow.name}</h1>
         {description.trim() ? <MarkdownContent components={{ h1: heading, h2: heading, h3: heading, h4: heading, h5: heading, h6: heading, img: () => null }}>{description}</MarkdownContent> : <p className="text-muted-foreground">課題説明はまだ登録されていません。</p>}

@@ -8,7 +8,7 @@ import App from './App'
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); vi.restoreAllMocks() })
 
 const project: components['schemas']['ProjectDetail'] = {
-  id: 'project-1', resource_id: 'ex1', name: 'C言語の復習', latest_version_id: 'version-1', latest_version: 'v1.0.0',
+  id: 'project-1', resource_id: 'ex1', name: '課題1', description: 'C言語によるプログラミングの復習', latest_version_id: 'version-1', latest_version: 'v1.0.0',
   display_order: 0, published_at: null, deadline: null, my_result: null,
   required_files: ['main.c', '*.h', 'レポート.pdf（任意）'],
   workflows: [
@@ -37,6 +37,8 @@ test('dashboard links to a Workflow; detail renders safe Markdown, real heading 
   fireEvent.click(await screen.findByRole('link', { name: '基本課題' }))
   expect(await screen.findByRole('heading', { level: 1, name: '基本課題' })).toBeDefined()
   expect(router.state.location.pathname).toBe('/projects/project-1/ex1-1')
+  expect(screen.getByRole('heading', { name: '課題1' })).toBeDefined()
+  expect(screen.getAllByText(project.description)).toHaveLength(2)
   const outline = within(screen.getByRole('navigation', { name: '課題の目次' }))
   expect(screen.getAllByRole('heading', { level: 1 })).toHaveLength(1)
   const anchors = outline.getAllByRole('link', { name: '提出方法' })
@@ -122,10 +124,15 @@ test('detail uses the shared historical result popover', async () => {
     submission_id: 'submission-1', content_hash: `sha256:${'a'.repeat(64)}`, uploaded_at: '2026-09-22T00:00:00Z',
     request: { id: 'request-1', version_id: 'old-version', version: 'v0.9.0', state: 'completed', status: 'WA', workflows: [{ id: 'old', name: '更新前の課題', status: 'WA', duration_ms: 120 }] },
   } }))
-  fireEvent.click(await screen.findByRole('button', { name: 'C言語の復習 の提出結果' }))
+  fireEvent.click(await screen.findByRole('button', { name: '課題1 の提出結果' }))
   const popup = within(await screen.findByRole('dialog'))
   expect(popup.getByText('更新前の課題')).toBeDefined()
   expect(popup.getByText('0.12 s')).toBeDefined()
   fireEvent.keyDown(document, { key: 'Escape' })
   await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+})
+test('detail omits an unspecified Project description', async () => {
+  setup('/projects/project-1', async () => Response.json({ ...project, description: '' }))
+  expect(await screen.findByRole('heading', { name: '課題1' })).toBeDefined()
+  expect(screen.queryByText(project.description)).toBeNull()
 })

@@ -15,6 +15,7 @@ func TestProjectDetail(t *testing.T) {
 	p := &store.ProjectLatest{Project: store.Project{
 		ID: uuid.New(), ResourceID: "ex1", Name: "Example", LatestVersionID: uuid.New(), DisplayOrder: 3,
 	}, Version: "v1.0.0", ResourceJSON: resource.Resource{
+		Metadata:      resource.Metadata{Description: "C言語によるプログラミングの復習"},
 		RequiredFiles: []string{"z.c", "*.h", "レポート.pdf（任意）"},
 		Workflows: map[string]resource.Workflow{
 			"ex1-2":  {Name: "Second", Jobs: map[string]resource.Job{"private": {Name: "must-not-leak"}}},
@@ -23,7 +24,7 @@ func TestProjectDetail(t *testing.T) {
 		},
 	}}
 	detail := projectDetail(p)
-	if detail.Id != p.ID || detail.LatestVersionId != p.LatestVersionID || detail.LatestVersion != p.Version || detail.ResourceId != p.ResourceID || detail.Name != p.Name || detail.DisplayOrder != 3 {
+	if detail.Id != p.ID || detail.LatestVersionId != p.LatestVersionID || detail.LatestVersion != p.Version || detail.ResourceId != p.ResourceID || detail.Name != p.Name || detail.DisplayOrder != 3 || detail.Description != p.ResourceJSON.Metadata.Description {
 		t.Fatalf("lost Project metadata: %+v", detail)
 	}
 	if !reflect.DeepEqual(detail.RequiredFiles, []string{"z.c", "*.h", "レポート.pdf（任意）"}) {
@@ -47,10 +48,13 @@ func TestProjectDetail(t *testing.T) {
 }
 
 func TestProjectDetailMissingGuidance(t *testing.T) {
-	// Snapshots imported before required-files existed remain readable.
+	// Snapshots imported before optional metadata existed remain readable.
 	detail := projectDetail(&store.ProjectLatest{ResourceJSON: resource.Resource{
 		Workflows: map[string]resource.Workflow{"judge": {Name: "Judge"}},
 	}})
+	if detail.Description != "" {
+		t.Fatalf("missing description must be empty: %+v", detail)
+	}
 	if detail.RequiredFiles == nil || len(detail.RequiredFiles) != 0 {
 		t.Fatalf("missing guidance must be an empty array: %+v", detail)
 	}

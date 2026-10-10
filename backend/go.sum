@@ -28,6 +28,8 @@ github.com/dprotaso/go-yit v0.0.0-20220510233725-9ba8df137936 h1:PRxIJD8XjimM5aT
 github.com/dprotaso/go-yit v0.0.0-20220510233725-9ba8df137936/go.mod h1:ttYvX5qlB+mlV1okblJqcSMtR4c52UKxDiX9GRBS8+Q=
 github.com/dsa-uts/dsa-resource-spec v1.6.0 h1:pwpIy76H5Jdl1kgg9dX0GwWkL+zXxJo1DMPQscS0D6c=
 github.com/dsa-uts/dsa-resource-spec v1.6.0/go.mod h1:ri/XoMDQGx7ZfXIIJSp5cBHu7RWCM4lssN6sJRua7nc=
+github.com/dsa-uts/dsa-resource-spec v1.7.0 h1:gNVI13ncyBLrVeY4t2GyiAUzApjV89NEI4CY5y+HIlI=
+github.com/dsa-uts/dsa-resource-spec v1.7.0/go.mod h1:ri/XoMDQGx7ZfXIIJSp5cBHu7RWCM4lssN6sJRua7nc=
 github.com/felixge/httpsnoop v1.1.0 h1:3YtUj32ZZkqZtt3sZZsClsymw/QDuVfpNhoA31zeORc=
 github.com/felixge/httpsnoop v1.1.0/go.mod h1:Zqxgdd+1Rkcz8euOqdr7lqgCRJztwr5hp9vDSi5UZCE=
 github.com/fsnotify/fsnotify v1.4.7/go.mod h1:jwhsz4b93w/PPRr/qN1Yymfu8t87LnFCMoQvtojpjFo=

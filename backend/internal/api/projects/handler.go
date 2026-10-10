@@ -31,9 +31,17 @@ func (h *Handler) ListProjects(ctx context.Context, req generated.ListProjectsRe
 	result := make([]generated.Project, 0, len(projects))
 	for _, p := range projects {
 		snapshot := p.ResourceJSON
-		item := generated.Project{Id: p.ID, ResourceId: p.ResourceID, Name: p.Name,
-			LatestVersionId: p.LatestVersionID, LatestVersion: p.Version, DisplayOrder: p.DisplayOrder,
-			PublishedAt: p.PublishedAt, Deadline: p.Deadline, Workflows: make([]struct {
+		item := generated.Project{
+			Id:              p.ID,
+			ResourceId:      p.ResourceID,
+			Name:            p.Name,
+			Description:     snapshot.Metadata.Description,
+			LatestVersionId: p.LatestVersionID,
+			LatestVersion:   p.Version,
+			DisplayOrder:    p.DisplayOrder,
+			PublishedAt:     p.PublishedAt,
+			Deadline:        p.Deadline,
+			Workflows: make([]struct {
 				Id   string `json:"id"`
 				Name string `json:"name"`
 			}, 0, len(snapshot.Workflows)),
@@ -64,10 +72,17 @@ func (h *Handler) GetProject(ctx context.Context, req generated.GetProjectReques
 
 func projectDetail(p *store.ProjectLatest) generated.ProjectDetail {
 	snapshot := p.ResourceJSON
-	detail := generated.ProjectDetail{Id: p.ID, ResourceId: p.ResourceID, Name: p.Name,
-		LatestVersionId: p.LatestVersionID, LatestVersion: p.Version, DisplayOrder: p.DisplayOrder,
-		PublishedAt: p.PublishedAt, Deadline: p.Deadline,
-		RequiredFiles: append([]string{}, snapshot.RequiredFiles...),
+	detail := generated.ProjectDetail{
+		Id:              p.ID,
+		ResourceId:      p.ResourceID,
+		Name:            p.Name,
+		Description:     snapshot.Metadata.Description,
+		LatestVersionId: p.LatestVersionID,
+		LatestVersion:   p.Version,
+		DisplayOrder:    p.DisplayOrder,
+		PublishedAt:     p.PublishedAt,
+		Deadline:        p.Deadline,
+		RequiredFiles:   append([]string{}, snapshot.RequiredFiles...),
 		Workflows: make([]struct {
 			DescriptionMarkdown string `json:"description_markdown"`
 			Id                  string `json:"id"`

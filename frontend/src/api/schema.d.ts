@@ -550,6 +550,8 @@ export interface components {
             id: string;
             resource_id: string;
             name: string;
+            /** @description Plain-text description from the latest Resource. */
+            description: string;
             /** Format: uuid */
             latest_version_id: string;
             latest_version: string;
@@ -598,6 +600,8 @@ export interface components {
             id: string;
             resource_id: string;
             name: string;
+            /** @description Plain-text description from the latest Resource metadata. */
+            description: string;
             /** Format: uuid */
             latest_version_id: string;
             latest_version: string;
