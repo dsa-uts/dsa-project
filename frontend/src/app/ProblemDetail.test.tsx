@@ -9,7 +9,7 @@ afterEach(() => { cleanup(); vi.unstubAllGlobals(); vi.restoreAllMocks() })
 
 const project: components['schemas']['ProjectDetail'] = {
   id: 'project-1', resource_id: 'ex1', name: '課題1', description: 'C言語によるプログラミングの復習', latest_version_id: 'version-1', latest_version: 'v1.0.0',
-  display_order: 0, published_at: null, deadline: null, my_result: null,
+  display_order: 0, published_at: null, deadline: null,
   required_files: ['main.c', '*.h', 'レポート.pdf（任意）'],
   workflows: [
     { id: 'ex1-1', name: '基本課題', description_markdown: '# 基本課題\n\n[課題リンク](https://example.com/task)\n\n## ファイル `main.c`\n\n```c\n// ## Not a heading\nint main(void) { return 0; }\n```\n\n# 提出方法\n本文\n\n## 提出方法\n別の説明\n<script>alert(1)</script>\n\n![添付画像](./private.png)' },
@@ -119,18 +119,6 @@ test('outline nests headings under the nearest shallower heading without empty l
   }
 })
 
-test('detail uses the shared historical result popover', async () => {
-  setup('/projects/project-1', async () => Response.json({ ...project, my_result: {
-    submission_id: 'submission-1', content_hash: `sha256:${'a'.repeat(64)}`, uploaded_at: '2026-09-22T00:00:00Z',
-    request: { id: 'request-1', version_id: 'old-version', version: 'v0.9.0', state: 'completed', status: 'WA', workflows: [{ id: 'old', name: '更新前の課題', status: 'WA', duration_ms: 120 }] },
-  } }))
-  fireEvent.click(await screen.findByRole('button', { name: '課題1 の提出結果' }))
-  const popup = within(await screen.findByRole('dialog'))
-  expect(popup.getByText('更新前の課題')).toBeDefined()
-  expect(popup.getByText('0.12 s')).toBeDefined()
-  fireEvent.keyDown(document, { key: 'Escape' })
-  await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
-})
 test('detail omits an unspecified Project description', async () => {
   setup('/projects/project-1', async () => Response.json({ ...project, description: '' }))
   expect(await screen.findByRole('heading', { name: '課題1' })).toBeDefined()

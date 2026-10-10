@@ -43,7 +43,8 @@ func (s *ProjectStore) ListProjects(ctx context.Context, publishedOnly bool) ([]
 	projects := []ProjectLatest{}
 	query := s.db.NewSelect().TableExpr("projects AS p").
 		ColumnExpr("p.*, v.version, v.resource_json").
-		Join("JOIN project_versions AS v ON v.id = p.latest_version_id").OrderExpr("p.display_order ASC")
+		Join("JOIN project_versions AS v ON v.id = p.latest_version_id").
+		OrderExpr("p.display_order ASC")
 	if publishedOnly {
 		query = query.Where("p.published_at <= CURRENT_TIMESTAMP")
 	}

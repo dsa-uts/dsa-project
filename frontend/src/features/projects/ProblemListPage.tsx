@@ -1,7 +1,6 @@
 import { useState } from 'react'
-import { Tabs, Tooltip } from 'radix-ui'
+import { Tabs } from 'radix-ui'
 import { Link } from 'react-router-dom'
-import { SubmissionSummary } from './SubmissionSummary'
 import { $api } from '@/api/client'
 import { Button } from '@/components/ui/button'
 
@@ -9,12 +8,6 @@ export function ProblemListPage() {
   const [selected, setSelected] = useState('all')
   const projects = $api.useQuery('get', '/api/projects', {}, {
     retry: false,
-    // 最新CI結果がnullのものがある場合はrefetchする
-    refetchInterval: (query) =>
-      !query.state.error &&
-        query.state.data?.projects.some(
-          (project) => project.my_result && project.my_result.request.state !== 'completed'
-        ) ? 5000 : false,
   })
 
   const rows = projects.data?.projects ?? []
@@ -35,25 +28,20 @@ export function ProblemListPage() {
         </Tabs.List>
         <Tabs.Content value={active} className="space-y-12 pt-10 outline-none focus-visible:ring-2 focus-visible:ring-ring">
           {rows.length === 0 && <p className="text-muted-foreground">表示できる課題はありません。</p>}
-          <Tooltip.Provider>
-            {rows.filter((project) => active === 'all' || project.id === active).map((project) =>
-              <section key={project.id} aria-labelledby={`project-${project.id}`} className="space-y-4">
-                <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
-                  <div className="min-w-0 space-y-1 break-words">
-                    <h2 id={`project-${project.id}`} className="text-3xl font-bold">
-                      {project.name}
-                    </h2>
-                    {project.description &&
-                      <p className="text-sm text-muted-foreground">
-                        {project.description}
-                      </p>}
-                  </div>
-                  <SubmissionSummary project={project} />
-                </div>
-                {project.workflows.length > 0 ? <ul className="divide-y rounded-md border bg-card">{project.workflows.map((workflow) => <li key={workflow.id}><Link to={`/projects/${project.id}/${workflow.id}`} className="block px-6 py-5 font-semibold hover:bg-accent hover:text-link focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring">{workflow.name}</Link></li>)}</ul> : <p className="text-muted-foreground">問題はまだ登録されていません。</p>}
-              </section>
-            )}
-          </Tooltip.Provider>
+          {rows.filter((project) => active === 'all' || project.id === active).map((project) =>
+            <section key={project.id} aria-labelledby={`project-${project.id}`} className="space-y-4">
+              <div className="min-w-0 space-y-1 break-words">
+                <h2 id={`project-${project.id}`} className="text-3xl font-bold">
+                  {project.name}
+                </h2>
+                {project.description &&
+                  <p className="text-sm text-muted-foreground">
+                    {project.description}
+                  </p>}
+              </div>
+              {project.workflows.length > 0 ? <ul className="divide-y rounded-md border bg-card">{project.workflows.map((workflow) => <li key={workflow.id}><Link to={`/projects/${project.id}/${workflow.id}`} className="block px-6 py-5 font-semibold hover:bg-accent hover:text-link focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring">{workflow.name}</Link></li>)}</ul> : <p className="text-muted-foreground">問題はまだ登録されていません。</p>}
+            </section>
+          )}
         </Tabs.Content>
       </Tabs.Root>}
   </main>

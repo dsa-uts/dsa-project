@@ -3,12 +3,11 @@ import { Link, useLocation, useParams } from 'react-router-dom'
 import Markdown, { type Components } from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import type { Element, Root } from 'hast'
-import { Accordion, Tooltip } from 'radix-ui'
+import { Accordion } from 'radix-ui'
 import { ChevronRight } from 'lucide-react'
 import { $api } from '@/api/client'
 import { Button } from '@/components/ui/button'
 import { MarkdownContent } from '@/components/MarkdownContent'
-import { SubmissionSummary } from './SubmissionSummary'
 import { ValidationSubmitForm } from './ValidationSubmitForm'
 
 const heading: Components['h2'] = ({ children, node }) => createElement(node?.tagName === 'h1' ? 'h2' : node?.tagName ?? 'h2', { id: `section-${node?.position?.start.offset}`, className: 'scroll-mt-6', tabIndex: -1 }, children)
@@ -93,7 +92,7 @@ export function ProblemDetailPage() {
         <li aria-hidden="true">/</li><li><Link to={`/projects/${project.id}`} className="text-link hover:underline">{project.name}</Link></li>
         {workflow && <><li aria-hidden="true">/</li><li aria-current="page">{workflow.name}</li></>}
       </ol></nav>
-      <div className="flex flex-wrap items-center gap-x-5 gap-y-2"><div className="min-w-0 space-y-1 break-words"><span>{project.name}</span>{project.description && <p className="text-sm text-muted-foreground">{project.description}</p>}</div><Tooltip.Provider><SubmissionSummary project={project} /></Tooltip.Provider></div>
+      <div className="min-w-0 space-y-1 break-words"><span>{project.name}</span>{project.description && <p className="text-sm text-muted-foreground">{project.description}</p>}</div>
       {workflow ? <article key={workflow.id} lang="ja" className="markdown-content min-w-0">
         <h1 className="!mb-6 !text-4xl sm:!text-5xl">{workflow.name}</h1>
         {description.trim() ? <MarkdownContent components={{ h1: heading, h2: heading, h3: heading, h4: heading, h5: heading, h6: heading, img: () => null }}>{description}</MarkdownContent> : <p className="text-muted-foreground">課題説明はまだ登録されていません。</p>}
