@@ -64,7 +64,7 @@ test('popover uses historical Workflow names, counts and durations, and closes w
   expect(popup.getByText('0.12 s')).toBeDefined()
   expect(popup.getByText('0.00 s')).toBeDefined()
   expect(popup.getByText('—')).toBeDefined()
-  expect(popup.getAllByRole('button', { name: 'Details' }).every((button) => button.hasAttribute('disabled'))).toBe(true)
+  expect(popup.getAllByRole('link', { name: 'Details' }).map(link => link.getAttribute('href'))).toEqual(['/results/request-1?workflow=old-1', '/results/request-1?workflow=old-2', '/results/request-1?workflow=old-3'])
   fireEvent.keyDown(document, { key: 'Escape' })
   await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
 })

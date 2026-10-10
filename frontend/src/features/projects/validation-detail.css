@@ -1,0 +1,32 @@
+.result-code .markdown-code-block {
+  background: transparent;
+  color: var(--foreground);
+  border: 0;
+}
+.result-code pre {
+  overflow: auto;
+  padding: 2.5rem 0 0.5rem;
+  counter-reset: line;
+}
+.result-code .code-line {
+  display: block;
+  min-height: 1.5em;
+}
+.result-code .code-line::before {
+  counter-increment: line;
+  content: counter(line);
+  display: inline-block;
+  width: 3em;
+  margin-right: 1em;
+  color: var(--muted-foreground);
+  text-align: right;
+  user-select: none;
+}
+.result-code .markdown-code-copy {
+  background: var(--card);
+  color: var(--foreground);
+  border: 1px solid var(--border);
+}
+.result-code .markdown-code-copy:hover {
+  background: var(--accent);
+}

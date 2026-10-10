@@ -4,6 +4,7 @@ import { NavigationGuard } from '@/components/navigation-guard'
 import { AdminUsersPage } from '@/features/users/AdminUsersPage'
 import { AdminProjectsPage } from '@/features/projects/AdminProjectsPage'
 import { ProblemDetailPage } from '@/features/projects/ProblemDetailPage'
+import { ValidationDetailPage } from '@/features/projects/ValidationDetailPage'
 import { ValidationResultsPage } from '@/features/projects/ValidationResultsPage'
 import { ProblemListPage } from '@/features/projects/ProblemListPage'
 import { BulkUsersPage } from '@/features/users/BulkUsersPage'
@@ -26,6 +27,7 @@ function App() {
               <Route path="/" element={<Navigate to="/about" replace />} />
               <Route path="/about" element={<AboutPage />} />
               <Route path="/results" element={<ValidationResultsPage />} />
+              <Route path="/results/:requestId" element={<ValidationDetailPage />} />
               <Route path="/projects" element={<ProblemListPage />} />
               <Route path="/projects/:projectId/:workflowId?" element={<ProblemDetailPage />} />
               <Route path="/admin/list" element={<AdminPage />} />

@@ -1,3 +1,4 @@
+import { Link } from 'react-router-dom'
 import { Popover, Tooltip } from 'radix-ui'
 import { Check, CircleX, Clock, LoaderCircle, X } from 'lucide-react'
 import type { components } from '@/api/schema'
@@ -58,7 +59,7 @@ export function SubmissionSummary({ project }: { project: Project }) {
           <span className="min-w-0 break-words font-semibold">{workflow.name}</span>
           <span className={`font-semibold ${completed && workflow.status ? statusClass[workflow.status] : 'text-muted-foreground'}`}>{completed ? workflow.status ?? '—' : '—'}</span>
           <span className="text-right text-sm tabular-nums text-muted-foreground">{completed && workflow.duration_ms !== null ? `${(workflow.duration_ms / 1000).toFixed(2)} s` : '—'}</span>
-          <button type="button" disabled title="詳細画面は準備中です" className="col-start-2 justify-self-start text-sm text-muted-foreground sm:col-start-auto sm:justify-self-end">Details</button>
+          <Link to={`/results/${request.id}?${new URLSearchParams({ workflow: workflow.id })}`} className="col-start-2 justify-self-start text-sm text-link underline sm:col-start-auto sm:justify-self-end">Details</Link>
         </li>)}</ul>
         <Popover.Arrow className="fill-popover" />
       </Popover.Content>

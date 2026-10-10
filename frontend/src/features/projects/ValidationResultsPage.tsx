@@ -3,13 +3,11 @@ import { Link, useSearchParams } from 'react-router-dom'
 import { Copy, FileText } from 'lucide-react'
 import { $api } from '@/api/client'
 import type { components } from '@/api/schema'
+import { StatusBadge } from './ValidationStatus'
 import { Button } from '@/components/ui/button'
 
 type Status = components['schemas']['Status']
-const statusClass: Record<Status, string> = {
-  AC: 'bg-status-ac', WA: 'bg-status-wa', TLE: 'bg-status-tle', MLE: 'bg-status-mle',
-  RE: 'bg-status-re', OLE: 'bg-status-ole', IE: 'bg-status-ie', CE: 'bg-destructive', SKIP: 'bg-muted text-muted-foreground',
-}
+const statuses: Status[] = ['AC', 'WA', 'TLE', 'MLE', 'RE', 'OLE', 'IE', 'CE', 'SKIP']
 const states = { pending: '待機中', running: '実行中', retrying: '再試行中', completed: '完了' }
 const dateFormat = new Intl.DateTimeFormat('ja-JP', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })
 
@@ -29,7 +27,7 @@ export function ValidationResultsPage() {
   const [search, setSearch] = useSearchParams()
   const projectId = search.get('project_id') || undefined
   const rawStatus = search.get('status')
-  const status = Object.keys(statusClass).find((value): value is Status => value === rawStatus)
+  const status = statuses.find((value): value is Status => value === rawStatus)
   const state = search.get('state') === 'incomplete' ? 'incomplete' : undefined
   const next = search.get('next') || undefined
   const prev = search.get('prev') || undefined
@@ -82,7 +80,7 @@ export function ValidationResultsPage() {
           setSearch(params)
         }}>
           <option value="">すべて</option><option value="incomplete">未完了</option>
-          {Object.keys(statusClass).map(status => <option key={status}>{status}</option>)}
+          {statuses.map(status => <option key={status}>{status}</option>)}
         </select>
       </div>
       {results.isPending && <p role="status">結果を読み込み中…</p>}
@@ -92,10 +90,10 @@ export function ValidationResultsPage() {
           <table aria-label="バリデーション結果" className="w-full text-left text-sm">
             <thead className="whitespace-nowrap bg-muted/30"><tr>{['リクエスト', '課題', '提出ユーザー', '全体結果', '提出ファイル SHA-256', '実行時間', 'リクエスト日時'].map(label => <th key={label} scope="col" className="px-4 py-5 font-semibold">{label}</th>)}</tr></thead>
             <tbody>{data.requests.map(request => <tr key={request.id} className="border-t">
-              <td className="px-4 py-5"><CopyValue value={request.id} label="Request ID">{request.id.slice(0, 8)}…{request.id.slice(-4)}</CopyValue></td>
+              <td className="px-4 py-5"><CopyValue value={request.id} label="Request ID"><Link to={`/results/${request.id}`} className="text-link underline" aria-label={`Validation Result ${request.id}`}>{request.id.slice(0, 8)}…{request.id.slice(-4)}</Link></CopyValue></td>
               <td className="min-w-32 px-4 py-5"><span>{request.project.name}</span><span className="mt-1 block text-xs text-muted-foreground">{request.version}</span></td>
               <td className="min-w-32 px-4 py-5"><span>{request.subject_user.name}</span><span className="mt-1 block text-muted-foreground">{request.subject_user.userid}</span></td>
-              <td className="whitespace-nowrap px-4 py-5">{request.state === 'completed' && request.status ? <span className={`inline-block min-w-14 rounded-md px-3 py-2 text-center font-semibold text-primary-foreground ${statusClass[request.status]}`}>{request.status}</span> : <span className="text-muted-foreground">{states[request.state]}</span>}</td>
+              <td className="whitespace-nowrap px-4 py-5">{request.state === 'completed' && request.status ? <StatusBadge status={request.status} /> : <span className="text-muted-foreground">{states[request.state]}</span>}</td>
               <td className="px-4 py-5"><CopyValue value={request.content_hash} label="SHA-256">{request.content_hash.replace(/^sha256:/, '').slice(0, 8)}…{request.content_hash.slice(-4)}</CopyValue></td>
               <td className="whitespace-nowrap px-4 py-5 tabular-nums">{request.duration_ms === null ? '—' : `${(request.duration_ms / 1000).toFixed(2)} s`}</td>
               <td className="whitespace-nowrap px-4 py-5 tabular-nums"><time dateTime={request.requested_at}>{dateFormat.format(new Date(request.requested_at))}</time></td>
