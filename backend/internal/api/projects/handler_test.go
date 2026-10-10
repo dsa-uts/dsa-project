@@ -42,9 +42,6 @@ func TestProjectDetail(t *testing.T) {
 			t.Fatalf("exposed private data: %s", data)
 		}
 	}
-	if !strings.Contains(string(data), `"my_result":null`) {
-		t.Fatalf("expected null result: %s", data)
-	}
 }
 
 func TestProjectDetailMissingGuidance(t *testing.T) {

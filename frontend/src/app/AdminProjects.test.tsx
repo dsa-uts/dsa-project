@@ -6,7 +6,7 @@ import App from './App'
 
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); vi.restoreAllMocks() })
 
-const project = { id: 'project-1', resource_id: 'ex1', name: '課題1', latest_version_id: 'version-1', latest_version: 'v1.0.0', display_order: 0, published_at: '2026-09-12T10:59:00Z', deadline: null, workflows: [], my_result: null }
+const project = { id: 'project-1', resource_id: 'ex1', name: '課題1', latest_version_id: 'version-1', latest_version: 'v1.0.0', display_order: 0, published_at: '2026-09-12T10:59:00Z', deadline: null, workflows: [] }
 function setup(patch: (request: Request) => Promise<Response>, role = 'admin', projects = [project]) {
   const fetch = vi.fn(async (request: Request) => {
     const path = new URL(request.url).pathname

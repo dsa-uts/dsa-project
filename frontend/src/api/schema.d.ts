@@ -563,38 +563,7 @@ export interface components {
                 id: string;
                 name: string;
             }[];
-            my_result: components["schemas"]["MyResult"];
         };
-        /** @description Latest own validation Request and its Submission, across Versions. Currently null until Submission/Request APIs are implemented. */
-        MyResult: {
-            /** Format: uuid */
-            submission_id: string;
-            /** @description Full normalized file tree hash (Normalized Submission Identity). Clients abbreviate the digest for display. */
-            content_hash: string;
-            /** Format: date-time */
-            uploaded_at: string;
-            request: {
-                /** Format: uuid */
-                id: string;
-                /** Format: uuid */
-                version_id: string;
-                version: string;
-                /** @enum {string} */
-                state: "pending" | "queued" | "running" | "completed";
-                status: components["schemas"]["NullableStatus"];
-                workflows: {
-                    id: string;
-                    /** @description Workflow name from the Request's pinned Version, not the latest Project Version. */
-                    name: string;
-                    status: components["schemas"]["NullableStatus"];
-                    /**
-                     * Format: int64
-                     * @description Sum of executed Step durations in this Workflow, including compilation. Unexecuted Steps are excluded. Null until the Request completes or if timing is unavailable.
-                     */
-                    duration_ms: number | null;
-                }[];
-            };
-        } | null;
         ProjectDetail: {
             /** Format: uuid */
             id: string;
@@ -617,7 +586,6 @@ export interface components {
                 /** @description Inline Markdown from the snapshot; empty when unspecified. No attachment serving or URL rewriting. */
                 description_markdown: string;
             }[];
-            my_result: components["schemas"]["MyResult"];
         };
         CreateSessionRequest: {
             userid: string;

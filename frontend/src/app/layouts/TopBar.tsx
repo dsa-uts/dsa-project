@@ -17,13 +17,15 @@ export function TopBar() {
   return (
     <header className="shrink-0 bg-top-bar text-top-bar-foreground">
       <div className="flex min-h-16 flex-wrap items-center justify-between gap-2 px-4 py-2 sm:h-16 sm:flex-nowrap sm:gap-4 sm:px-8 sm:py-0">
-        <Link to="/about" className="rounded-sm px-2 py-1 text-3xl font-bold outline-none transition-opacity hover:bg-top-bar-hover hover:opacity-80 focus-visible:ring-2 focus-visible:ring-top-bar-foreground">
-          DSA
-        </Link>
-        <NavLink to="/projects" className={navClass}>
-          Dashboard
-        </NavLink>
-        <NavLink to="/results" className={`mr-auto ${navClass}`}>Results</NavLink>
+        <div className="flex flex-wrap items-center gap-2 sm:flex-nowrap sm:gap-4">
+          <NavLink to="/about" className="rounded-sm px-2 py-1 text-3xl font-bold outline-none transition-opacity hover:bg-top-bar-hover hover:opacity-80 focus-visible:ring-2 focus-visible:ring-top-bar-foreground aria-[current=page]:bg-top-bar-hover">
+            DSA
+          </NavLink>
+          <NavLink to="/projects" className={navClass}>
+            Dashboard
+          </NavLink>
+          <NavLink to="/results" className={navClass}>Results</NavLink>
+        </div>
         <div className="flex items-center gap-2 sm:gap-4">
           {user?.role === 'admin' && (
             <Link to="/admin/list" aria-current={adminPage ? 'page' : undefined} className={`${navClass} sm:px-4`}>
