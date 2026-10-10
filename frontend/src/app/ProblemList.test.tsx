@@ -8,7 +8,7 @@ import App from './App'
 afterEach(() => { cleanup(); vi.useRealTimers(); vi.unstubAllGlobals(); vi.restoreAllMocks() })
 
 const project: components['schemas']['Project'] = {
-  id: 'project-1', resource_id: 'ex1', name: '課題1', latest_version_id: 'version-2', latest_version: 'v2.0.0',
+  id: 'project-1', resource_id: 'ex1', name: '課題1', description: 'C言語によるプログラミングの復習', latest_version_id: 'version-2', latest_version: 'v2.0.0',
   display_order: 0, published_at: null, deadline: null,
   workflows: [{ id: 'new', name: '最新版の問題' }],
   my_result: {
@@ -20,7 +20,7 @@ const project: components['schemas']['Project'] = {
     ] },
   },
 }
-const noResult = { ...project, id: 'project-2', name: '課題2', my_result: null }
+const noResult = { ...project, id: 'project-2', name: '課題2', description: '', my_result: null }
 
 function setup(list = async () => Response.json({ projects: [project, noResult] })) {
   const fetchList = vi.fn(list)
@@ -38,6 +38,9 @@ function setup(list = async () => Response.json({ projects: [project, noResult] 
 test('filters fetched Projects without navigation and shows no-result Projects without a popover', async () => {
   const { fetchList, router } = setup()
   await screen.findByRole('heading', { name: '課題1' })
+  expect(screen.getByRole('tab', { name: '課題1' })).toBeDefined()
+  expect(within(screen.getByRole('region', { name: '課題1' })).getByText(project.description)).toBeDefined()
+  expect(within(screen.getByRole('region', { name: '課題2' })).queryByText(project.description)).toBeNull()
   expect(screen.getByText('実行結果なし')).toBeDefined()
   expect(screen.queryByRole('button', { name: '課題2 の提出結果' })).toBeNull()
   fireEvent.mouseDown(screen.getByRole('tab', { name: '課題2' }), { button: 0, ctrlKey: false })

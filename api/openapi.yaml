@@ -843,11 +843,14 @@ components:
     Project:
       type: object
       additionalProperties: false
-      required: [id, resource_id, name, latest_version_id, latest_version, display_order, published_at, deadline, workflows, my_result]
+      required: [id, resource_id, name, description, latest_version_id, latest_version, display_order, published_at, deadline, workflows, my_result]
       properties:
         id: { type: string, format: uuid }
         resource_id: { type: string }
         name: { type: string }
+        description:
+          type: string
+          description: Plain-text description from the latest Resource.
         latest_version_id: { type: string, format: uuid }
         latest_version: { type: string }
         display_order: { type: integer, format: int64 }
@@ -901,11 +904,14 @@ components:
     ProjectDetail:
       type: object
       additionalProperties: false
-      required: [id, resource_id, name, latest_version_id, latest_version, display_order, published_at, deadline, workflows, my_result, required_files]
+      required: [id, resource_id, name, description, latest_version_id, latest_version, display_order, published_at, deadline, workflows, my_result, required_files]
       properties:
         id: { type: string, format: uuid }
         resource_id: { type: string }
         name: { type: string }
+        description:
+          type: string
+          description: Plain-text description from the latest Resource metadata.
         latest_version_id: { type: string, format: uuid }
         latest_version: { type: string }
         display_order: { type: integer, format: int64 }
