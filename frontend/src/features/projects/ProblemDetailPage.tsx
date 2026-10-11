@@ -175,7 +175,7 @@ function ProblemDetailContent({ projects, project }: {
     }
   }, [location.key, location.pathname, location.hash, workflowId, project])
 
-  return <main ref={pageRef} className="mx-auto grid w-full max-w-screen-2xl flex-1 md:min-h-0 md:grid-cols-[18rem_minmax(0,1fr)] md:grid-rows-[minmax(0,1fr)] lg:grid-cols-[20rem_minmax(0,1fr)]">
+  return <main ref={pageRef} className="grid w-full flex-1 md:min-h-0 md:grid-cols-[18rem_minmax(0,1fr)] md:grid-rows-[minmax(0,1fr)] lg:grid-cols-[20rem_minmax(0,1fr)]">
     <aside tabIndex={0} aria-label="課題ナビゲーション" className="min-w-0 border-b bg-muted/30 p-5 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring md:overflow-y-auto md:border-r md:border-b-0 md:p-6">
       <div className="mb-4 space-y-2 break-words">
         <Select aria-label="課題を選択" value={project.id} onValueChange={id => void navigate(`/projects/${id}`)}
