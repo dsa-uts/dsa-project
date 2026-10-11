@@ -215,13 +215,6 @@ export function ProblemDetailPage() {
           </>}
         </ol>
       </nav>
-      <div className="min-w-0 space-y-1 break-words">
-        <span>{project.name}</span>
-        {project.description &&
-          <p className="text-sm text-muted-foreground">
-            {project.description}
-          </p>}
-      </div>
       {workflow ?
         <article key={workflow.id} lang="ja" className="markdown-content min-w-0">
           <h1 className="!mb-6 !text-4xl sm:!text-5xl">{workflow.name}</h1>
