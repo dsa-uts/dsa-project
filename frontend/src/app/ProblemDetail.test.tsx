@@ -72,6 +72,18 @@ test('direct Workflow URLs, default selection and unknown Workflow recovery', as
   expect(screen.getByRole('heading', { level: 1, name: '基本課題' })).toBeDefined()
 })
 
+test('switching Workflow resets the content scroll without resetting the sidebar', async () => {
+  const { router } = setup()
+  await screen.findByRole('heading', { level: 1, name: '基本課題' })
+  const content = screen.getByRole('region', { name: '課題本文' })
+  const sidebar = screen.getByRole('complementary', { name: '課題ナビゲーションと提出' })
+  content.scrollTop = 300
+  sidebar.scrollTop = 100
+  await act(async () => { await router.navigate('/projects/project-1/ex1-2') })
+  expect(content.scrollTop).toBe(0)
+  expect(sidebar.scrollTop).toBe(100)
+})
+
 test('not-found and server failures are recoverable without showing stale content', async () => {
   let status = 404
   setup('/projects/project-1', async () => status === 200 ? Response.json({ ...project, required_files: [] }) : Response.json({ code: status, message: 'Unavailable' }, { status }))
