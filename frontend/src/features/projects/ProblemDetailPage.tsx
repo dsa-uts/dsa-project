@@ -1,4 +1,4 @@
-import { createElement, useEffect, useRef } from 'react'
+import { createElement, useEffect, useMemo, useRef } from 'react'
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
 import Markdown, { type Components } from 'react-markdown'
 import remarkGfm from 'remark-gfm'
@@ -11,21 +11,21 @@ import { MarkdownContent } from '@/components/MarkdownContent'
 import { Select, SelectItem } from '@/components/ui/select'
 import { ValidationSubmitForm } from './ValidationSubmitForm'
 
-const heading: Components['h2'] = ({ children, node }) =>
+const heading = (workflowId: string): Components['h2'] => ({ children, node }) =>
   createElement(
     `h${Math.min(Number(node?.tagName[1] ?? 1) + 1, 6)}`, // type
     { // props
-      id: `section-${node?.position?.start.offset}`,
+      id: `workflow-${workflowId}-section-${node?.position?.start.offset}`,
       className: 'scroll-mt-6',
       tabIndex: -1
     },
     children // ...children
   )
-const outlineHeading: Components['h2'] = ({ children, node }) =>
-  <a href={`#section-${node?.position?.start.offset}`}
+const outlineHeading = (workflowId: string): Components['h2'] => ({ children, node }) =>
+  <Link to={`#workflow-${workflowId}-section-${node?.position?.start.offset}`}
     className="block rounded-sm py-1.5 hover:text-link focus-visible:ring-2 focus-visible:ring-ring">
     {children}
-  </a>
+  </Link>
 
 function rehypeOutline() {
   /**
@@ -153,23 +153,27 @@ function ProblemDetailContent({ projects, project }: {
   const navigate = useNavigate()
   const pageRef = useRef<HTMLElement>(null)
   const contentRef = useRef<HTMLDivElement>(null)
+  // Keep heading components stable so navigation preserves their DOM and focus.
+  const workflows = useMemo(() => project.workflows.map(item => ({
+    ...item,
+    heading: heading(item.id),
+    outlineHeading: outlineHeading(item.id),
+  })), [project.workflows])
   const workflow = workflowId
     ? project.workflows.find((item) => item.id === workflowId)
     : project.workflows[0]
-  // The page supplies the title; omit the same leading Markdown title.
-  const description = workflow?.description_markdown || ''
-  //  .replace(/^# ([^\n]+)\r?\n?/, (title, name: string) => name.trim() === workflow.name ? '' : title) ?? ''
 
   useEffect(() => {
-    if (location.hash) {
-      const target = document.getElementById(location.hash.slice(1))
+    const targetId = location.hash.slice(1) || (workflowId ? `workflow-${workflowId}` : '')
+    if (targetId) {
+      const target = document.getElementById(targetId)
       target?.scrollIntoView()
       target?.focus({ preventScroll: true })
     } else {
       pageRef.current?.scrollIntoView({ block: 'start' })
       if (contentRef.current) contentRef.current.scrollTop = 0
     }
-  }, [location.pathname, location.hash, description])
+  }, [location.key, location.pathname, location.hash, workflowId, project])
 
   return <main ref={pageRef} className="mx-auto grid w-full max-w-screen-2xl flex-1 md:min-h-0 md:grid-cols-[18rem_minmax(0,1fr)] md:grid-rows-[minmax(0,1fr)] lg:grid-cols-[20rem_minmax(0,1fr)]">
     <aside tabIndex={0} aria-label="課題ナビゲーションと提出" className="min-w-0 border-b bg-muted/30 p-5 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring md:overflow-y-auto md:border-r md:border-b-0 md:p-6">
@@ -182,60 +186,64 @@ function ProblemDetailContent({ projects, project }: {
         {project.description && <p className="text-sm text-muted-foreground">{project.description}</p>}
       </div>
       <nav aria-label="課題の目次" className="space-y-2">
-        <Accordion.Root key={workflow?.id} type="single" collapsible defaultValue={workflow?.id}>
-          {project.workflows.map((item) =>
-            <Accordion.Item key={item.id} value={item.id}>
-              <Accordion.Header>
-                <Accordion.Trigger asChild>
-                  <Link to={`/projects/${project.id}/${item.id}`} aria-current={item.id === workflow?.id ? 'page' : undefined} className="group flex items-center gap-3 rounded-md px-3 py-3 font-semibold hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring aria-[current=page]:bg-link/10 aria-[current=page]:text-link">
-                    <ChevronRight className="size-5 shrink-0 group-data-[state=open]:rotate-90" aria-hidden="true" />
-                    <span className="min-w-0 break-words">
-                      {item.name}
-                    </span>
-                  </Link>
-                </Accordion.Trigger>
-              </Accordion.Header>
+        <Accordion.Root key={project.id} type="multiple" defaultValue={workflow ? [workflow.id] : []}>
+          {workflows.map((item) => {
+            const renderOutlineHeading = item.outlineHeading
+            return <Accordion.Item key={item.id} value={item.id}>
+              <div className="flex items-center">
+                <Accordion.Header className="shrink-0">
+                  <Accordion.Trigger aria-label={`${item.name}の目次を開閉`} className="group flex size-11 items-center justify-center rounded-md hover:bg-foreground/10 focus-visible:ring-2 focus-visible:ring-ring">
+                    <ChevronRight className="size-5 group-data-[state=open]:rotate-90" aria-hidden="true" />
+                  </Accordion.Trigger>
+                </Accordion.Header>
+                <Link to={`/projects/${project.id}/${item.id}`} className="min-w-0 flex-1 rounded-md px-3 py-3 font-semibold break-words hover:bg-foreground/10 hover:text-link focus-visible:ring-2 focus-visible:ring-ring">
+                  {item.name}
+                </Link>
+              </div>
               <Accordion.Content>
-                {item.id === workflow?.id &&
-                  <div className="my-2 ml-3 text-sm break-words">
-                    <Markdown
-                      skipHtml
-                      remarkPlugins={[remarkGfm]}
-                      rehypePlugins={[rehypeOutline]}
-                      allowedElements={['ul', 'li', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'code', 'em', 'strong', 'del', 'a']}
-                      components={{
-                        ul: ({ children }) => <ul className="ml-3 border-l pl-3">{children}</ul>,
-                        h1: outlineHeading,
-                        h2: outlineHeading,
-                        h3: outlineHeading,
-                        h4: outlineHeading,
-                        h5: outlineHeading,
-                        h6: outlineHeading,
-                        a: ({ children }) => <>{children}</>,
-                        // code: ({ children }) => <>{children}</>
-                      }}>
-                      {description}
-                    </Markdown>
-                  </div>}
+                <div className="my-2 ml-3 text-sm break-words">
+                  <Markdown
+                    skipHtml
+                    remarkPlugins={[remarkGfm]}
+                    rehypePlugins={[rehypeOutline]}
+                    allowedElements={['ul', 'li', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'code', 'em', 'strong', 'del', 'a']}
+                    components={{
+                      ul: ({ children }) => <ul className="ml-3 border-l pl-3">{children}</ul>,
+                      h1: renderOutlineHeading,
+                      h2: renderOutlineHeading,
+                      h3: renderOutlineHeading,
+                      h4: renderOutlineHeading,
+                      h5: renderOutlineHeading,
+                      h6: renderOutlineHeading,
+                      a: ({ children }) => <>{children}</>,
+                      // code: ({ children }) => <>{children}</>
+                    }}>
+                    {item.description_markdown}
+                  </Markdown>
+                </div>
               </Accordion.Content>
-            </Accordion.Item>)}
+            </Accordion.Item>
+          })}
         </Accordion.Root>
       </nav>
       <ValidationSubmitForm key={project.id} projectId={project.id} requiredFiles={project.required_files} />
     </aside>
-    <div ref={contentRef} role="region" aria-label="課題本文" tabIndex={0} className="min-w-0 space-y-5 bg-card p-5 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring sm:p-8 md:overflow-y-auto">
-      {workflow ?
-        <article key={workflow.id} lang="ja" className="markdown-content min-w-0">
-          <h1 className="!mb-6 !text-4xl sm:!text-5xl">{workflow.name}</h1>
+    <div ref={contentRef} role="region" aria-label="課題本文" tabIndex={0} className="min-w-0 space-y-5 bg-background p-5 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring sm:p-8 md:overflow-y-auto">
+      {workflowId && !workflow && <p role="alert">指定された問題が見つかりません。左の目次から選択してください。</p>}
+      {workflows.map(item => {
+        const renderHeading = item.heading
+        const description = item.description_markdown
+        return <article key={item.id} id={`workflow-${item.id}`} tabIndex={-1} lang="ja" className="markdown-content min-w-0 scroll-mt-5 rounded-xl border bg-card p-5 sm:p-8">
+          <h1 className="!mb-6 !text-4xl sm:!text-5xl">{item.name}</h1>
           {description.trim() ?
             <MarkdownContent
               components={{
-                h1: heading,
-                h2: heading,
-                h3: heading,
-                h4: heading,
-                h5: heading,
-                h6: heading,
+                h1: renderHeading,
+                h2: renderHeading,
+                h3: renderHeading,
+                h4: renderHeading,
+                h5: renderHeading,
+                h6: renderHeading,
                 img: () => null
               }}>
               {description}
@@ -243,10 +251,9 @@ function ProblemDetailContent({ projects, project }: {
             <p className="text-muted-foreground">
               課題説明はまだ登録されていません。
             </p>}
-        </article> :
-        <p role="alert">
-          {workflowId ? '指定された問題が見つかりません。左の目次から選択してください。' : '問題はまだ登録されていません。'}
-        </p>}
+        </article>
+      })}
+      {!project.workflows.length && <p role="alert">問題はまだ登録されていません。</p>}
     </div>
   </main>
 }

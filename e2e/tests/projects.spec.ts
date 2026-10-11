@@ -42,8 +42,8 @@ test('Dashboard lists actual Projects and filters them without navigation', asyn
   await page.screenshot({ path: 'test-results/problem-detail-mobile.png', fullPage: true })
   await page.setViewportSize({ width: 1448, height: 1086 })
   const outline = page.getByRole('navigation', { name: '課題の目次' })
-  const sectionLink = outline.locator('a[href^="#"]').first()
-  const anchor = await sectionLink.getAttribute('href')
+  const sectionLink = outline.locator('a[href*="#workflow-"]').first()
+  const anchor = new URL((await sectionLink.getAttribute('href'))!, page.url()).hash
   await sectionLink.click()
   await expect(page.locator(anchor!)).toBeInViewport()
   await page.reload()
@@ -55,10 +55,16 @@ test('Dashboard lists actual Projects and filters them without navigation', asyn
     await expect(page.getByRole('list', { name: '提出が求められているファイル' }).getByRole('listitem')).toHaveText(detail.required_files)
   }
   if (project.workflows.length > 1) {
-    await outline.getByRole('link', { name: project.workflows[1].name, exact: true }).click()
+    await outline.getByRole('button', { name: `${project.workflows[1].name}の目次を開閉`, exact: true }).click()
+    await expect(outline.getByRole('button', { name: `${workflow.name}の目次を開閉`, exact: true })).toHaveAttribute('aria-expanded', 'true')
+    await expect(outline.getByRole('button', { name: `${project.workflows[1].name}の目次を開閉`, exact: true })).toHaveAttribute('aria-expanded', 'true')
+    await outline.locator(`a[href="/projects/${project.id}/${project.workflows[1].id}"]`).click()
+    await expect(page.locator(`#workflow-${project.workflows[1].id}`)).toBeInViewport()
+    await expect(outline.getByRole('button', { name: `${workflow.name}の目次を開閉`, exact: true })).toHaveAttribute('aria-expanded', 'true')
     await expect(page.getByRole('heading', { level: 1, name: project.workflows[1].name, exact: true })).toBeVisible()
   }
-  await outline.getByRole('link', { name: workflow.name, exact: true }).click()
+  await outline.getByRole('button', { name: `${workflow.name}の目次を開閉`, exact: true }).click()
+  await expect(page.getByRole('article')).toHaveCount(project.workflows.length)
   await page.screenshot({ path: 'test-results/problem-detail.png', fullPage: true })
 
   const linkedListProject = projects.find((item: { resource_id: string }) => item.resource_id === 'ex2')

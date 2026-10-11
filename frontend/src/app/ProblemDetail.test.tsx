@@ -43,14 +43,14 @@ test('dashboard links to a Workflow; detail renders safe Markdown, real heading 
   expect(screen.getByRole('combobox', { name: '課題を選択' })).toHaveProperty('textContent', project.name)
   expect(screen.getByText(project.description)).toBeDefined()
   const outline = within(screen.getByRole('navigation', { name: '課題の目次' }))
-  expect(screen.getAllByRole('heading', { level: 1 })).toHaveLength(1)
+  expect(screen.getAllByRole('heading', { level: 1 })).toHaveLength(2)
   const anchors = outline.getAllByRole('link', { name: '提出方法' })
   expect(anchors[0].getAttribute('href')).not.toBe(anchors[1].getAttribute('href'))
-  for (const anchor of anchors) expect(document.querySelector(anchor.getAttribute('href')!)).toHaveProperty('textContent', '提出方法')
+  for (const anchor of anchors) expect(document.getElementById(anchor.getAttribute('href')!.split('#')[1])).toHaveProperty('textContent', '提出方法')
   expect(outline.queryByText('Not a heading')).toBeNull()
-  fireEvent.click(outline.getAllByRole('link', { name: '基本課題' })[0])
+  fireEvent.click(outline.getByRole('button', { name: '基本課題の目次を開閉' }))
   expect(outline.queryByRole('link', { name: 'ファイル main.c' })).toBeNull()
-  fireEvent.click(outline.getByRole('link', { name: '基本課題' }))
+  fireEvent.click(outline.getByRole('button', { name: '基本課題の目次を開閉' }))
   expect(outline.getByRole('link', { name: 'ファイル main.c' })).toBeDefined()
   expect(screen.getByRole('link', { name: '課題リンク' }).getAttribute('href')).toBe('https://example.com/task')
   expect(document.querySelector('script')).toBeNull()
@@ -58,10 +58,10 @@ test('dashboard links to a Workflow; detail renders safe Markdown, real heading 
   expect(within(screen.getByRole('list', { name: '提出が求められているファイル' })).getAllByRole('listitem').map(item => item.textContent)).toEqual(project.required_files)
   expect(screen.getByRole('button', { name: '提出する' })).toHaveProperty('disabled', true)
   expect(screen.getByRole('button', { name: 'ファイルを選択' })).toHaveProperty('disabled', false)
-  fireEvent.click(outline.getByRole('link', { name: '発展課題' }))
+  fireEvent.click(outline.getByRole('button', { name: '発展課題の目次を開閉' }))
   expect(await screen.findByText('課題説明はまだ登録されていません。')).toBeDefined()
   expect(fetchDetail).toHaveBeenCalledTimes(1)
-  await act(async () => { await router.navigate(-1) })
+  expect(router.state.location.pathname).toBe('/projects/project-1/ex1-1')
   expect(screen.getByRole('heading', { level: 1, name: '基本課題' })).toBeDefined()
   expect(fetchMock.mock.calls.every(([request]) => request.method === 'GET')).toBe(true)
 })
@@ -75,16 +75,63 @@ test('direct Workflow URLs, default selection and unknown Workflow recovery', as
   expect(screen.getByRole('heading', { level: 1, name: '基本課題' })).toBeDefined()
 })
 
-test('switching Workflow resets the content scroll without resetting the sidebar', async () => {
+test('Workflow name links scroll to the card without resetting the sidebar or outline', async () => {
   const { router } = setup()
   await screen.findByRole('heading', { level: 1, name: '基本課題' })
   const content = screen.getByRole('region', { name: '課題本文' })
   const sidebar = screen.getByRole('complementary', { name: '課題ナビゲーションと提出' })
   content.scrollTop = 300
   sidebar.scrollTop = 100
-  await act(async () => { await router.navigate('/projects/project-1/ex1-2') })
-  expect(content.scrollTop).toBe(0)
+  const card = document.getElementById('workflow-ex1-2')!
+  const scroll = vi.spyOn(card, 'scrollIntoView')
+  const link = within(sidebar).getByRole('link', { name: '発展課題' })
+  await act(async () => { fireEvent.click(link) })
+  expect(router.state.location.pathname).toBe('/projects/project-1/ex1-2')
+  expect(scroll).toHaveBeenCalledTimes(1)
+  expect(document.activeElement).toBe(card)
   expect(sidebar.scrollTop).toBe(100)
+  expect(screen.getByRole('button', { name: '基本課題の目次を開閉' }).getAttribute('aria-expanded')).toBe('true')
+  expect(screen.getByRole('button', { name: '発展課題の目次を開閉' }).getAttribute('aria-expanded')).toBe('false')
+  await act(async () => { fireEvent.click(link) })
+  expect(scroll).toHaveBeenCalledTimes(2)
+  await act(async () => { await router.navigate(-1) })
+  expect(content.scrollTop).toBe(0)
+})
+
+test('outlines open independently and heading links target the correct Workflow without closing outlines', async () => {
+  const { router } = setup('/projects/project-1', async () => Response.json({ ...project,
+    workflows: project.workflows.map(item => ({ ...item, description_markdown: '## 入力\n本文' })),
+  }))
+  await screen.findByRole('heading', { level: 1, name: '基本課題' })
+  const outline = within(screen.getByRole('navigation', { name: '課題の目次' }))
+  const first = outline.getByRole('button', { name: '基本課題の目次を開閉' })
+  const second = outline.getByRole('button', { name: '発展課題の目次を開閉' })
+  const content = screen.getByRole('region', { name: '課題本文' })
+  content.scrollTop = 300
+  fireEvent.click(second)
+  expect(first.getAttribute('aria-expanded')).toBe('true')
+  expect(second.getAttribute('aria-expanded')).toBe('true')
+  expect(content.scrollTop).toBe(300)
+  const links = outline.getAllByRole('link', { name: '入力' })
+  expect(links[0].getAttribute('href')).not.toBe(links[1].getAttribute('href'))
+  for (const [index, link] of links.entries()) {
+    const target = document.getElementById(link.getAttribute('href')!.split('#')[1])!
+    expect(target.closest('article')?.id).toBe(`workflow-${project.workflows[index].id}`)
+    const scroll = vi.spyOn(target, 'scrollIntoView')
+    await act(async () => { fireEvent.click(outline.getAllByRole('link', { name: '入力' })[index]) })
+    expect(scroll).toHaveBeenCalledTimes(1)
+    expect(document.activeElement).toBe(target)
+  }
+  expect(first.getAttribute('aria-expanded')).toBe('true')
+  expect(second.getAttribute('aria-expanded')).toBe('true')
+  await act(async () => { await router.navigate(-1) })
+  expect(document.activeElement?.id).toBe('workflow-ex1-1-section-0')
+  fireEvent.click(first)
+  expect(second.getAttribute('aria-expanded')).toBe('true')
+  fireEvent.click(second)
+  expect(outline.queryAllByRole('link', { name: '入力' })).toHaveLength(0)
+  expect(within(content).getAllByRole('article')).toHaveLength(2)
+  expect(within(content).getAllByText('本文')).toHaveLength(2)
 })
 
 test.each([404, 500])('detail failure (%s) shows an error without retry or content', async (status) => {
@@ -132,8 +179,8 @@ test('outline nests headings under the nearest shallower heading without empty l
     ['詳細'],
   ])
   expect(outline.querySelector('a a')).toBeNull()
-  for (const link of outline.querySelectorAll('a[href^="#section-"]')) {
-    expect(document.querySelector(link.getAttribute('href')!)?.textContent).toBe(link.textContent)
+  for (const link of outline.querySelectorAll('a[href*="#workflow-"]')) {
+    expect(document.getElementById(link.getAttribute('href')!.split('#')[1])?.textContent).toBe(link.textContent)
   }
 })
 
