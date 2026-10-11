@@ -7,8 +7,10 @@ export function AuthenticatedLayout() {
   return (
     <div className="fixed inset-0 flex flex-col overflow-clip">
       <TopBar />
-      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
-        <Outlet context={auth} />
+      <div className="relative flex min-h-0 flex-1 flex-col"> {/* absolute基準 */}
+        <div className="flex min-h-0 flex-1 flex-col overflow-y-auto"> {/* Topバー固定でページスクロールできるようにする */}
+          <Outlet context={auth} />
+        </div>
       </div>
     </div>
   )

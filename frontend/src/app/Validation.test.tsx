@@ -2,7 +2,7 @@ import { afterEach, expect, test, vi } from 'vitest'
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { createMemoryRouter, RouterProvider } from 'react-router-dom'
-import { ValidationSubmitForm } from '@/features/projects/ValidationSubmitForm'
+import { ValidationSubmitPanel } from '@/features/projects/ValidationSubmitPanel'
 import { ValidationResultsPage } from '@/features/projects/ValidationResultsPage'
 import type { components } from '@/api/schema'
 
@@ -18,10 +18,11 @@ function setup(path: string, handle: (request: Request) => Promise<Response>) {
   vi.stubGlobal('fetch', fetchMock)
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   const router = createMemoryRouter([
-    { path: '/submit', element: <ValidationSubmitForm projectId="project-1" requiredFiles={['main.c']} /> },
+    { path: '/submit', element: <ValidationSubmitPanel projectId="project-1" projectName="課題1" requiredFiles={['main.c']} /> },
     { path: '/results', element: <ValidationResultsPage /> },
   ], { initialEntries: [path] })
   render(<QueryClientProvider client={client}><RouterProvider router={router} /></QueryClientProvider>)
+  if (path === '/submit') fireEvent.click(screen.getByRole('button', { name: '課題を提出' }))
   return { router, fetchMock, client }
 }
 

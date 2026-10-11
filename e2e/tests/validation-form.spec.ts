@@ -13,11 +13,16 @@ test('submit files through the form, navigate to Results, and filter persisted R
   expect(imported.status(), await imported.text()).toBe(200)
   const { project_id } = await imported.json()
   await page.goto(`/projects/${project_id}`)
+  await page.getByRole('button', { name: '課題を提出', exact: true }).click()
   const source = `// ${randomUUID()}\nint main(void) { return 0; }\n`
   await page.getByLabel('提出ファイル', { exact: true }).setInputFiles([
     { name: 'main.c', mimeType: 'text/plain', buffer: Buffer.from(source) },
     { name: 'empty.txt', mimeType: 'text/plain', buffer: Buffer.alloc(0) },
   ])
+  await expect(page.getByRole('list', { name: '選択したファイル' })).toContainText('empty.txt')
+  await page.keyboard.press('Escape')
+  await expect(page.getByRole('dialog')).toBeHidden()
+  await page.getByRole('button', { name: '課題を提出', exact: true }).click()
   await expect(page.getByRole('list', { name: '選択したファイル' })).toContainText('empty.txt')
   const creation = page.waitForResponse(response => response.request().method() === 'POST' && response.url().endsWith(`/api/projects/${project_id}/validation`))
   await page.getByRole('button', { name: '提出する', exact: true }).click()
@@ -67,6 +72,7 @@ test('browse Validation detail, expand Steps, switch Workflows and download subm
   expect(imported.status(), await imported.text()).toBe(200)
   const { project_id } = await imported.json()
   await page.goto(`/projects/${project_id}`)
+  await page.getByRole('button', { name: '課題を提出', exact: true }).click()
   const { fileURLToPath } = await import('node:url')
   await page.getByLabel('提出ファイル', { exact: true }).setInputFiles(['Makefile', 'gcd_euclid.c', 'gcd_recursive.c', 'main_euclid.c', 'main_recursive.c'].map(path => fileURLToPath(new URL(`../fixtures/validation-ex1/${path}`, import.meta.url))))
   const creation = page.waitForResponse(response => response.request().method() === 'POST' && response.url().endsWith(`/api/projects/${project_id}/validation`))

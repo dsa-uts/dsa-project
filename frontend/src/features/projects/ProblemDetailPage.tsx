@@ -9,7 +9,7 @@ import { $api } from '@/api/client'
 import type { components } from '@/api/schema'
 import { MarkdownContent } from '@/components/MarkdownContent'
 import { Select, SelectItem } from '@/components/ui/select'
-import { ValidationSubmitForm } from './ValidationSubmitForm'
+import { ValidationSubmitPanel } from './ValidationSubmitPanel'
 
 const heading = (workflowId: string): Components['h2'] => ({ children, node }) =>
   createElement(
@@ -176,7 +176,7 @@ function ProblemDetailContent({ projects, project }: {
   }, [location.key, location.pathname, location.hash, workflowId, project])
 
   return <main ref={pageRef} className="mx-auto grid w-full max-w-screen-2xl flex-1 md:min-h-0 md:grid-cols-[18rem_minmax(0,1fr)] md:grid-rows-[minmax(0,1fr)] lg:grid-cols-[20rem_minmax(0,1fr)]">
-    <aside tabIndex={0} aria-label="課題ナビゲーションと提出" className="min-w-0 border-b bg-muted/30 p-5 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring md:overflow-y-auto md:border-r md:border-b-0 md:p-6">
+    <aside tabIndex={0} aria-label="課題ナビゲーション" className="min-w-0 border-b bg-muted/30 p-5 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring md:overflow-y-auto md:border-r md:border-b-0 md:p-6">
       <div className="mb-4 space-y-2 break-words">
         <Select aria-label="課題を選択" value={project.id} onValueChange={id => void navigate(`/projects/${id}`)}
           className="h-12 w-full text-xl font-bold">
@@ -226,14 +226,23 @@ function ProblemDetailContent({ projects, project }: {
           })}
         </Accordion.Root>
       </nav>
-      <ValidationSubmitForm key={project.id} projectId={project.id} requiredFiles={project.required_files} />
     </aside>
-    <div ref={contentRef} role="region" aria-label="課題本文" tabIndex={0} className="min-w-0 space-y-5 bg-background p-5 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring sm:p-8 md:overflow-y-auto">
+    <div
+      ref={contentRef}
+      role="region"
+      aria-label="課題本文"
+      tabIndex={0}
+      className="min-w-0 space-y-5 bg-background p-5 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring sm:p-8 md:overflow-y-auto pb-24 sm:pb-24">
       {workflowId && !workflow && <p role="alert">指定された問題が見つかりません。左の目次から選択してください。</p>}
       {workflows.map(item => {
         const renderHeading = item.heading
         const description = item.description_markdown
-        return <article key={item.id} id={`workflow-${item.id}`} tabIndex={-1} lang="ja" className="markdown-content min-w-0 scroll-mt-5 rounded-xl border bg-card p-5 sm:p-8">
+        return <article
+          key={item.id}
+          id={`workflow-${item.id}`}
+          tabIndex={-1}
+          lang="ja"
+          className="markdown-content mx-auto w-full max-w-6xl min-w-0 scroll-mt-5 rounded-xl border bg-card p-5 sm:p-8">
           <h1 className="!mb-6 !text-4xl sm:!text-5xl">{item.name}</h1>
           {description.trim() ?
             <MarkdownContent
@@ -255,5 +264,6 @@ function ProblemDetailContent({ projects, project }: {
       })}
       {!project.workflows.length && <p role="alert">問題はまだ登録されていません。</p>}
     </div>
+    <ValidationSubmitPanel key={project.id} projectId={project.id} projectName={project.name} requiredFiles={project.required_files} />
   </main>
 }

@@ -1,5 +1,5 @@
 import { afterEach, expect, test, vi } from 'vitest'
-import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { createMemoryRouter, RouterProvider } from 'react-router-dom'
 import type { components } from '@/api/schema'
@@ -55,6 +55,7 @@ test('dashboard links to a Workflow; detail renders safe Markdown, real heading 
   expect(screen.getByRole('link', { name: '課題リンク' }).getAttribute('href')).toBe('https://example.com/task')
   expect(document.querySelector('script')).toBeNull()
   expect(screen.queryByRole('img')).toBeNull()
+  fireEvent.click(screen.getByRole('button', { name: '課題を提出' }))
   expect(within(screen.getByRole('list', { name: '提出が求められているファイル' })).getAllByRole('listitem').map(item => item.textContent)).toEqual(project.required_files)
   expect(screen.getByRole('button', { name: '提出する' })).toHaveProperty('disabled', true)
   expect(screen.getByRole('button', { name: 'ファイルを選択' })).toHaveProperty('disabled', false)
@@ -75,11 +76,50 @@ test('direct Workflow URLs, default selection and unknown Workflow recovery', as
   expect(screen.getByRole('heading', { level: 1, name: '基本課題' })).toBeDefined()
 })
 
+test('submission panel keeps files across closing and Workflow navigation, but resets for another Project', async () => {
+  const { router } = setup()
+  const trigger = await screen.findByRole('button', { name: '課題を提出' })
+  expect(screen.queryByRole('dialog')).toBeNull()
+  const content = screen.getByRole('region', { name: '課題本文' })
+  content.scrollTop = 300
+  fireEvent.click(trigger)
+  const panel = screen.getByRole('dialog', { name: '課題1を提出' })
+  expect(content.scrollTop).toBe(300)
+  fireEvent.change(within(panel).getByLabelText('提出ファイル'), { target: { files: [new File(['code'], 'main.c')] } })
+  await within(panel).findByRole('button', { name: 'main.c を削除' })
+  fireEvent.click(within(panel).getByRole('button', { name: '提出パネルを閉じる' }))
+  await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+  await waitFor(() => expect(document.activeElement).toBe(trigger))
+  fireEvent.click(trigger)
+  expect(screen.getByRole('button', { name: 'main.c を削除' })).toBeDefined()
+
+  await act(async () => {
+    fireEvent.pointerDown(content)
+    content.focus()
+  })
+  expect(screen.getByRole('dialog', { name: '課題1を提出' })).toBeDefined()
+  await act(async () => { fireEvent.click(screen.getByRole('link', { name: '発展課題' })) })
+  expect(router.state.location.pathname).toBe('/projects/project-1/ex1-2')
+  expect(screen.getByRole('button', { name: 'main.c を削除' })).toBeDefined()
+  fireEvent.keyDown(screen.getByRole('dialog'), { key: 'Escape' })
+  await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+  await waitFor(() => expect(document.activeElement).toBe(trigger))
+
+  fireEvent.click(trigger)
+  await act(async () => { await router.navigate('/projects/project-2') })
+  await screen.findByRole('heading', { name: '課題2-1' })
+  expect(screen.queryByRole('dialog')).toBeNull()
+  fireEvent.click(screen.getByRole('button', { name: '課題を提出' }))
+  expect(screen.getByRole('dialog', { name: '課題2を提出' })).toBeDefined()
+  expect(screen.queryByRole('list', { name: '選択したファイル' })).toBeNull()
+  expect(screen.getByRole('button', { name: '提出する' })).toHaveProperty('disabled', true)
+})
+
 test('Workflow name links scroll to the card without resetting the sidebar or outline', async () => {
   const { router } = setup()
   await screen.findByRole('heading', { level: 1, name: '基本課題' })
   const content = screen.getByRole('region', { name: '課題本文' })
-  const sidebar = screen.getByRole('complementary', { name: '課題ナビゲーションと提出' })
+  const sidebar = screen.getByRole('complementary', { name: '課題ナビゲーション' })
   content.scrollTop = 300
   sidebar.scrollTop = 100
   const card = document.getElementById('workflow-ex1-2')!
@@ -146,6 +186,7 @@ test.each([404, 500])('detail failure (%s) shows an error without retry or conte
 test('detail omits empty required files', async () => {
   setup('/projects/project-1', async () => Response.json({ ...project, required_files: [] }))
   await screen.findByRole('heading', { level: 1, name: '基本課題' })
+  fireEvent.click(screen.getByRole('button', { name: '課題を提出' }))
   expect(screen.queryByRole('list', { name: '提出が求められているファイル' })).toBeNull()
 })
 
@@ -192,7 +233,7 @@ test('detail omits an unspecified Project description', async () => {
 
 test('sidebar switches Projects and follows browser history', async () => {
   const { router } = setup('/projects/project-1/ex1-2')
-  const sidebar = within(await screen.findByRole('complementary', { name: '課題ナビゲーションと提出' }))
+  const sidebar = within(await screen.findByRole('complementary', { name: '課題ナビゲーション' }))
   const select = sidebar.getByRole('combobox', { name: '課題を選択' })
   fireEvent.keyDown(select, { key: 'ArrowDown' })
   await screen.findByRole('option', { name: '課題2' })
