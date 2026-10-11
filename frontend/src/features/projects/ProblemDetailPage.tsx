@@ -8,6 +8,7 @@ import { ChevronRight } from 'lucide-react'
 import { $api } from '@/api/client'
 import type { components } from '@/api/schema'
 import { MarkdownContent } from '@/components/MarkdownContent'
+import { Select, SelectItem } from '@/components/ui/select'
 import { ValidationSubmitForm } from './ValidationSubmitForm'
 
 const heading: Components['h2'] = ({ children, node }) =>
@@ -173,11 +174,11 @@ function ProblemDetailContent({ projects, project }: {
   return <main ref={pageRef} className="mx-auto grid w-full max-w-screen-2xl flex-1 md:min-h-0 md:grid-cols-[18rem_minmax(0,1fr)] md:grid-rows-[minmax(0,1fr)] lg:grid-cols-[20rem_minmax(0,1fr)]">
     <aside tabIndex={0} aria-label="課題ナビゲーションと提出" className="min-w-0 border-b bg-muted/30 p-5 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring md:overflow-y-auto md:border-r md:border-b-0 md:p-6">
       <div className="mb-4 space-y-2 break-words">
-        <select aria-label="課題を選択" value={project.id} onChange={event => void navigate(`/projects/${event.target.value}`)}
-          className="h-12 w-full min-w-0 rounded-md border bg-card px-3 text-xl font-bold focus-visible:ring-2 focus-visible:ring-ring">
-          {!projects.some(item => item.id === project.id) && <option value={project.id}>{project.name}</option>}
-          {projects.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}
-        </select>
+        <Select aria-label="課題を選択" value={project.id} onValueChange={id => void navigate(`/projects/${id}`)}
+          className="h-12 w-full text-xl font-bold">
+          {!projects.some(item => item.id === project.id) && <SelectItem value={project.id}>{project.name}</SelectItem>}
+          {projects.map(item => <SelectItem key={item.id} value={item.id}>{item.name}</SelectItem>)}
+        </Select>
         {project.description && <p className="text-sm text-muted-foreground">{project.description}</p>}
       </div>
       <nav aria-label="課題の目次" className="space-y-2">

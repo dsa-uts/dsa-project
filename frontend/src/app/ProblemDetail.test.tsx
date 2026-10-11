@@ -40,7 +40,7 @@ test('dashboard links to a Workflow; detail renders safe Markdown, real heading 
   fireEvent.click(await screen.findByRole('link', { name: '基本課題' }))
   expect(await screen.findByRole('heading', { level: 1, name: '基本課題' })).toBeDefined()
   expect(router.state.location.pathname).toBe('/projects/project-1/ex1-1')
-  expect(screen.getByRole('combobox', { name: '課題を選択' })).toHaveProperty('value', project.id)
+  expect(screen.getByRole('combobox', { name: '課題を選択' })).toHaveProperty('textContent', project.name)
   expect(screen.getByText(project.description)).toBeDefined()
   const outline = within(screen.getByRole('navigation', { name: '課題の目次' }))
   expect(screen.getAllByRole('heading', { level: 1 })).toHaveLength(1)
@@ -139,7 +139,7 @@ test('outline nests headings under the nearest shallower heading without empty l
 
 test('detail omits an unspecified Project description', async () => {
   setup('/projects/project-1', async () => Response.json({ ...project, description: '' }))
-  expect(await screen.findByRole('combobox', { name: '課題を選択' })).toHaveProperty('value', project.id)
+  expect(await screen.findByRole('combobox', { name: '課題を選択' })).toHaveProperty('textContent', project.name)
   expect(screen.queryByText(project.description)).toBeNull()
 })
 
@@ -147,17 +147,18 @@ test('sidebar switches Projects and follows browser history', async () => {
   const { router } = setup('/projects/project-1/ex1-2')
   const sidebar = within(await screen.findByRole('complementary', { name: '課題ナビゲーションと提出' }))
   const select = sidebar.getByRole('combobox', { name: '課題を選択' })
+  fireEvent.keyDown(select, { key: 'ArrowDown' })
   await screen.findByRole('option', { name: '課題2' })
-  expect(within(select).getAllByRole('option').map(option => option.textContent)).toEqual(['課題1', '課題2'])
+  expect(screen.getAllByRole('option').map(option => option.textContent)).toEqual(['課題1', '課題2'])
   expect(screen.queryByRole('link', { name: 'Problem List' })).toBeNull()
-  fireEvent.change(select, { target: { value: 'project-2' } })
+  fireEvent.click(screen.getByRole('option', { name: '課題2' }))
   expect(await screen.findByRole('heading', { level: 1, name: '課題2-1' })).toBeDefined()
   expect(router.state.location.pathname).toBe('/projects/project-2')
-  expect(screen.getByRole('combobox', { name: '課題を選択' })).toHaveProperty('value', 'project-2')
+  expect(screen.getByRole('combobox', { name: '課題を選択' })).toHaveProperty('textContent', '課題2')
   expect(screen.getByText('連結リスト')).toBeDefined()
   await act(async () => { await router.navigate(-1) })
   expect(await screen.findByRole('heading', { level: 1, name: '発展課題' })).toBeDefined()
-  expect(screen.getByRole('combobox', { name: '課題を選択' })).toHaveProperty('value', project.id)
+  expect(screen.getByRole('combobox', { name: '課題を選択' })).toHaveProperty('textContent', project.name)
 })
 
 test('Project list failure shows an error without rendering detail', async () => {

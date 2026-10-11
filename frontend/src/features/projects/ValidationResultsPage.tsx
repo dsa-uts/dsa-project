@@ -5,6 +5,7 @@ import { $api } from '@/api/client'
 import type { components } from '@/api/schema'
 import { StatusBadge } from './ValidationStatus'
 import { Button } from '@/components/ui/button'
+import { Select, SelectItem } from '@/components/ui/select'
 
 type Status = components['schemas']['Status']
 const statuses: Status[] = ['AC', 'WA', 'TLE', 'MLE', 'RE', 'OLE', 'IE', 'CE', 'SKIP']
@@ -73,15 +74,15 @@ export function ValidationResultsPage() {
       <div><h1 className="break-words text-4xl font-bold">{title}</h1><p className="mt-2 text-muted-foreground">{projectId ? 'この課題' : '全課題'}の提出・最新順</p></div>
       <div className="flex flex-wrap items-center gap-6 rounded-md border bg-muted/30 p-5">
         <label htmlFor="result-filter" className="font-medium">全体結果</label>
-        <select id="result-filter" className="h-11 min-w-48 rounded-md border bg-card px-4 focus-visible:ring-2 focus-visible:ring-ring" value={state ?? status ?? ''} onChange={event => {
+        <Select id="result-filter" className="min-w-48" value={state ?? status ?? 'all'} onValueChange={value => {
           const params = new URLSearchParams(search)
           for (const key of ['status', 'state', 'next', 'prev']) params.delete(key)
-          if (event.target.value) params.set(event.target.value === 'incomplete' ? 'state' : 'status', event.target.value)
+          if (value !== 'all') params.set(value === 'incomplete' ? 'state' : 'status', value)
           setSearch(params)
         }}>
-          <option value="">すべて</option><option value="incomplete">未完了</option>
-          {statuses.map(status => <option key={status}>{status}</option>)}
-        </select>
+          <SelectItem value="all">すべて</SelectItem><SelectItem value="incomplete">未完了</SelectItem>
+          {statuses.map(status => <SelectItem key={status} value={status}>{status}</SelectItem>)}
+        </Select>
       </div>
       {results.isPending && <p role="status">結果を読み込み中…</p>}
       {results.isError && <div role="alert" className="flex flex-wrap items-center gap-3"><p className="text-destructive">{results.error?.code === 404 ? '課題が見つからないか、公開されていません。' : '結果一覧を取得できませんでした。'}</p><Button variant="outline" onClick={() => void results.refetch()}>再読み込み</Button><Link to="/results" className="text-link underline">すべての結果へ</Link></div>}
