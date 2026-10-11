@@ -1,5 +1,5 @@
 import { afterEach, expect, test, vi } from 'vitest'
-import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { createMemoryRouter, RouterProvider } from 'react-router-dom'
 import type { components } from '@/api/schema'
@@ -17,12 +17,15 @@ const project: components['schemas']['ProjectDetail'] = {
   ],
 }
 
-function setup(path = '/projects/project-1', load = async () => Response.json(project)) {
+const secondProject = { ...project, id: 'project-2', name: '課題2', description: '連結リスト', workflows: [{ id: 'ex2-1', name: '課題2-1', description_markdown: '課題2の本文' }] }
+
+function setup(path = '/projects/project-1', load = async () => Response.json(project), loadList = async () => Response.json({ projects: [project, secondProject] })) {
   const fetchDetail = vi.fn(load)
   const fetchMock = vi.fn(async (request: Request) => {
     const pathname = new URL(request.url).pathname
     if (pathname === '/api/me') return Response.json({ id: 'student', userid: 'student', name: 'Student', role: 'student' })
-    if (pathname === '/api/projects') return Response.json({ projects: [project] })
+    if (pathname === '/api/projects') return loadList()
+    if (pathname === '/api/projects/project-2') return Response.json(secondProject)
     if (pathname === '/api/projects/project-1') return fetchDetail()
     throw new Error(`Unexpected API: ${pathname}`)
   })
@@ -37,15 +40,15 @@ test('dashboard links to a Workflow; detail renders safe Markdown, real heading 
   fireEvent.click(await screen.findByRole('link', { name: '基本課題' }))
   expect(await screen.findByRole('heading', { level: 1, name: '基本課題' })).toBeDefined()
   expect(router.state.location.pathname).toBe('/projects/project-1/ex1-1')
-  expect(screen.getByRole('heading', { name: '課題1' })).toBeDefined()
-  expect(screen.getAllByText(project.description)).toHaveLength(2)
+  expect(screen.getByRole('combobox', { name: '課題を選択' })).toHaveProperty('value', project.id)
+  expect(screen.getByText(project.description)).toBeDefined()
   const outline = within(screen.getByRole('navigation', { name: '課題の目次' }))
   expect(screen.getAllByRole('heading', { level: 1 })).toHaveLength(1)
   const anchors = outline.getAllByRole('link', { name: '提出方法' })
   expect(anchors[0].getAttribute('href')).not.toBe(anchors[1].getAttribute('href'))
   for (const anchor of anchors) expect(document.querySelector(anchor.getAttribute('href')!)).toHaveProperty('textContent', '提出方法')
   expect(outline.queryByText('Not a heading')).toBeNull()
-  fireEvent.click(outline.getByRole('link', { name: '基本課題' }))
+  fireEvent.click(outline.getAllByRole('link', { name: '基本課題' })[0])
   expect(outline.queryByRole('link', { name: 'ファイル main.c' })).toBeNull()
   fireEvent.click(outline.getByRole('link', { name: '基本課題' }))
   expect(outline.getByRole('link', { name: 'ファイル main.c' })).toBeDefined()
@@ -84,15 +87,17 @@ test('switching Workflow resets the content scroll without resetting the sidebar
   expect(sidebar.scrollTop).toBe(100)
 })
 
-test('not-found and server failures are recoverable without showing stale content', async () => {
-  let status = 404
-  setup('/projects/project-1', async () => status === 200 ? Response.json({ ...project, required_files: [] }) : Response.json({ code: status, message: 'Unavailable' }, { status }))
-  expect((await screen.findByRole('alert')).textContent).toContain('公開されていません')
-  status = 500
-  fireEvent.click(screen.getByRole('button', { name: '再読み込み' }))
-  await waitFor(() => expect(screen.getByRole('alert').textContent).toBe('課題を取得できませんでした。'))
-  status = 200
-  fireEvent.click(screen.getByRole('button', { name: '再読み込み' }))
+test.each([404, 500])('detail failure (%s) shows an error without retry or content', async (status) => {
+  setup('/projects/project-1', async () => Response.json({ code: status, message: 'Unavailable' }, { status }))
+  expect((await screen.findByRole('alert')).textContent).toBe(status === 404
+    ? '課題が見つからないか、公開されていません。'
+    : '課題を取得できませんでした。')
+  expect(screen.queryByRole('button', { name: '再読み込み' })).toBeNull()
+  expect(screen.queryByRole('region', { name: '課題本文' })).toBeNull()
+})
+
+test('detail omits empty required files', async () => {
+  setup('/projects/project-1', async () => Response.json({ ...project, required_files: [] }))
   await screen.findByRole('heading', { level: 1, name: '基本課題' })
   expect(screen.queryByRole('list', { name: '提出が求められているファイル' })).toBeNull()
 })
@@ -120,7 +125,8 @@ test('outline nests headings under the nearest shallower heading without empty l
   const lists = within(outline).getAllByRole('list')
   const labels = (list: HTMLElement) => Array.from(list.children).map(item => item.firstElementChild?.textContent)
   expect(lists.map(labels)).toEqual([
-    ['最初の節', '課題', '次の課題'],
+    ['基本課題', '課題', '次の課題'],
+    ['最初の節'],
     ['テスト main.c', '具体例', '提出方法'],
     ['入力', '出力'],
     ['詳細'],
@@ -133,6 +139,43 @@ test('outline nests headings under the nearest shallower heading without empty l
 
 test('detail omits an unspecified Project description', async () => {
   setup('/projects/project-1', async () => Response.json({ ...project, description: '' }))
-  expect(await screen.findByRole('heading', { name: '課題1' })).toBeDefined()
+  expect(await screen.findByRole('combobox', { name: '課題を選択' })).toHaveProperty('value', project.id)
   expect(screen.queryByText(project.description)).toBeNull()
+})
+
+test('sidebar switches Projects and follows browser history', async () => {
+  const { router } = setup('/projects/project-1/ex1-2')
+  const sidebar = within(await screen.findByRole('complementary', { name: '課題ナビゲーションと提出' }))
+  const select = sidebar.getByRole('combobox', { name: '課題を選択' })
+  await screen.findByRole('option', { name: '課題2' })
+  expect(within(select).getAllByRole('option').map(option => option.textContent)).toEqual(['課題1', '課題2'])
+  expect(screen.queryByRole('link', { name: 'Problem List' })).toBeNull()
+  fireEvent.change(select, { target: { value: 'project-2' } })
+  expect(await screen.findByRole('heading', { level: 1, name: '課題2-1' })).toBeDefined()
+  expect(router.state.location.pathname).toBe('/projects/project-2')
+  expect(screen.getByRole('combobox', { name: '課題を選択' })).toHaveProperty('value', 'project-2')
+  expect(screen.getByText('連結リスト')).toBeDefined()
+  await act(async () => { await router.navigate(-1) })
+  expect(await screen.findByRole('heading', { level: 1, name: '発展課題' })).toBeDefined()
+  expect(screen.getByRole('combobox', { name: '課題を選択' })).toHaveProperty('value', project.id)
+})
+
+test('Project list failure shows an error without rendering detail', async () => {
+  setup('/projects/project-1', async () => Response.json(project), async () =>
+    Response.json({ message: 'Unavailable' }, { status: 500 }))
+  expect((await screen.findByRole('alert')).textContent).toBe('課題を取得できませんでした。')
+  expect(screen.queryByRole('region', { name: '課題本文' })).toBeNull()
+  expect(screen.queryByRole('button', { name: /再読み込み/ })).toBeNull()
+})
+
+test.each(['list', 'detail'])('waits for the %s before rendering detail', async (pending) => {
+  let resolve!: (response: Response) => void
+  const response = new Promise<Response>(done => { resolve = done })
+  setup('/projects/project-1',
+    () => pending === 'detail' ? response : Promise.resolve(Response.json(project)),
+    () => pending === 'list' ? response : Promise.resolve(Response.json({ projects: [project] })))
+  expect(await screen.findByRole('status')).toHaveProperty('textContent', '読み込み中…')
+  expect(screen.queryByRole('region', { name: '課題本文' })).toBeNull()
+  await act(async () => { resolve(Response.json(pending === 'detail' ? project : { projects: [project] })) })
+  expect(await screen.findByRole('heading', { level: 1, name: '基本課題' })).toBeDefined()
 })

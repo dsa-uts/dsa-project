@@ -1,12 +1,12 @@
 import { createElement, useEffect, useRef } from 'react'
-import { Link, useLocation, useParams } from 'react-router-dom'
+import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
 import Markdown, { type Components } from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import type { Element, Root } from 'hast'
 import { Accordion } from 'radix-ui'
 import { ChevronRight } from 'lucide-react'
 import { $api } from '@/api/client'
-import { Button } from '@/components/ui/button'
+import type { components } from '@/api/schema'
 import { MarkdownContent } from '@/components/MarkdownContent'
 import { ValidationSubmitForm } from './ValidationSubmitForm'
 
@@ -126,17 +126,35 @@ function getChildList(parent: Element): Element {
 }
 
 export function ProblemDetailPage() {
-  const { projectId = '', workflowId } = useParams()
-  const location = useLocation()
-  const pageRef = useRef<HTMLElement>(null)
-  const contentRef = useRef<HTMLDivElement>(null)
-  const detail = $api.useQuery('get', '/api/projects/{project_id}', {
+  const { projectId = '' } = useParams()
+  const projectsQuery = $api.useQuery('get', '/api/projects', {}, { retry: false })
+  const detailQuery = $api.useQuery('get', '/api/projects/{project_id}', {
     params: { path: { project_id: projectId } },
   }, { retry: false })
-  const project = detail.data
+
+  if (projectsQuery.isPending || detailQuery.isPending) return <main className="p-8" role="status">読み込み中…</main>
+  if (projectsQuery.isError || detailQuery.isError) return <main className="space-y-4 p-8">
+    <p role="alert" className="text-destructive">{detailQuery.error?.code === 404 ? '課題が見つからないか、公開されていません。' : '課題を取得できませんでした。'}</p>
+    <Link to="/projects" className="block text-link underline">Problem Listへ戻る</Link>
+  </main>
+
+  const projects = projectsQuery.data.projects
+  const project = detailQuery.data
+  return <ProblemDetailContent projects={projects} project={project} />
+}
+
+function ProblemDetailContent({ projects, project }: {
+  projects: components['schemas']['Project'][]
+  project: components['schemas']['ProjectDetail']
+}) {
+  const { workflowId } = useParams()
+  const location = useLocation()
+  const navigate = useNavigate()
+  const pageRef = useRef<HTMLElement>(null)
+  const contentRef = useRef<HTMLDivElement>(null)
   const workflow = workflowId
-    ? project?.workflows.find((item) => item.id === workflowId)
-    : project?.workflows[0]
+    ? project.workflows.find((item) => item.id === workflowId)
+    : project.workflows[0]
   // The page supplies the title; omit the same leading Markdown title.
   const description = workflow?.description_markdown || ''
   //  .replace(/^# ([^\n]+)\r?\n?/, (title, name: string) => name.trim() === workflow.name ? '' : title) ?? ''
@@ -152,16 +170,16 @@ export function ProblemDetailPage() {
     }
   }, [location.pathname, location.hash, description])
 
-  if (detail.isPending) return <main className="p-8" role="status">読み込み中…</main>
-  if (detail.isError || !project) return <main className="space-y-4 p-8">
-    <p role="alert" className="text-destructive">{detail.error?.code === 404 ? '課題が見つからないか、公開されていません。' : '課題を取得できませんでした。'}</p>
-    <Button variant="outline" onClick={() => void detail.refetch()}>再読み込み</Button>
-    <Link to="/projects" className="block text-link underline">Problem Listへ戻る</Link>
-  </main>
-
   return <main ref={pageRef} className="mx-auto grid w-full max-w-screen-2xl flex-1 md:min-h-0 md:grid-cols-[18rem_minmax(0,1fr)] md:grid-rows-[minmax(0,1fr)] lg:grid-cols-[20rem_minmax(0,1fr)]">
     <aside tabIndex={0} aria-label="課題ナビゲーションと提出" className="min-w-0 border-b bg-muted/30 p-5 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring md:overflow-y-auto md:border-r md:border-b-0 md:p-6">
-      <div className="mb-4 space-y-1 break-words"><h2 className="text-xl font-bold">{project.name}</h2>{project.description && <p className="text-sm text-muted-foreground">{project.description}</p>}</div>
+      <div className="mb-4 space-y-2 break-words">
+        <select aria-label="課題を選択" value={project.id} onChange={event => void navigate(`/projects/${event.target.value}`)}
+          className="h-12 w-full min-w-0 rounded-md border bg-card px-3 text-xl font-bold focus-visible:ring-2 focus-visible:ring-ring">
+          {!projects.some(item => item.id === project.id) && <option value={project.id}>{project.name}</option>}
+          {projects.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}
+        </select>
+        {project.description && <p className="text-sm text-muted-foreground">{project.description}</p>}
+      </div>
       <nav aria-label="課題の目次" className="space-y-2">
         <Accordion.Root key={workflow?.id} type="single" collapsible defaultValue={workflow?.id}>
           {project.workflows.map((item) =>
@@ -205,16 +223,6 @@ export function ProblemDetailPage() {
       <ValidationSubmitForm key={project.id} projectId={project.id} requiredFiles={project.required_files} />
     </aside>
     <div ref={contentRef} role="region" aria-label="課題本文" tabIndex={0} className="min-w-0 space-y-5 bg-card p-5 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring sm:p-8 md:overflow-y-auto">
-      <nav aria-label="パンくずリスト">
-        <ol className="flex flex-wrap items-center gap-2 text-sm">
-          <li><Link to="/projects" className="text-link hover:underline">Problem List</Link></li>
-          <li aria-hidden="true">/</li>
-          <li><Link to={`/projects/${project.id}`} className="text-link hover:underline">{project.name}</Link></li>
-          {workflow && <>
-            <li aria-hidden="true">/</li><li aria-current="page">{workflow.name}</li>
-          </>}
-        </ol>
-      </nav>
       {workflow ?
         <article key={workflow.id} lang="ja" className="markdown-content min-w-0">
           <h1 className="!mb-6 !text-4xl sm:!text-5xl">{workflow.name}</h1>
