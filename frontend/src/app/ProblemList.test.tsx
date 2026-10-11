@@ -42,12 +42,15 @@ test('filters fetched Projects without navigation', async () => {
   expect(fetchList).toHaveBeenCalledTimes(1)
 })
 
-test('a failed list load can be retried and an empty list is explicit', async () => {
-  let fails = true
-  setup(async () => fails ? Response.json({ message: 'Unavailable' }, { status: 500 }) : Response.json({ projects: [] }))
+test('a failed list load shows an error without retry', async () => {
+  setup(async () => Response.json({ message: 'Unavailable' }, { status: 500 }))
   expect(await screen.findByRole('alert')).toHaveProperty('textContent', expect.stringContaining('課題一覧を取得できませんでした。'))
-  fails = false
-  fireEvent.click(screen.getByRole('button', { name: '再読み込み' }))
+  expect(screen.queryByRole('button', { name: '再読み込み' })).toBeNull()
+  expect(screen.queryByRole('tablist')).toBeNull()
+})
+
+test('an empty list is explicit', async () => {
+  setup(async () => Response.json({ projects: [] }))
   expect(await screen.findByText('表示できる課題はありません。')).toBeDefined()
   expect(screen.queryByRole('alert')).toBeNull()
 })

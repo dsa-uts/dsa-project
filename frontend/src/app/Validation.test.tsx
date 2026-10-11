@@ -2,7 +2,7 @@ import { afterEach, expect, test, vi } from 'vitest'
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { createMemoryRouter, RouterProvider } from 'react-router-dom'
-import { ValidationSubmitForm } from '@/features/projects/ValidationSubmitForm'
+import { ValidationSubmitPanel } from '@/features/projects/ValidationSubmitPanel'
 import { ValidationResultsPage } from '@/features/projects/ValidationResultsPage'
 import type { components } from '@/api/schema'
 
@@ -18,10 +18,11 @@ function setup(path: string, handle: (request: Request) => Promise<Response>) {
   vi.stubGlobal('fetch', fetchMock)
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   const router = createMemoryRouter([
-    { path: '/submit', element: <ValidationSubmitForm projectId="project-1" requiredFiles={['main.c']} /> },
+    { path: '/submit', element: <ValidationSubmitPanel projectId="project-1" projectName="課題1" requiredFiles={['main.c']} /> },
     { path: '/results', element: <ValidationResultsPage /> },
   ], { initialEntries: [path] })
   render(<QueryClientProvider client={client}><RouterProvider router={router} /></QueryClientProvider>)
+  if (path === '/submit') fireEvent.click(screen.getByRole('button', { name: '課題を提出' }))
   return { router, fetchMock, client }
 }
 
@@ -78,14 +79,18 @@ test('filters and bidirectional cursors live in the URL, including browser Back'
   fireEvent.click(screen.getByRole('button', { name: 'Prev' }))
   await waitFor(() => expect(queries.at(-1)?.get('prev')).toBe(row.id))
   expect(queries.at(-1)?.has('next')).toBe(false)
-  fireEvent.change(screen.getByLabelText('全体結果'), { target: { value: 'incomplete' } })
+  fireEvent.keyDown(screen.getByLabelText('全体結果'), { key: 'ArrowDown' })
+  fireEvent.click(await screen.findByRole('option', { name: '未完了' }))
   await waitFor(() => expect(queries.at(-1)?.get('state')).toBe('incomplete'))
   expect(router.state.location.search).toBe('?project_id=project-1&state=incomplete')
   fireEvent.click(within(screen.getByRole('navigation', { name: '結果の課題絞り込み' })).getByRole('link', { name: '課題2' }))
   await waitFor(() => expect(queries.at(-1)?.get('project_id')).toBe('project-2'))
   await act(async () => router.navigate(-1))
   expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('課題1')
-  expect(screen.getByLabelText('全体結果')).toHaveProperty('value', 'incomplete')
+  expect(screen.getByLabelText('全体結果')).toHaveProperty('textContent', '未完了')
+  fireEvent.keyDown(screen.getByLabelText('全体結果'), { key: 'ArrowDown' })
+  fireEvent.click(await screen.findByRole('option', { name: 'すべて' }))
+  await waitFor(() => expect(router.state.location.search).toBe('?project_id=project-1'))
 })
 
 test('empty cursor pages return to the first page with the same filter', async () => {
