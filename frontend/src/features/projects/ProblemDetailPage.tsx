@@ -12,7 +12,7 @@ import { ValidationSubmitForm } from './ValidationSubmitForm'
 
 const heading: Components['h2'] = ({ children, node }) =>
   createElement(
-    node?.tagName === 'h1' ? 'h2' : node?.tagName ?? 'h2', // type
+    `h${Math.min(Number(node?.tagName[1] ?? 1) + 1, 6)}`, // type
     { // props
       id: `section-${node?.position?.start.offset}`,
       className: 'scroll-mt-6',
@@ -138,7 +138,8 @@ export function ProblemDetailPage() {
     ? project?.workflows.find((item) => item.id === workflowId)
     : project?.workflows[0]
   // The page supplies the title; omit the same leading Markdown title.
-  const description = workflow?.description_markdown.replace(/^# ([^\n]+)\r?\n?/, (title, name: string) => name.trim() === workflow.name ? '' : title) ?? ''
+  const description = workflow?.description_markdown || ''
+  //  .replace(/^# ([^\n]+)\r?\n?/, (title, name: string) => name.trim() === workflow.name ? '' : title) ?? ''
 
   useEffect(() => {
     if (location.hash) {

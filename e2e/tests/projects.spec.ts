@@ -65,7 +65,7 @@ test('Dashboard lists actual Projects and filters them without navigation', asyn
   await page.goto(`/projects/${linkedListProject.id}/ex2-1`)
   const examples = outline.getByRole('listitem').filter({ has: page.getByRole('link', { name: '具体例', exact: true }) }).last()
   await expect(examples.getByRole('list').getByRole('link')).toHaveText(['入力1', '出力1', '入力2', '出力2'])
-  await expect(outline.getByRole('list').first().locator(':scope > li > ul > li > a')).toHaveText(['テストファイル test_linked_list.c', '制約', '出力', '具体例', '提出方法'])
+  await expect(outline.getByRole('list').first().locator(':scope > li > ul > li > a')).toHaveText(['test_linked_list.c', '制約', '出力', '具体例'])
   await outline.screenshot({ path: 'test-results/problem-outline.png' })
   const inputFormat = page.locator('article blockquote').first()
   await expect(inputFormat.locator('.katex')).toHaveCount(5)
