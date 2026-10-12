@@ -1,6 +1,121 @@
 import { randomUUID } from 'node:crypto'
+import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { expect, test } from '@playwright/test'
 import type { components } from '../../frontend/src/api/schema.js'
+
+test('drop folders into the submission tree and persist files at the pointed directory', async ({ page }) => {
+  const temporary = await mkdtemp(join(tmpdir(), 'dsa-submission-'))
+  try {
+    await mkdir(join(temporary, 'src', 'lib'), { recursive: true })
+    await writeFile(join(temporary, 'src', 'main.c'), 'a'.repeat(2400))
+    await writeFile(join(temporary, 'src', 'lib', 'util.h'), 'header')
+    await writeFile(join(temporary, 'extra.c'), 'extra')
+    await page.goto('/login')
+    await page.getByLabel('User ID', { exact: true }).fill('admin')
+    await page.getByLabel('Password', { exact: true }).fill('admin')
+    await page.getByRole('button', { name: 'Log in' }).click()
+    await expect(page.getByRole('link', { name: 'Dashboard' })).toBeVisible()
+    const imported = await page.request.post('/api/admin/resource-imports', { data: { resource_id: 'ex1', version: 'v1.0.0' } })
+    expect(imported.status(), await imported.text()).toBe(200)
+    const { project_id } = await imported.json()
+    await page.goto(`/projects/${project_id}`)
+    await page.getByRole('button', { name: '課題を提出', exact: true }).click()
+    const chooser = page.waitForEvent('filechooser')
+    await page.getByRole('button', { name: '提出ファイルを追加' }).click()
+    await (await chooser).setFiles({ name: 'root.txt', mimeType: 'text/plain', buffer: Buffer.from('root') })
+    await expect(page.getByRole('treeitem', { name: 'root.txt', exact: true })).toBeVisible()
+
+    const session = await page.context().newCDPSession(page)
+    const drop = async (path: string, target: ReturnType<typeof page.getByRole>) => {
+      const bounds = await target.boundingBox()
+      expect(bounds).not.toBeNull()
+      const x = bounds!.x + bounds!.width / 2
+      const y = bounds!.y + bounds!.height / 2
+      const data = { items: [], files: [path], dragOperationsMask: 1 }
+      await session.send('Input.dispatchDragEvent', { type: 'dragEnter', x, y, data })
+      await session.send('Input.dispatchDragEvent', { type: 'dragOver', x, y, data })
+      await expect(target).toHaveClass(/(?:^|\s)bg-accent(?:\s|$)/)
+      if (await target.getAttribute('aria-expanded') === 'false') {
+        await expect(target).toHaveAttribute('aria-expanded', 'true')
+      }
+      const blank = await page.getByRole('button', { name: '提出ファイルを追加' }).boundingBox()
+      // CDP first enters the new element; a second event delivers dragover there.
+      await session.send('Input.dispatchDragEvent', { type: 'dragOver', x: blank!.x + 3, y: blank!.y + 3, data })
+      await session.send('Input.dispatchDragEvent', { type: 'dragOver', x: blank!.x + 3, y: blank!.y + 3, data })
+      await expect(target).not.toHaveClass(/(?:^|\s)bg-accent(?:\s|$)/)
+      await session.send('Input.dispatchDragEvent', { type: 'dragOver', x, y, data })
+      await session.send('Input.dispatchDragEvent', { type: 'dragOver', x, y, data })
+      await expect(target).toHaveClass(/(?:^|\s)bg-accent(?:\s|$)/)
+      await session.send('Input.dispatchDragEvent', { type: 'drop', x, y, data })
+      await expect(page.getByRole('dialog').getByRole('status')).toBeEmpty()
+    }
+    await drop(join(temporary, 'src'), page.getByRole('treeitem', { name: 'root.txt', exact: true }))
+    await page.getByRole('treeitem', { name: 'src', exact: true }).click()
+    await page.getByRole('treeitem', { name: 'lib', exact: true }).click()
+    await expect(page.getByRole('treeitem', { name: 'main.c', exact: true })).toContainText('2.4 KB')
+    await expect(page.getByRole('button', { name: 'src/lib/util.h を削除', exact: true })).toBeVisible()
+    const src = page.getByRole('treeitem', { name: 'src', exact: true })
+    await src.focus()
+    await page.keyboard.press('ArrowLeft')
+    await expect(src).toHaveAttribute('aria-expanded', 'false')
+    await drop(join(temporary, 'extra.c'), src)
+    await expect(src).toHaveAttribute('aria-expanded', 'true')
+    await page.getByRole('button', { name: 'src/extra.c を削除', exact: true }).click()
+    await drop(join(temporary, 'extra.c'), page.getByRole('treeitem', { name: 'main.c', exact: true }))
+    await expect(page.getByRole('button', { name: 'src/extra.c を削除', exact: true })).toBeVisible()
+    const moveBesideFile = async (name: string, targetName: string, edge: 'top' | 'bottom', directory: string) => {
+      const source = await page.getByRole('treeitem', { name, exact: true }).boundingBox()
+      const target = await page.getByRole('treeitem', { name: targetName, exact: true }).boundingBox()
+      const x = target!.x + target!.width / 2
+      const y = target!.y + (edge === 'top' ? 2 : target!.height - 2)
+      await page.mouse.move(source!.x + source!.width / 2, source!.y + source!.height / 2)
+      await page.mouse.down()
+      await page.mouse.move(x, y, { steps: 5 })
+      await page.mouse.move(x, y)
+      await expect(page.getByTestId('submission-drop-line')).toBeVisible()
+      await page.mouse.up()
+      const path = directory ? `${directory}/${name}` : name
+      await expect(page.getByRole('button', { name: `${path} を削除`, exact: true })).toBeVisible()
+      await expect(page.getByRole('dialog').getByRole('status')).toBeEmpty()
+      await expect(page.getByTestId('submission-drop-line')).not.toBeVisible()
+    }
+    await moveBesideFile('extra.c', 'root.txt', 'top', '')
+    await moveBesideFile('extra.c', 'main.c', 'bottom', 'src')
+    await moveBesideFile('extra.c', 'main.c', 'top', 'src')
+    await page.getByRole('treeitem', { name: 'main.c', exact: true }).dragTo(page.getByRole('treeitem', { name: 'lib', exact: true }))
+    await expect(page.getByRole('button', { name: 'src/lib/main.c を削除', exact: true })).toBeVisible()
+    await moveBesideFile('main.c', 'extra.c', 'top', 'src')
+    await page.getByRole('treeitem', { name: 'root.txt', exact: true }).dragTo(src)
+    await expect(page.getByRole('button', { name: 'src/root.txt を削除', exact: true })).toBeVisible()
+    const blank = page.getByRole('button', { name: '提出ファイルを追加' })
+    await page.getByRole('treeitem', { name: 'lib', exact: true }).dragTo(blank, { targetPosition: { x: 3, y: 3 } })
+    await page.getByRole('treeitem', { name: 'lib', exact: true }).click()
+    await expect(page.getByRole('button', { name: 'lib/util.h を削除', exact: true })).toBeVisible()
+    await page.getByRole('treeitem', { name: 'extra.c', exact: true }).dragTo(blank, { targetPosition: { x: 3, y: 3 } })
+    await expect(page.getByRole('button', { name: 'extra.c を削除', exact: true })).toBeVisible()
+    await page.getByRole('button', { name: 'lib を削除', exact: true }).click()
+    await expect(page.getByRole('treeitem', { name: 'lib', exact: true })).toHaveCount(0)
+    await page.setViewportSize({ width: 390, height: 844 })
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
+    await page.screenshot({ path: 'test-results/submission-tree-mobile.png', fullPage: true })
+    const creation = page.waitForResponse(response => response.request().method() === 'POST' && response.url().endsWith(`/api/projects/${project_id}/validation`))
+    await page.getByRole('button', { name: '提出する', exact: true }).click()
+    const response = await creation
+    expect(response.status(), await response.text()).toBe(201)
+    const created: components['schemas']['CreatedRequest'] = await response.json()
+    const files = await page.request.get(`/api/requests/${created.id}/validation/files`)
+    expect(files.status()).toBe(200)
+    const form = await new Response(new Uint8Array(await files.body()), { headers: { 'Content-Type': files.headers()['content-type'] } }).formData()
+    const metadata: components['schemas']['ValidationFilesMetadata'] = JSON.parse(String(form.get('metadata')))
+    expect(metadata.submission_files.map(file => file.path).sort()).toEqual(['extra.c', 'src/main.c', 'src/root.txt'])
+    const extra = metadata.submission_files.find(file => file.path === 'extra.c')!
+    expect(await (form.get(extra.part) as Blob).text()).toBe('extra')
+  } finally {
+    await rm(temporary, { recursive: true, force: true })
+  }
+})
 
 test('submit files through the form, navigate to Results, and filter persisted Requests', async ({ page }) => {
   test.setTimeout(120_000)
@@ -19,11 +134,11 @@ test('submit files through the form, navigate to Results, and filter persisted R
     { name: 'main.c', mimeType: 'text/plain', buffer: Buffer.from(source) },
     { name: 'empty.txt', mimeType: 'text/plain', buffer: Buffer.alloc(0) },
   ])
-  await expect(page.getByRole('list', { name: '選択したファイル' })).toContainText('empty.txt')
+  await expect(page.getByRole('tree', { name: '選択したファイル' })).toContainText('empty.txt')
   await page.keyboard.press('Escape')
   await expect(page.getByRole('dialog')).toBeHidden()
   await page.getByRole('button', { name: '課題を提出', exact: true }).click()
-  await expect(page.getByRole('list', { name: '選択したファイル' })).toContainText('empty.txt')
+  await expect(page.getByRole('tree', { name: '選択したファイル' })).toContainText('empty.txt')
   const creation = page.waitForResponse(response => response.request().method() === 'POST' && response.url().endsWith(`/api/projects/${project_id}/validation`))
   await page.getByRole('button', { name: '提出する', exact: true }).click()
   const response = await creation

@@ -3,6 +3,25 @@ import { unzipSync } from 'fflate'
 export type SubmissionFile = { path: string; content: Blob }
 const maxBytes = 20_000_000
 
+function checkPath(path: string, paths: string[]) {
+  const conflict = paths.find(other => other === path || other.startsWith(`${path}/`) || path.startsWith(`${other}/`))
+  if (conflict) throw new Error(`パスが重複または衝突しています: ${path} / ${conflict}`)
+}
+
+export function moveFiles(files: SubmissionFile[], source: string, directory: string) {
+  if (directory === source || directory.startsWith(`${source}/`)) throw new Error('フォルダを自身の配下には移動できません。')
+  const name = source.slice(source.lastIndexOf('/') + 1)
+  const destination = directory ? `${directory}/${name}` : name
+  const paths: string[] = []
+  return files.map(file => {
+    const path = file.path === source || file.path.startsWith(`${source}/`)
+      ? destination + file.path.slice(source.length) : file.path
+    checkPath(path, paths)
+    paths.push(path)
+    return { path, content: file.content }
+  })
+}
+
 function normalizePath(name: string) {
   const slashed = name.replaceAll('\\', '/')
   if (slashed.includes('\0') || slashed[1] === ':') throw new Error(`無効なパスです: ${name}`)
@@ -15,34 +34,37 @@ function normalizePath(name: string) {
   return parts.join('/')
 }
 
-// Validate ZIP entries before extraction too: unzip's object result cannot retain duplicate names.
-export async function prepareFiles(selected: File[], existing: SubmissionFile[] = []): Promise<SubmissionFile[]> {
+export async function prepareFiles(selected: SubmissionFile[], existing: SubmissionFile[] = [], directory = ''): Promise<SubmissionFile[]> {
   const files = [...existing]
   const paths = existing.map(file => file.path)
   let bytes = existing.reduce((sum, file) => sum + file.content.size, 0)
   const reserve = (name: string, size: number) => {
     const path = normalizePath(name)
-    const conflict = paths.find(other => other === path || other.startsWith(`${path}/`) || path.startsWith(`${other}/`))
-    if (conflict) throw new Error(`パスが重複または衝突しています: ${path} / ${conflict}`)
+    checkPath(path, paths)
     paths.push(path)
     bytes += size
     if (paths.length > 50 || bytes > maxBytes) throw new Error('提出できるのは50ファイル、合計20 MBまでです。')
     return path
   }
   for (const file of selected) {
-    if (!/\.zip$/i.test(file.name)) {
-      files.push({ path: reserve(file.webkitRelativePath || file.name, file.size), content: file })
+    const relativePath = normalizePath(file.path)
+    const path = directory ? `${directory}/${relativePath}` : relativePath
+    if (!/\.zip$/i.test(path)) {
+      files.push({ path: reserve(path, file.content.size), content: file.content })
       continue
     }
-    const entries = unzipSync(new Uint8Array(await file.arrayBuffer()), {
+    const parent = path.slice(0, path.lastIndexOf('/') + 1)
+    const entryPath = (name: string) => parent + normalizePath(name)
+    const entries = unzipSync(new Uint8Array(await file.content.arrayBuffer()), {
       filter(entry) {
         if (entry.name.replaceAll('\\', '/').endsWith('/')) return false
-        reserve(entry.name, entry.originalSize)
+        // 同名エントリーが展開結果で上書きされる前に、重複を検出する。
+        reserve(entryPath(entry.name), entry.originalSize)
         return true
       },
     })
     for (const [name, content] of Object.entries(entries)) {
-      files.push({ path: normalizePath(name), content: new Blob([new Uint8Array(content)]) })
+      files.push({ path: entryPath(name), content: new Blob([new Uint8Array(content)]) })
     }
   }
   if (!files.length) throw new Error('提出するファイルを選択してください。')
