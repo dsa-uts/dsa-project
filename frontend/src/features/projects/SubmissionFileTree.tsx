@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useRef, type ChangeEvent, type KeyboardEvent } from 'react'
-import { dragAndDropFeature, hotkeysCoreFeature, syncDataLoaderFeature, type ItemInstance } from '@headless-tree/core'
+import { useEffect, useMemo, useRef, useState, type ChangeEvent, type DragEvent, type KeyboardEvent } from 'react'
+import { hotkeysCoreFeature, syncDataLoaderFeature, type ItemInstance } from '@headless-tree/core'
 import { useTree } from '@headless-tree/react'
 import { ChevronRight, File, FileCode, FileText, Folder, FolderOpen, Trash2, Upload } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -13,9 +13,11 @@ function submissionPath(item: ItemInstance<FileNode>) {
   return item.getId().slice(1)
 }
 
-function destinationDirectory(item: ItemInstance<FileNode>) {
-  // ファイル行へのドロップは、そのファイルの親フォルダへの追加として扱う。
-  return submissionPath(item.isFolder() ? item : item.getParent()!)
+function dropDirectory(event: DragEvent<HTMLDivElement>) {
+  const target = event.target instanceof Element
+    ? event.target.closest('[data-drop-folder]') : null
+  return target && event.currentTarget.contains(target)
+    ? target.getAttribute('data-drop-folder') ?? '' : ''
 }
 
 function fileIcon(node: FileNode, expanded: boolean) {
@@ -40,34 +42,19 @@ export function SubmissionFileTree({ files, busy, onAdd, onMove, onRemove }: {
   onRemove: (path: string) => void
 }) {
   const input = useRef<HTMLInputElement>(null)
-  const addButton = useRef<HTMLButtonElement>(null)
+  const rootDropArea = useRef<HTMLButtonElement>(null)
+  const draggedPath = useRef<string | null>(null)
+  const [dropTarget, setDropTarget] = useState<string | null>(null)
   const nodes = useMemo(() => buildFileTree(files), [files])
-  const acceptsFiles = (data: DataTransfer) => !busy && Array.from(data.types).includes('Files')
   const tree = useTree<FileNode>({
-    rootItemId: 'root',
-    initialState: { expandedItems: ['/'] },
+    rootItemId: '/',
     getItemName: item => item.getItemData().name,
     isItemFolder: item => item.getItemData().size === undefined,
     dataLoader: {
       getItem: path => nodes.get(path)!,
       getChildren: path => nodes.get(path)?.children ?? [],
     },
-    canReorder: false,
-    indent: 16,
-    canDrag: items => !busy && items.every(item => item.getId() !== '/'),
-    canDrop: (_, target) => !busy && target.item.getId() !== 'root' && target.item.isFolder(),
-    onDrop: (items, target) => onMove(submissionPath(items[0]), destinationDirectory(target.item)),
-    canDragForeignDragObjectOver: (data, target) => acceptsFiles(data) && target.item.getId() !== 'root',
-    canDropForeignDragObject: (data, target) => acceptsFiles(data) && target.item.getId() !== 'root',
-    onDropForeignDragObject: (data, target) => onAdd(
-      () => droppedFiles(data),
-      destinationDirectory(target.item)
-    ),
-    features: [
-      syncDataLoaderFeature,
-      hotkeysCoreFeature,
-      dragAndDropFeature,
-    ],
+    features: [syncDataLoaderFeature, hotkeysCoreFeature],
   })
 
   // ファイル更新後の構造をキャッシュへ反映し、削除済みの行へのフォーカスを解除する。
@@ -77,23 +64,63 @@ export function SubmissionFileTree({ files, busy, onAdd, onMove, onRemove }: {
       ...config, state: {
         ...state,
         focusedItem: state.focusedItem && nodes.has(state.focusedItem) ? state.focusedItem : null,
+        expandedItems: state.expandedItems.filter(path => nodes.has(path)),
       }
     }))
     tree.rebuildTree()
   }, [nodes, tree])
 
-  const target = tree.getDragTarget()
-  const dropDirectory = !busy && target ? destinationDirectory(target.item) : null
+  const activeDropTarget = !busy && nodes.has(`/${dropTarget}`) ? dropTarget : null
+
+  // 閉じたフォルダにも、少し待てば配下を確認しながらドロップできる。
+  useEffect(() => {
+    if (!activeDropTarget) return
+    const timeout = window.setTimeout(() => {
+      const folder = tree.getItemInstance(`/${activeDropTarget}`)
+      if (!folder.isExpanded()) folder.expand()
+    }, 600)
+    return () => window.clearTimeout(timeout)
+  }, [activeDropTarget, tree])
+
+  const canDrop = (data: DataTransfer, directory: string) => {
+    if (busy) return false
+    const source = draggedPath.current
+    if (source !== null) {
+      return nodes.has(`/${source}`) && directory !== source && !directory.startsWith(`${source}/`)
+    }
+    return Array.from(data.types).includes('Files')
+  }
+
+  const handleDragOver = (event: DragEvent<HTMLDivElement>) => {
+    event.preventDefault()
+    const directory = dropDirectory(event)
+    const allowed = canDrop(event.dataTransfer, directory)
+    event.dataTransfer.dropEffect = allowed ? (draggedPath.current === null ? 'copy' : 'move') : 'none'
+    setDropTarget(allowed ? directory : null)
+  }
+
+  const handleDrop = (event: DragEvent<HTMLDivElement>) => {
+    event.preventDefault()
+    const directory = dropDirectory(event)
+    const allowed = canDrop(event.dataTransfer, directory)
+    const source = draggedPath.current
+    draggedPath.current = null
+    setDropTarget(null)
+    if (!allowed) return
+    if (source !== null) onMove(source, directory)
+    else onAdd(() => droppedFiles(event.dataTransfer), directory)
+  }
+
   const remove = (path: string) => {
     onRemove(path)
-    addButton.current?.focus()
+    rootDropArea.current?.focus()
   }
 
   const handleSelect = (event: ChangeEvent<HTMLInputElement>) => {
     const selected = selectedFiles(event.target.files ?? [])
     // 同じファイルを削除後に選び直せるよう、入力値をリセットする。
     event.target.value = ''
-    if (selected.length) onAdd(async () => selected, '')
+    if (!busy && selected.length) onAdd(async () => selected, '')
   }
   const handleItemKeyDown = (event: KeyboardEvent<HTMLDivElement>, item: ItemInstance<FileNode>) => {
     if (event.key === 'Enter' || event.key === ' ') {
@@ -101,7 +128,7 @@ export function SubmissionFileTree({ files, busy, onAdd, onMove, onRemove }: {
       if (item.isFolder() && item.isExpanded()) item.collapse()
       else if (item.isFolder()) item.expand()
     }
-    if (event.key === 'Delete' && !busy && item.getId() !== '/') {
+    if (event.key === 'Delete' && !busy) {
       event.preventDefault()
       remove(submissionPath(item))
     }
@@ -110,35 +137,55 @@ export function SubmissionFileTree({ files, busy, onAdd, onMove, onRemove }: {
   return <div>
     <input ref={input} type="file" multiple className="sr-only" tabIndex={-1} aria-label="提出ファイル" disabled={busy}
       onChange={handleSelect} />
-    <Button ref={addButton} type="button" variant="outline" aria-label="提出ファイルを追加" disabled={busy}
-      onClick={() => input.current?.click()}>
-      <Upload aria-hidden="true" />ファイルを追加
-    </Button>
-    <p className="my-2 text-xs text-muted-foreground">ファイル・フォルダ・ZIPを置きたいフォルダへドロップ</p>
-    <div aria-busy={busy} className="rounded-md border p-2">
+    <p className="mb-2 text-xs text-muted-foreground">フォルダに重ねるとその中へ、下の余白に重ねるとルートに配置</p>
+    <div aria-busy={busy} className="rounded-md border p-2"
+      onDragOver={handleDragOver} onDrop={handleDrop}
+      onDragLeave={event => {
+        if (!(event.relatedTarget instanceof Node) || !event.currentTarget.contains(event.relatedTarget)) {
+          setDropTarget(null)
+        }
+      }}
+      onDragEnd={() => { draggedPath.current = null; setDropTarget(null) }}>
       <div {...tree.getContainerProps('選択したファイル')}>
         {tree.getItems().filter(item => nodes.has(item.getId())).map(item => {
           const path = submissionPath(item)
           const node = nodes.get(item.getId())!
           const folder = node.size === undefined
-          const root = item.getId() === '/'
           const Icon = fileIcon(node, item.isExpanded())
-          return <div {...item.getProps()} key={path} draggable={!busy && !root} aria-label={node.name}
-            className={cn('flex min-h-11 items-center gap-2 rounded-sm pr-1 text-sm outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring', folder && dropDirectory === path && 'bg-accent')}
+          const directory = folder ? path : submissionPath(item.getParent()!)
+          return <div {...item.getProps()} key={path} draggable={!busy} aria-label={node.name}
+            data-drop-folder={directory}
+            onDragStart={event => {
+              if (busy) { event.preventDefault(); return }
+              draggedPath.current = path
+              event.dataTransfer.effectAllowed = 'move'
+              event.dataTransfer.setData('text/plain', path)
+            }}
+            className={cn('flex min-h-11 items-center gap-2 rounded-sm pr-1 text-sm outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring', folder && activeDropTarget === path && 'bg-accent ring-2 ring-inset ring-ring')}
             style={{ paddingLeft: item.getItemMeta().level * 16 + 4 }}
             onKeyDown={event => handleItemKeyDown(event, item)}>
             <ChevronRight aria-hidden="true" className={cn('size-3.5 shrink-0 text-muted-foreground', !folder && 'invisible', item.isExpanded() && 'rotate-90')} />
             <Icon aria-hidden="true" className={cn('size-4 shrink-0', folder ? 'text-amber-500' : 'text-blue-500')} />
             <span title={path} className="min-w-0 flex-1 truncate">{node.name}</span>
             {!folder && <span className="shrink-0 text-xs tabular-nums text-muted-foreground">{fileSize(node.size!)}</span>}
-            {!root && <Button type="button" variant="ghost" size="icon" disabled={busy} aria-label={`${path} を削除`}
+            <Button type="button" variant="ghost" size="icon" disabled={busy} aria-label={`${path} を削除`}
               className="size-9" onKeyDown={event => event.stopPropagation()}
               onClick={event => { event.stopPropagation(); remove(path) }}>
               <Trash2 aria-hidden="true" className="size-4" />
-            </Button>}
+            </Button>
           </div>
         })}
       </div>
+      <button ref={rootDropArea} type="button" data-drop-folder="" disabled={busy}
+        aria-label="ルートに提出ファイルを追加"
+        onClick={() => input.current?.click()}
+        className={cn('mt-2 flex min-h-40 w-full flex-col items-center justify-center gap-2 rounded-sm px-3 py-6 text-center text-sm outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-wait disabled:opacity-50',
+          activeDropTarget === '' && 'bg-accent ring-2 ring-inset ring-ring')}>
+        <Upload aria-hidden="true" className="size-6 text-muted-foreground" />
+        <span>{activeDropTarget === '' ? 'ルートに配置' : 'ここにドロップしてルートに配置'}</span>
+        <span className="text-xs text-muted-foreground">ファイル・フォルダ・ZIP</span>
+        <span className="text-xs text-muted-foreground">クリックしてファイルを選択</span>
+      </button>
       <div role="status" className="text-center text-xs text-muted-foreground">
         {busy ? '読み込み・送信中…' : ''}
       </div>

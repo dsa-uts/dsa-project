@@ -10,8 +10,7 @@ export type FileNode = {
 // 正規化・衝突検証済みの提出パスから、フォルダ優先・名前順の表示用ツリーを作る。
 export function buildFileTree(files: SubmissionFile[]) {
   const nodes = new Map<string, FileNode>([
-    ['root', { name: '', children: ['/'] }],
-    ['/', { name: './', children: [] }],
+    ['/', { name: '', children: [] }],
   ])
 
   for (const file of files) {

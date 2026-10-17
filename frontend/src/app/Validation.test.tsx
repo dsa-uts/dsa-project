@@ -56,7 +56,7 @@ test('submission blocks duplicate events, retains files on 413, and refreshes ca
 
 test('network failure keeps the files and does not automatically repeat a POST', async () => {
   const { fetchMock } = setup('/submit', async () => { throw new TypeError('Network error') })
-  fireEvent.drop(screen.getByRole('treeitem', { name: './' }), { dataTransfer: { types: ['Files'], files: [new File(['code'], 'main.c')] } })
+  fireEvent.drop(screen.getByRole('button', { name: 'ルートに提出ファイルを追加' }), { dataTransfer: { types: ['Files'], files: [new File(['code'], 'main.c')] } })
   await screen.findByRole('button', { name: 'main.c を削除' })
   fireEvent.submit(screen.getByRole('form'))
   expect((await screen.findByRole('alert')).textContent).toContain('Resultsで履歴を確認')
@@ -67,13 +67,12 @@ test('network failure keeps the files and does not automatically repeat a POST',
 test('submission tree shows sizes, adds to folder and file parents, and deletes only the chosen subtree', async () => {
   setup('/submit', async () => Response.json({ requests: [] }))
   const picker = screen.getByLabelText('提出ファイル')
-  const root = screen.getByRole('treeitem', { name: './' })
-  expect(root.getAttribute('draggable')).toBe('false')
-  expect(within(root).queryByRole('button')).toBeNull()
+  const root = screen.getByRole('button', { name: 'ルートに提出ファイルを追加' })
+  expect(screen.queryByRole('treeitem', { name: './' })).toBeNull()
   fireEvent.keyDown(root, { key: 'Delete' })
-  expect(screen.getByRole('treeitem', { name: './' })).toBe(root)
+  expect(screen.getByRole('button', { name: 'ルートに提出ファイルを追加' })).toBe(root)
   const click = vi.spyOn(picker, 'click')
-  fireEvent.click(screen.getByRole('button', { name: '提出ファイルを追加' }))
+  fireEvent.click(screen.getByRole('button', { name: 'ルートに提出ファイルを追加' }))
   expect(click).toHaveBeenCalledOnce()
   const zip = zipSync({ 'src/main.c': strToU8('a'.repeat(2400)), 'src2/keep.c': strToU8('keep') })
   fireEvent.change(picker, { target: { files: [new File([zip], 'source.zip')] } })
@@ -101,7 +100,7 @@ test('submission tree shows sizes, adds to folder and file parents, and deletes 
   expect(screen.getByRole('button', { name: 'src2/keep.c を削除' })).toBeDefined()
   expect(click).toHaveBeenCalledOnce()
   fireEvent.click(screen.getByRole('button', { name: 'src2/keep.c を削除' }))
-  expect(within(tree).getAllByRole('treeitem')).toEqual([root])
+  expect(within(tree).queryAllByRole('treeitem')).toEqual([])
   expect(screen.getByRole('button', { name: '提出する' })).toHaveProperty('disabled', true)
 })
 
