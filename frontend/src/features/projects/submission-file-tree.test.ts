@@ -9,8 +9,8 @@ test('builds parent folders once and orders folders before files with numeric na
     { path: 'src/lib/util.h', content: new Blob(['header']) },
   ])
 
-  expect(nodes.size).toBe(7)
-  expect(nodes.get('/')).toEqual({ name: '', children: ['/src', '/README.md'] })
+  expect(nodes.size).toBe(8)
+  expect(nodes.get('/')).toEqual({ name: './', children: ['/src', '/README.md'] })
   expect(nodes.get('/src')).toEqual({
     name: 'src', children: ['/src/lib', '/src/file2.c', '/src/file10.c'],
   })
@@ -20,5 +20,8 @@ test('builds parent folders once and orders folders before files with numeric na
 })
 
 test('keeps only the root when no files are selected', () => {
-  expect([...buildFileTree([])]).toEqual([['/', { name: '', children: [] }]])
+  expect([...buildFileTree([])]).toEqual([
+    ['root', { name: '', children: ['/'] }],
+    ['/', { name: './', children: [] }],
+  ])
 })
