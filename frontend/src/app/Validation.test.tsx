@@ -5,6 +5,7 @@ import { createMemoryRouter, RouterProvider } from 'react-router-dom'
 import { ValidationSubmitPanel } from '@/features/projects/ValidationSubmitPanel'
 import { ValidationResultsPage } from '@/features/projects/ValidationResultsPage'
 import type { components } from '@/api/schema'
+import { zipSync, strToU8 } from 'fflate'
 
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); vi.restoreAllMocks(); vi.useRealTimers() })
 const row: components['schemas']['ValidationSummary'] = {
@@ -22,7 +23,7 @@ function setup(path: string, handle: (request: Request) => Promise<Response>) {
     { path: '/results', element: <ValidationResultsPage /> },
   ], { initialEntries: [path] })
   render(<QueryClientProvider client={client}><RouterProvider router={router} /></QueryClientProvider>)
-  if (path === '/submit') fireEvent.click(screen.getByRole('button', { name: '課題を提出' }))
+  if (path === '/submit') fireEvent.click(screen.getByRole('button', { name: 'サンプル提出' }))
   return { router, fetchMock, client }
 }
 
@@ -55,12 +56,77 @@ test('submission blocks duplicate events, retains files on 413, and refreshes ca
 
 test('network failure keeps the files and does not automatically repeat a POST', async () => {
   const { fetchMock } = setup('/submit', async () => { throw new TypeError('Network error') })
-  fireEvent.drop(screen.getByText('ファイル・ZIPをドロップ'), { dataTransfer: { files: [new File(['code'], 'main.c')] } })
+  fireEvent.drop(screen.getByRole('button', { name: 'ルートに提出ファイルを追加' }), { dataTransfer: { types: ['Files'], files: [new File(['code'], 'main.c')] } })
   await screen.findByRole('button', { name: 'main.c を削除' })
   fireEvent.submit(screen.getByRole('form'))
   expect((await screen.findByRole('alert')).textContent).toContain('Resultsで履歴を確認')
   expect(screen.getByRole('button', { name: 'main.c を削除' })).toBeDefined()
   expect(fetchMock).toHaveBeenCalledTimes(1)
+})
+
+test('submission tree shows sizes, adds to folder and file parents, and deletes only the chosen subtree', async () => {
+  setup('/submit', async () => Response.json({ requests: [] }))
+  const picker = screen.getByLabelText('提出ファイル')
+  const root = screen.getByRole('button', { name: 'ルートに提出ファイルを追加' })
+  expect(screen.queryByRole('treeitem', { name: './' })).toBeNull()
+  fireEvent.keyDown(root, { key: 'Delete' })
+  expect(screen.getByRole('button', { name: 'ルートに提出ファイルを追加' })).toBe(root)
+  const click = vi.spyOn(picker, 'click')
+  fireEvent.click(screen.getByRole('button', { name: 'ルートに提出ファイルを追加' }))
+  expect(click).toHaveBeenCalledOnce()
+  const zip = zipSync({ 'src/main.c': strToU8('a'.repeat(2400)), 'src2/keep.c': strToU8('keep') })
+  fireEvent.change(picker, { target: { files: [new File([zip], 'source.zip')] } })
+  const tree = await screen.findByRole('tree', { name: '選択したファイル' })
+  const folder = await within(tree).findByRole('treeitem', { name: 'src' })
+  fireEvent.click(folder)
+  fireEvent.click(within(tree).getByRole('treeitem', { name: 'src2' }))
+  const main = await within(tree).findByRole('treeitem', { name: 'main.c' })
+  expect(main.textContent).toContain('2.4 KB')
+  fireEvent.dragOver(main, { dataTransfer: { types: ['Files'] } })
+  expect(folder.classList.contains('bg-accent')).toBe(true)
+  fireEvent.dragLeave(main, { relatedTarget: document.body })
+  expect(screen.getByRole('status').textContent).toBe('')
+  fireEvent.drop(main, { dataTransfer: { types: ['Files'], files: [new File(['header'], 'util.h')] } })
+  await screen.findByRole('button', { name: 'src/util.h を削除' })
+  fireEvent.click(folder)
+  expect(folder.getAttribute('aria-expanded')).toBe('false')
+  fireEvent.dragOver(folder, { dataTransfer: { types: ['Files'] } })
+  await waitFor(() => expect(folder.getAttribute('aria-expanded')).toBe('true'))
+  fireEvent.drop(folder, { dataTransfer: { types: ['Files'], files: [new File(['extra'], 'extra.c')] } })
+  await screen.findByRole('button', { name: 'src/extra.c を削除' })
+  expect(folder.getAttribute('aria-expanded')).toBe('true')
+  fireEvent.click(screen.getByRole('button', { name: 'src を削除' }))
+  expect(screen.queryByRole('treeitem', { name: 'src' })).toBeNull()
+  expect(screen.getByRole('button', { name: 'src2/keep.c を削除' })).toBeDefined()
+  expect(click).toHaveBeenCalledOnce()
+  fireEvent.click(screen.getByRole('button', { name: 'src2/keep.c を削除' }))
+  expect(within(tree).queryAllByRole('treeitem')).toEqual([])
+  expect(screen.getByRole('button', { name: '提出する' })).toHaveProperty('disabled', true)
+})
+
+test('tree keyboard operations and special filenames retain the final multipart paths', async () => {
+  let uploaded: string[] = []
+  setup('/submit', async request => {
+    if (request.method === 'POST') {
+      const body = await request.formData()
+      const metadata = JSON.parse(await (body.get('metadata') as Blob).text())
+      uploaded = metadata.files.map((file: { path: string }) => file.path)
+      return Response.json({ message: 'test' }, { status: 422 })
+    }
+    return Response.json({ requests: [] })
+  })
+  const zip = zipSync({ 'src/main.c': strToU8('code'), constructor: strToU8('special') })
+  fireEvent.change(screen.getByLabelText('提出ファイル'), { target: { files: [new File([zip], 'source.zip')] } })
+  const folder = await screen.findByRole('treeitem', { name: 'src' })
+  fireEvent.click(folder)
+  fireEvent.keyDown(folder, { key: 'Enter' })
+  expect(folder.getAttribute('aria-expanded')).toBe('false')
+  fireEvent.keyDown(folder, { key: 'Enter' })
+  expect(folder.getAttribute('aria-expanded')).toBe('true')
+  fireEvent.drop(screen.getByRole('treeitem', { name: 'main.c' }), { dataTransfer: { types: ['Files'], files: [new File(['header'], 'util.h')] } })
+  await screen.findByRole('button', { name: 'src/util.h を削除' })
+  fireEvent.submit(screen.getByRole('form'))
+  await waitFor(() => expect(uploaded).toEqual(['src/main.c', 'constructor', 'src/util.h']))
 })
 
 test('filters and bidirectional cursors live in the URL, including browser Back', async () => {

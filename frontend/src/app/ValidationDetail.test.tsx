@@ -133,3 +133,30 @@ test('binary output remains identifiable and invalid multipart responses fail', 
   vi.stubGlobal('fetch', async () => { const form = new FormData(); form.set('metadata', JSON.stringify({ submission_files: [{ part: 'missing', path: 'a' }], presets: [] })); return new Response(form) })
   await expect(loadResultFiles('request-1', 'files', new AbortController().signal)).rejects.toThrow('ファイルの内容がありません')
 })
+
+test('text decoding preserves whitespace and rejects control characters', () => {
+  const text = 'こんにちは\tworld\r\n'
+  expect(decodeText(new TextEncoder().encode(text))).toBe(text)
+  expect(decodeText(new Uint8Array())).toBe('')
+  for (const byte of [0, 8, 11, 12, 14, 31, 127, 255]) {
+    expect(decodeText(new Uint8Array([byte]))).toBeNull()
+  }
+})
+
+test.each<{ kind: 'files' | 'artifacts'; metadata: unknown; message: string }>([
+  { kind: 'files', metadata: null, message: 'ファイル情報が不正です。' },
+  { kind: 'files', metadata: { submission_files: {}, presets: [] }, message: 'ファイル情報が不正です。' },
+  { kind: 'files', metadata: { submission_files: [{ part: 'file0', path: 1 }], presets: [] }, message: 'ファイル情報が不正です。' },
+  { kind: 'files', metadata: { submission_files: [], presets: [{ workflow_id: 1, files: [] }] }, message: 'プリセット情報が不正です。' },
+  { kind: 'artifacts', metadata: { files: null }, message: 'Artifact情報が不正です。' },
+  { kind: 'artifacts', metadata: { files: [null] }, message: 'Artifact情報が不正です。' },
+  { kind: 'artifacts', metadata: { files: [{ part: 'file0', path: 'a', workflow_id: 'basic', job_id: 'test', name: 'summary' }] }, message: 'Artifact情報が不正です。' },
+])('rejects malformed $kind metadata: $metadata', async ({ kind, metadata, message }) => {
+  vi.stubGlobal('fetch', async () => {
+    const form = new FormData()
+    form.set('metadata', JSON.stringify(metadata))
+    form.set('file0', new Blob(['content']), 'ignored')
+    return new Response(form)
+  })
+  await expect(loadResultFiles('request-1', kind, new AbortController().signal)).rejects.toThrow(message)
+})
