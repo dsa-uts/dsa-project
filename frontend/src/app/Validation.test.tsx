@@ -23,7 +23,7 @@ function setup(path: string, handle: (request: Request) => Promise<Response>) {
     { path: '/results', element: <ValidationResultsPage /> },
   ], { initialEntries: [path] })
   render(<QueryClientProvider client={client}><RouterProvider router={router} /></QueryClientProvider>)
-  if (path === '/submit') fireEvent.click(screen.getByRole('button', { name: '課題を提出' }))
+  if (path === '/submit') fireEvent.click(screen.getByRole('button', { name: 'サンプル提出' }))
   return { router, fetchMock, client }
 }
 

@@ -29,13 +29,13 @@ test('folder drops retain the outer folder, nested paths, and every readEntries 
   expect(await files[1].content.text()).toBe('code')
 })
 
-test('captures all drop entries before asynchronous reads, and rejects empty folders', async () => {
+test('captures all drop entries before asynchronous reads, and returns no files for empty folders', async () => {
   const data = transfer([directory('empty', []), file('main.c')])
   const capture = vi.spyOn(data.items[1], 'webkitGetAsEntry')
   const reading = droppedFiles(data)
   expect(capture).toHaveBeenCalledOnce()
   expect((await reading).map(file => file.path)).toEqual(['main.c'])
-  await expect(droppedFiles(transfer([directory('empty', [])]))).rejects.toThrow('ファイルがありません')
+  await expect(droppedFiles(transfer([directory('empty', [])]))).resolves.toEqual([])
 })
 
 test('read failures reject the entire drop and excessive folder contents stop traversal', async () => {
