@@ -83,7 +83,7 @@ export function ValidationSubmitPanel({ projectId, projectName, requiredFiles }:
     onOpenChange={setOpen}>
     <Dialog.Trigger asChild>
       <Button className="fixed right-5 bottom-[max(1.25rem,env(safe-area-inset-bottom))] z-30 h-12 bg-top-bar px-5 text-top-bar-foreground shadow-lg hover:bg-top-bar-hover sm:right-8">
-        <Upload aria-hidden="true" />課題を提出
+        <Upload aria-hidden="true" />サンプル提出
       </Button>
     </Dialog.Trigger>
     <Dialog.Content
@@ -92,7 +92,7 @@ export function ValidationSubmitPanel({ projectId, projectName, requiredFiles }:
       className="absolute inset-y-0 right-0 z-50 flex w-full flex-col border-l bg-card text-foreground shadow-xl sm:max-w-[25rem] motion-safe:data-[state=open]:animate-in motion-safe:data-[state=open]:slide-in-from-right motion-safe:data-[state=closed]:animate-out motion-safe:data-[state=closed]:slide-out-to-right">
       <div className="flex shrink-0 items-center justify-between gap-3 border-b p-5">
         <Dialog.Title className="min-w-0 text-xl font-bold break-words">
-          {projectName}を提出
+          {projectName}を提出（サンプル）
         </Dialog.Title>
         <Dialog.Close asChild>
           <Button type="button" variant="ghost" size="icon" aria-label="提出パネルを閉じる">
@@ -119,7 +119,6 @@ export function ValidationSubmitPanel({ projectId, projectName, requiredFiles }:
             onAdd={select}
             onMove={handleMove}
             onRemove={handleRemove} />
-          <p className="text-sm text-muted-foreground">最大50ファイル・合計20 MB（ZIPは展開後）</p>
           {error && <p role="alert" className="break-words text-sm text-destructive">{error}</p>}
         </div>
         <div className="shrink-0 border-t p-5 pb-[max(1.25rem,env(safe-area-inset-bottom))]">
