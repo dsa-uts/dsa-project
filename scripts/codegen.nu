@@ -50,7 +50,7 @@ def 'main check' [] {
     error make {
       msg: (
         [
-          'generated code is out of sync with api/openapi.yaml.'
+          'generated code is out of sync with api/openapi.yaml and its referenced files.'
           "Run 'task codegen:generate' and commit the diff."
         ] | str join (char newline)
       )

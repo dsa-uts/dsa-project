@@ -1,0 +1,74 @@
+parameters:
+  SessionCookie:
+    name: __Host-dsa_session
+    x-go-name: SessionToken
+    in: cookie
+    required: false
+    schema: { type: string }
+
+schemas:
+  Status:
+    type: string
+    enum: [AC, WA, TLE, MLE, RE, OLE, IE, CE, SKIP]
+  NullableStatus:
+    anyOf:
+      - $ref: "#/schemas/Status"
+      - type: "null"
+  Error:
+    type: object
+    required: [code, message]
+    properties:
+      code:
+        type: integer
+        description: HTTPレスポンスのステータスコードと同じ値
+        minimum: 400
+        maximum: 599
+        example: 404
+      message:
+        type: string
+        example: Project not found.
+
+responses:
+  BadRequest:
+    description: Invalid input, including malformed bodies, unsupported Content-Type, and file size limits
+    content:
+      application/json:
+        schema: { $ref: "#/schemas/Error" }
+  ValidationError:
+    description: 業務上の制約違反
+    content:
+      application/json:
+        schema: { $ref: "#/schemas/Error" }
+  InvalidCredentials:
+    description: 認証情報が無効
+    content:
+      application/json:
+        schema: { $ref: "#/schemas/Error" }
+  Unauthorized:
+    description: 未認証
+    headers:
+      Set-Cookie:
+        schema: { type: string }
+    content:
+      application/json:
+        schema: { $ref: "#/schemas/Error" }
+  InternalError:
+    description: サーバー内部エラー
+    content:
+      application/json:
+        schema: { $ref: "#/schemas/Error" }
+  Forbidden:
+    description: Admin Role required
+    content:
+      application/json:
+        schema: { $ref: "#/schemas/Error" }
+  NotFound:
+    description: User Account not found
+    content:
+      application/json:
+        schema: { $ref: "#/schemas/Error" }
+  UserConflict:
+    description: userid_taken (exact duplicate) or cannot_modify_self
+    content:
+      application/json:
+        schema: { $ref: "#/schemas/Error" }

@@ -6,7 +6,7 @@
 
 - Resource の形式・公開手順・実行規則は [dsa-resource-spec v1.3.0](https://github.com/dsa-uts/dsa-resource-spec/tree/v1.3.0/docs) を参照する。形式の定義は複製しない
 - [Resource 取り込み仕様](resource-imports.md) — GitHub からの取得・検証・DB 保存・認証設定・E2E 方針
-- [REST API 仕様](../../api/openapi.yaml) — クライアント向け REST API の形(single source of truth、ADR 0010)。[api.md](./api.md) は Conventions と未実装エンドポイントの草稿
+- [REST API 仕様](../../api/openapi.yaml) — クライアント向け REST API の入口。参照先の機能別 YAML と合わせて single source of truth。[api.md](./api.md) は Conventions と未実装エンドポイントの草稿
 - DB スキーマは [backend/internal/store/migrations/](../../backend/internal/store/migrations/) の SQL ファイルが正(Markdown の複製は持たない)
 
 用語と Principles は [../../CONTEXT.md](../../CONTEXT.md) を正とする。

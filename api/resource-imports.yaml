@@ -1,0 +1,64 @@
+paths:
+  /api/admin/resource-imports:
+    post:
+      operationId: importResource
+      security: [{ sessionAuth: [admin] }]
+      summary: Import a Resource Version from the configured GitHub repository
+      description: |
+        Synchronously fetch and validate a Resource, then atomically save its
+        immutable Version and update the Project title and latest Version.
+        First import creates an unpublished Project with no deadline at the end
+        of the list. Updates preserve schedule and order. Equal Versions return
+        changed=false without accessing GitHub; older Versions are rejected.
+        Repository, commit and image overrides are not accepted. No rejudging occurs.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [resource_id, version]
+              properties:
+                resource_id: { type: string, pattern: '^[a-z][a-z0-9-]*$' }
+                version:
+                  type: string
+                  description: Formal vMAJOR.MINOR.PATCH only; validated by the handler to return invalid_resource_version
+      responses:
+        "200":
+          description: Committed import or unchanged current Version
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [project_id, version_id, resource_id, version, changed]
+                properties:
+                  project_id: { type: string, format: uuid }
+                  version_id: { type: string, format: uuid }
+                  resource_id: { type: string }
+                  version: { type: string }
+                  changed: { type: boolean }
+        "401": { $ref: "./common.yaml#/responses/Unauthorized" }
+        "403": { $ref: "./common.yaml#/responses/Forbidden" }
+        "404":
+          description: resource_version_not_found (not in index)
+          content:
+            application/json:
+              schema: { $ref: "./common.yaml#/schemas/Error" }
+        "409":
+          description: older_resource_version
+          content:
+            application/json:
+              schema: { $ref: "./common.yaml#/schemas/Error" }
+        "400": { $ref: "./common.yaml#/responses/BadRequest" }
+        "422":
+          description: invalid_resource_version, invalid_resource, or resource_hash_mismatch
+          content:
+            application/json:
+              schema: { $ref: "./common.yaml#/schemas/Error" }
+        "503":
+          description: resource_source_unavailable (including authentication, rate limit, and download failures); upstream bodies and credentials are never returned
+          content:
+            application/json:
+              schema: { $ref: "./common.yaml#/schemas/Error" }
+        "500": { $ref: "./common.yaml#/responses/InternalError" }

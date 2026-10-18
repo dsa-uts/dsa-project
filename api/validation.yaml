@@ -1,0 +1,485 @@
+paths:
+  /api/requests/{request_id}/validation:
+    get:
+      operationId: getValidation
+      security: [{ sessionAuth: [] }]
+      description: |
+        Students see their own Validation Requests in currently published Projects.
+        Managers and Admins see all Validation Requests. Missing, invisible and
+        non-validation Requests return 404. All definitions use the pinned Version.
+        Unfinished Requests return result null; poll every five seconds until completed.
+        Completed results include definitions even when execution results were not
+        saved. A missing result does not prove non-execution. Private Jobs are excluded.
+      parameters:
+        - name: request_id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Success; Cache-Control is no-store
+          content:
+            application/json:
+              schema: { $ref: '#/schemas/ValidationDetail' }
+        "400": { $ref: './common.yaml#/responses/BadRequest' }
+        "401": { $ref: './common.yaml#/responses/Unauthorized' }
+        "404":
+          description: Request missing or invisible
+          content:
+            application/json:
+              schema: { $ref: './common.yaml#/schemas/Error' }
+        "500": { $ref: './common.yaml#/responses/InternalError' }
+  /api/requests/{request_id}/validation/files:
+    get:
+      operationId: getValidationFiles
+      security: [{ sessionAuth: [] }]
+      description: |
+        Students see their own Validation Requests in currently published Projects.
+        Managers and Admins see all Validation Requests. Missing, invisible and
+        non-validation Requests return 404. All definitions use the pinned Version.
+        metadata is an application/json text part; referenced fileN parts contain
+        raw bytes. Paths come from metadata, not multipart filenames.
+        Available before completion. Includes all Workflow Presets regardless of visibility.
+      parameters:
+        - name: request_id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Success; Cache-Control is no-store
+          content:
+            multipart/form-data:
+              schema:
+                type: object
+                required: [metadata]
+                properties:
+                  metadata: { $ref: '#/schemas/ValidationFilesMetadata' }
+                additionalProperties: { type: string, format: binary }
+              encoding:
+                metadata:
+                  contentType: application/json
+        "400": { $ref: './common.yaml#/responses/BadRequest' }
+        "401": { $ref: './common.yaml#/responses/Unauthorized' }
+        "404":
+          description: Request missing or invisible
+          content:
+            application/json:
+              schema: { $ref: './common.yaml#/schemas/Error' }
+        "500": { $ref: './common.yaml#/responses/InternalError' }
+  /api/requests/{request_id}/validation/artifacts:
+    get:
+      operationId: getValidationArtifacts
+      security: [{ sessionAuth: [] }]
+      description: |
+        Students see their own Validation Requests in currently published Projects.
+        Managers and Admins see all Validation Requests. Missing, invisible and
+        non-validation Requests return 404. All definitions use the pinned Version.
+        metadata is an application/json text part; referenced fileN parts contain
+        raw bytes. Paths come from metadata, not multipart filenames.
+        Only final-attempt public outputs of public Jobs are included. Empty is successful.
+      parameters:
+        - name: request_id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Success; Cache-Control is no-store
+          content:
+            multipart/form-data:
+              schema:
+                type: object
+                required: [metadata]
+                properties:
+                  metadata: { $ref: '#/schemas/ValidationArtifactsMetadata' }
+                additionalProperties: { type: string, format: binary }
+              encoding:
+                metadata:
+                  contentType: application/json
+        "400": { $ref: './common.yaml#/responses/BadRequest' }
+        "401": { $ref: './common.yaml#/responses/Unauthorized' }
+        "404":
+          description: Request missing or invisible
+          content:
+            application/json:
+              schema: { $ref: './common.yaml#/schemas/Error' }
+        "409":
+          description: Request has not completed
+          content:
+            application/json:
+              schema: { $ref: './common.yaml#/schemas/Error' }
+        "500": { $ref: './common.yaml#/responses/InternalError' }
+  /api/validation:
+    get:
+      operationId: listValidation
+      summary: List visible Validation Requests
+      security: [{ sessionAuth: [] }]
+      description: |
+        Returns up to 20 Requests in UUID v7 ID descending order, across Versions.
+        Students see their own Requests in published Projects; Managers and Admins
+        see all users and Projects. Omit project_id for all visible Projects.
+        next and prev are mutually exclusive, as are status and state.
+        next selects older IDs; prev selects the nearest newer IDs. Cursors are
+        comparison boundaries and need not identify an existing or matching row.
+        Keep filters unchanged when navigating. Results reflect current data,
+        not a persistent snapshot. Poll the same query every 5 seconds while
+        displayed Requests are incomplete. If a page becomes empty, return to
+        the first page. No total count or configurable page size is provided.
+      parameters:
+        - name: project_id
+          in: query
+          schema: { type: string, format: uuid }
+        - name: status
+          in: query
+          schema: { $ref: './common.yaml#/schemas/Status' }
+        - name: state
+          in: query
+          schema: { type: string, enum: [incomplete] }
+        - name: next
+          in: query
+          schema: { type: string, format: uuid }
+        - name: prev
+          in: query
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Visible Requests; an empty page has null cursors
+          content:
+            application/json:
+              schema: { $ref: '#/schemas/ValidationPage' }
+        "400": { $ref: './common.yaml#/responses/BadRequest' }
+        "401": { $ref: './common.yaml#/responses/Unauthorized' }
+        "404":
+          description: Specified Project missing or not visible
+          content:
+            application/json:
+              schema: { $ref: './common.yaml#/schemas/Error' }
+        "500": { $ref: './common.yaml#/responses/InternalError' }
+  /api/projects/{project_id}/validation:
+    post:
+      operationId: createValidation
+      summary: Create a Validation Request
+      description: |
+        Creates a Request for the authenticated user against the latest Resource Version.
+        Multipart uploads reuse a Submission with the same normalized file tree.
+        JSON reruns an existing own validation Submission in this Project.
+        Every successful call creates a new Request, including when another run is incomplete.
+        The maximum request body size is 21 MB (21,000,000 bytes), including multipart overhead.
+        Requests exceeding this limit return HTTP 413.
+      security: [{ sessionAuth: [] }]
+      parameters:
+        - name: project_id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [submission_id]
+              properties:
+                submission_id: { type: string, format: uuid }
+          multipart/form-data:
+            schema:
+              type: object
+              required: [metadata]
+              additionalProperties: true
+              description: |
+                Exactly one JSON metadata part and one binary part per files entry.
+                Dynamic binary part names must match metadata exactly; duplicate,
+                missing, or unreferenced parts are rejected. Filenames are ignored.
+                Files total at most 20,000,000 bytes; zero-byte files are allowed.
+                ZIP files must be expanded by the client.
+              properties:
+                metadata: { $ref: '#/schemas/SubmissionMetadata' }
+            encoding:
+              metadata:
+                contentType: application/json
+      responses:
+        "201":
+          description: New Request created
+          content:
+            application/json:
+              schema: { $ref: '#/schemas/CreatedRequest' }
+        "401": { $ref: './common.yaml#/responses/Unauthorized' }
+        "403":
+          description: Submission belongs to another user (including for Managers and Admins)
+          content:
+            application/json:
+              schema: { $ref: './common.yaml#/schemas/Error' }
+        "404":
+          description: Project missing or not visible; Submission missing
+          content:
+            application/json:
+              schema: { $ref: './common.yaml#/schemas/Error' }
+        "413":
+          description: Request body exceeds 21 MB (21,000,000 bytes)
+          content:
+            text/plain:
+              schema: { type: string }
+        "400": { $ref: './common.yaml#/responses/BadRequest' }
+        "422": { $ref: './common.yaml#/responses/ValidationError' }
+        "500": { $ref: './common.yaml#/responses/InternalError' }
+
+schemas:
+  ValidationDetail:
+    type: object
+    required: [id, project, subject_user, version, state, status, content_hash, duration_ms, requested_at, submission_id, result]
+    properties:
+      id: { type: string, format: uuid }
+      project:
+        type: object
+        required: [id, name]
+        properties:
+          id: { type: string, format: uuid }
+          name: { type: string, description: Current Project display name }
+      subject_user:
+        type: object
+        required: [id, userid, name]
+        properties:
+          id: { type: string, format: uuid }
+          userid: { type: string }
+          name: { type: string }
+      version: { type: string }
+      state: { type: string, enum: [pending, running, retrying, completed] }
+      status: { $ref: './common.yaml#/schemas/NullableStatus' }
+      content_hash: { type: string, pattern: '^sha256:[0-9a-f]{64}$' }
+      duration_ms:
+        allOf: [{ $ref: '#/schemas/NullableMeasurement' }]
+        description: Final attempt elapsed time including preparation and saving, excluding queue time and discarded attempts
+      requested_at: { type: string, format: date-time }
+      submission_id: { type: string, format: uuid }
+      result:
+        anyOf: [{ $ref: '#/schemas/ValidationResult' }, { type: 'null' }]
+  NullableMeasurement:
+    type: [integer, 'null']
+    format: int64
+    minimum: 0
+    description: Null when unavailable; durations are milliseconds and memory is bytes
+  ValidationResult:
+    type: object
+    required: [peak_memory_bytes, workflows]
+    properties:
+      peak_memory_bytes: { $ref: '#/schemas/NullableMeasurement' }
+      workflows:
+        type: array
+        description: Workflow ID order; definitions from the pinned Version
+        items: { $ref: '#/schemas/ValidationWorkflow' }
+  ValidationWorkflow:
+    type: object
+    required: [id, name, status, duration_ms, jobs]
+    properties:
+      id: { type: string }
+      name: { type: string }
+      status: { $ref: './common.yaml#/schemas/NullableStatus' }
+      duration_ms: { $ref: '#/schemas/NullableMeasurement' }
+      jobs:
+        type: array
+        description: Public Jobs in dependency order, breaking ties by ID
+        items: { $ref: '#/schemas/ValidationJob' }
+  ValidationJob:
+    type: object
+    required: [id, name, status, duration_ms, peak_memory_bytes, skip_reason, stop_reason, steps, artifacts]
+    properties:
+      id: { type: string }
+      name: { type: string }
+      status: { $ref: './common.yaml#/schemas/NullableStatus' }
+      duration_ms:
+        allOf: [{ $ref: '#/schemas/NullableMeasurement' }]
+        description: Elapsed Job time including preparation and cleanup, not the sum of Step durations
+      peak_memory_bytes: { $ref: '#/schemas/NullableMeasurement' }
+      skip_reason: { type: [string, 'null'] }
+      stop_reason: { type: [string, 'null'] }
+      steps:
+        type: array
+        items: { $ref: '#/schemas/ValidationStep' }
+      artifacts:
+        type: array
+        description: Public declarations, including failed and unrecorded captures
+        items: { $ref: '#/schemas/ValidationArtifact' }
+  ValidationStep:
+    type: object
+    required: [index, name, run, compile, timeout_ms, stdin, expected, status, exit_code, duration_ms, memory_bytes, stdout, stderr]
+    properties:
+      index: { type: integer, minimum: 0, description: Zero-based position in the pinned Job steps array }
+      name: { type: string }
+      run: { type: string, description: Bash source from the Resource }
+      compile: { type: boolean }
+      timeout_ms: { type: integer, format: int64, minimum: 0 }
+      stdin: { type: string, description: Base64-encoded input bytes; empty string means no input }
+      expected: { $ref: '#/schemas/StepExpectation' }
+      status: { $ref: './common.yaml#/schemas/NullableStatus' }
+      exit_code: { type: [integer, 'null'], description: Null when unavailable; never the internal -1 sentinel }
+      duration_ms: { $ref: '#/schemas/NullableMeasurement' }
+      memory_bytes:
+        allOf: [{ $ref: '#/schemas/NullableMeasurement' }]
+        description: Maximum sampled Sandbox memory during this Step, not isolated process RSS
+      stdout:
+        anyOf: [{ $ref: '#/schemas/StepOutput' }, { type: 'null' }]
+      stderr:
+        anyOf: [{ $ref: '#/schemas/StepOutput' }, { type: 'null' }]
+  StepOutput:
+    type: object
+    required: [data, truncated]
+    properties:
+      data: { type: string, description: Base64-encoded original bytes; empty output is an empty string }
+      truncated: { type: boolean, description: Only the allowed prefix was saved }
+  StepExpectation:
+    type: object
+    required: [exit_code, stdout, stderr]
+    properties:
+      exit_code: { type: [integer, 'null'], description: Null means unchecked }
+      stdout:
+        anyOf: [{ $ref: '#/schemas/ExpectedOutput' }, { type: 'null' }]
+      stderr:
+        anyOf: [{ $ref: '#/schemas/ExpectedOutput' }, { type: 'null' }]
+  ExpectedOutput:
+    type: object
+    description: Null means unchecked; an empty data string means expect empty output
+    required: [data, match]
+    properties:
+      data: { type: string, description: Base64-encoded expected bytes }
+      match: { type: string, enum: [exact, easy, sorted] }
+  ValidationArtifact:
+    type: object
+    required: [name, path, content_type, status, available, size_bytes, error]
+    properties:
+      name: { type: string }
+      path: { type: string }
+      content_type: { type: string }
+      status:
+        anyOf: [{ $ref: '#/schemas/ValidationArtifactStatus' }, { type: 'null' }]
+        description: Saved capture verdict; null when unrecorded
+      available: { type: boolean, description: Final-attempt bytes exist even if the capture verdict was not saved }
+      size_bytes: { $ref: '#/schemas/NullableMeasurement' }
+      error: { type: [string, 'null'], description: Safe failure message without internal paths }
+  ValidationArtifactStatus:
+    type: string
+    enum: [AC, WA, OLE]
+  FilePart:
+    type: object
+    required: [part, path]
+    properties:
+      part: { type: string, description: Binary multipart field name }
+      path: { type: string, description: Stored relative path }
+  ValidationFilesMetadata:
+    type: object
+    required: [submission_files, presets]
+    properties:
+      submission_files:
+        type: array
+        items: { $ref: '#/schemas/FilePart' }
+      presets:
+        type: array
+        items: { $ref: '#/schemas/PresetFiles' }
+  PresetFiles:
+    type: object
+    required: [workflow_id, files]
+    properties:
+      workflow_id: { type: string }
+      files:
+        type: array
+        items: { $ref: '#/schemas/FilePart' }
+  ValidationArtifactsMetadata:
+    type: object
+    required: [files]
+    properties:
+      files:
+        type: array
+        items: { $ref: '#/schemas/ArtifactPart' }
+  ArtifactPart:
+    allOf:
+      - $ref: '#/schemas/FilePart'
+      - type: object
+        required: [workflow_id, job_id, name, content_type]
+        properties:
+          workflow_id: { type: string }
+          job_id: { type: string }
+          name: { type: string }
+          content_type: { type: string }
+  ValidationPage:
+    type: object
+    additionalProperties: false
+    required: [requests, next, prev]
+    properties:
+      requests:
+        type: array
+        maxItems: 20
+        items: { $ref: '#/schemas/ValidationSummary' }
+      next:
+        type: [string, "null"]
+        format: uuid
+        description: Last returned ID if older matching rows exist, otherwise null
+      prev:
+        type: [string, "null"]
+        format: uuid
+        description: First returned ID if newer matching rows exist, otherwise null
+  ValidationSummary:
+    type: object
+    additionalProperties: false
+    required: [id, project, subject_user, version, state, status, content_hash, duration_ms, requested_at]
+    properties:
+      id: { type: string, format: uuid }
+      project:
+        type: object
+        required: [id, name]
+        properties:
+          id: { type: string, format: uuid }
+          name: { type: string, description: Current Project display name }
+      subject_user:
+        type: object
+        required: [id, userid, name]
+        properties:
+          id: { type: string, format: uuid }
+          userid: { type: string }
+          name: { type: string }
+      version: { type: string, description: Request's pinned Resource Version }
+      state: { type: string, enum: [pending, running, retrying, completed] }
+      status: { $ref: './common.yaml#/schemas/NullableStatus' }
+      content_hash: { type: string, pattern: '^sha256:[0-9a-f]{64}$' }
+      duration_ms:
+        type: [integer, "null"]
+        format: int64
+        minimum: 0
+        description: Final attempt elapsed time including preparation and saving, excluding queue time and discarded attempts. Null until completed or when unavailable.
+      requested_at: { type: string, format: date-time }
+  SubmissionMetadata:
+    type: object
+    additionalProperties: false
+    required: [files]
+    properties:
+      files:
+        type: array
+        minItems: 1
+        maxItems: 50
+        items:
+          type: object
+          additionalProperties: false
+          required: [part, path]
+          properties:
+            part:
+              type: string
+              minLength: 1
+              not: { const: metadata }
+            path:
+              type: string
+              minLength: 1
+              description: |
+                Normalized to a relative path with slash separators. Invalid UTF-8
+                bytes are removed and backslashes become slashes. Dot components,
+                repeated slashes, and parent (..) components are resolved under a
+                virtual root; leading slashes are removed. NUL, drive-letter paths,
+                and paths normalizing to empty are rejected. Normalized duplicate
+                paths and file/directory collisions return 422 with the paths in message.
+  CreatedRequest:
+    type: object
+    additionalProperties: false
+    required: [id, state, status]
+    properties:
+      id: { type: string, format: uuid, description: UUID v7 Request ID }
+      state: { type: string, enum: [pending, running, retrying, completed] }
+      status: { $ref: './common.yaml#/schemas/NullableStatus' }

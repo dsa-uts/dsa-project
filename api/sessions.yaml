@@ -1,0 +1,69 @@
+paths:
+  /api/session:
+    post:
+      operationId: createSession
+      security: []
+      summary: userid と password でログインする
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/schemas/CreateSessionRequest" }
+      responses:
+        "200":
+          description: ログインした User Account
+          headers:
+            Set-Cookie:
+              schema: { type: string }
+          content:
+            application/json:
+              schema: { $ref: "#/schemas/CurrentUser" }
+        "401": { $ref: "./common.yaml#/responses/InvalidCredentials" }
+        "400": { $ref: "./common.yaml#/responses/BadRequest" }
+        "500": { $ref: "./common.yaml#/responses/InternalError" }
+    delete:
+      operationId: deleteSession
+      security: []
+      summary: 現在のセッションからログアウトする
+      parameters:
+        - $ref: "./common.yaml#/parameters/SessionCookie"
+      responses:
+        "204":
+          description: セッションを削除した（セッションがなくても成功）
+          headers:
+            Set-Cookie:
+              schema: { type: string }
+        "500": { $ref: "./common.yaml#/responses/InternalError" }
+  /api/me:
+    get:
+      operationId: getCurrentUser
+      security: [{ sessionAuth: [] }]
+      summary: 現在の User Account を返す
+      responses:
+        "200":
+          description: 現在の User Account
+          content:
+            application/json:
+              schema: { $ref: "#/schemas/CurrentUser" }
+        "401": { $ref: "./common.yaml#/responses/Unauthorized" }
+        "500": { $ref: "./common.yaml#/responses/InternalError" }
+
+schemas:
+  CreateSessionRequest:
+    type: object
+    additionalProperties: false
+    required: [userid, password]
+    properties:
+      userid: { type: string, minLength: 1, maxLength: 30 }
+      password: { type: string, minLength: 1, maxLength: 256 }
+  CurrentUser:
+    type: object
+    additionalProperties: false
+    required: [id, userid, name, role]
+    properties:
+      id: { type: string, format: uuid }
+      userid: { type: string }
+      name: { type: string }
+      role:
+        type: string
+        enum: [student, manager, admin]
