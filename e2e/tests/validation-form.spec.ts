@@ -76,20 +76,31 @@ test('drop folders into the submission tree and persist files at the pointed dir
     await page.getByRole('button', { name: 'src/extra.c を削除', exact: true }).click()
     await drop(join(temporary, 'extra.c'), page.getByRole('treeitem', { name: 'main.c', exact: true }), src)
     await expect(page.getByRole('button', { name: 'src/extra.c を削除', exact: true })).toBeVisible()
+    const drag = async (source: ReturnType<typeof page.getByRole>, target: ReturnType<typeof page.getByRole>) => {
+      await source.hover()
+      const bounds = await source.boundingBox()
+      await page.mouse.down()
+      // ドロップ先へのスクロール前に、元の行でドラッグを開始する。
+      await page.mouse.move(bounds!.x + bounds!.width / 2 + 10, bounds!.y + bounds!.height / 2, { steps: 5 })
+      await target.hover()
+      // dragenter に続けて dragover を発生させ、ドロップを許可する。
+      await target.hover()
+      await page.mouse.up()
+    }
     const move = async (name: string, target: ReturnType<typeof page.getByRole>, directory: string) => {
-      await page.getByRole('treeitem', { name, exact: true }).dragTo(target)
+      await drag(page.getByRole('treeitem', { name, exact: true }), target)
       const path = directory ? `${directory}/${name}` : name
       await expect(page.getByRole('button', { name: `${path} を削除`, exact: true })).toBeVisible()
       await expect(page.getByRole('dialog').getByRole('status')).toBeEmpty()
     }
     await move('extra.c', root, '')
     await move('extra.c', page.getByRole('treeitem', { name: 'main.c', exact: true }), 'src')
-    await page.getByRole('treeitem', { name: 'main.c', exact: true }).dragTo(page.getByRole('treeitem', { name: 'lib', exact: true }))
+    await drag(page.getByRole('treeitem', { name: 'main.c', exact: true }), page.getByRole('treeitem', { name: 'lib', exact: true }))
     await expect(page.getByRole('button', { name: 'src/lib/main.c を削除', exact: true })).toBeVisible()
     await move('main.c', src, 'src')
-    await page.getByRole('treeitem', { name: 'root.txt', exact: true }).dragTo(src)
+    await drag(page.getByRole('treeitem', { name: 'root.txt', exact: true }), src)
     await expect(page.getByRole('button', { name: 'src/root.txt を削除', exact: true })).toBeVisible()
-    await page.getByRole('treeitem', { name: 'lib', exact: true }).dragTo(root)
+    await drag(page.getByRole('treeitem', { name: 'lib', exact: true }), root)
     await page.getByRole('treeitem', { name: 'lib', exact: true }).click()
     await expect(page.getByRole('button', { name: 'lib/util.h を削除', exact: true })).toBeVisible()
     await drop(join(temporary, 'src', 'lib'), src)
@@ -97,7 +108,7 @@ test('drop folders into the submission tree and persist files at the pointed dir
       .filter({ has: page.getByRole('button', { name: 'src/lib を削除', exact: true }) }).click()
     await expect(page.getByRole('button', { name: 'src/lib/util.h を削除', exact: true })).toBeVisible()
     await page.getByRole('button', { name: 'src/lib を削除', exact: true }).click()
-    await page.getByRole('treeitem', { name: 'extra.c', exact: true }).dragTo(root)
+    await drag(page.getByRole('treeitem', { name: 'extra.c', exact: true }), root)
     await expect(page.getByRole('button', { name: 'extra.c を削除', exact: true })).toBeVisible()
     await page.getByRole('button', { name: 'lib を削除', exact: true }).click()
     await expect(page.getByRole('treeitem', { name: 'lib', exact: true })).toHaveCount(0)
