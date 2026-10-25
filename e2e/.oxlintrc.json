@@ -1,0 +1,7 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "rules": {
+    "no-nested-ternary": "error",
+    "max-depth": ["error", { "max": 4 }]
+  }
+}
