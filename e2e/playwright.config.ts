@@ -2,6 +2,7 @@ import { defineConfig } from "@playwright/test";
 
 export default defineConfig({
   testDir: "./tests",
+  workers: 1,
   outputDir: process.env.E2E_ARTIFACT_DIR
     ? `${process.env.E2E_ARTIFACT_DIR}/test-results`
     : "test-results",
@@ -19,12 +20,18 @@ export default defineConfig({
   ],
   projects: [
     {
-      name: "default",
-      testIgnore: ["**/problem-registration.spec.ts", "**/problem-submission.spec.ts"],
+      name: "auth",
+      testMatch: "**/login.spec.ts",
+    },
+    {
+      name: "users",
+      testMatch: "**/batch-user-registration.spec.ts",
+      dependencies: ["auth"],
     },
     {
       name: "register",
       testMatch: "**/problem-registration.spec.ts",
+      dependencies: ["users"],
     },
     {
       name: "submit",
