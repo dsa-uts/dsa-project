@@ -1,0 +1,77 @@
+version: '3'
+
+tasks:
+  dev:
+    desc: "docker.py dev"
+    cmds:
+      - python3 docker.py dev
+
+  dev:build:
+    desc: "docker.py dev build"
+    cmds:
+      - python3 docker.py dev build
+
+  dev:down:
+    desc: "docker.py dev down"
+    cmds:
+      - python3 docker.py dev down
+
+  dev:logs:
+    desc: "docker.py dev logs"
+    cmds:
+      - python3 docker.py dev logs
+
+  prod:
+    desc: "docker.py prod"
+    cmds:
+      - python3 docker.py prod
+
+  prod:build:
+    desc: "docker.py prod build"
+    cmds:
+      - python3 docker.py prod build
+
+  prod:down:
+    desc: "docker.py prod down"
+    cmds:
+      - python3 docker.py prod down
+
+  prod:logs:
+    desc: "docker.py prod logs"
+    cmds:
+      - python3 docker.py prod logs
+
+  e2e:install:
+    desc: "E2E install"
+    cmds:
+      - nu --no-config-file scripts/e2e.nu install {{.CLI_ARGS}}
+
+  e2e:setup:
+    desc: "E2E setup"
+    cmds:
+      - nu --no-config-file scripts/e2e.nu setup {{.CLI_ARGS}}
+
+  e2e:test:
+    desc: "E2E test"
+    cmds:
+      - nu --no-config-file scripts/e2e.nu test {{.CLI_ARGS}}
+
+  e2e:logs:
+    desc: "E2E logs"
+    cmds:
+      - nu --no-config-file scripts/e2e.nu logs {{.CLI_ARGS}}
+
+  e2e:down:
+    desc: "E2E down"
+    cmds:
+      - nu --no-config-file scripts/e2e.nu down {{.CLI_ARGS}}
+
+  e2e:run:
+    desc: "E2E run"
+    cmds:
+      - nu --no-config-file scripts/e2e.nu run {{.CLI_ARGS}}
+
+  e2e:format:
+    desc: Format Nushell scripts
+    cmds:
+      - nufmt scripts/e2e.nu
