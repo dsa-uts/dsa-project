@@ -1,0 +1,4 @@
+﻿user_id,name,email,role,password
+202600001,サンプルユーザー1,sample1@coins.tsukuba.ac.jp,student,sample1
+202600002,サンプルユーザー2,sample2@coins.tsukuba.ac.jp,student,
+202600003,サンプルユーザー3,sample3@coins.tsukuba.ac.jp,student,
