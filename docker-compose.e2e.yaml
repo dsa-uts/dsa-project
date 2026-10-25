@@ -4,7 +4,7 @@ services:
       context: .
       dockerfile: dsa-frontend/Dockerfile.dev
     volumes:
-      - ./dsa-frontend:/app:ro
+      - ./dsa-frontend:/app
       - frontend-node-modules:/app/node_modules
     ports:
       - "127.0.0.1:15173:5173"
@@ -22,7 +22,7 @@ services:
       context: .
       dockerfile: dsa-backend/Dockerfile.dev
     volumes:
-      - ./dsa-backend:/app:ro
+      - ./dsa-backend:/app
       - ./database:/database:ro
       - uploads:/app/upload
       - backend-go-modules:/go
@@ -45,7 +45,7 @@ services:
       context: .
       dockerfile: dsa-judgeserver/Dockerfile.dev
     volumes:
-      - ./dsa-judgeserver:/app:ro
+      - ./dsa-judgeserver:/app
       - ./database:/database:ro
       - uploads:/app/upload
       - judge-go-modules:/go
