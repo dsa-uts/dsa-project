@@ -1,26 +1,26 @@
-import { useState, type SubmitEventHandler } from 'react'
-import { Navigate } from 'react-router-dom'
-import { $api } from '@/api/client'
-import { Page } from '@/components/Page'
-import { Button } from '@/components/ui/button'
-import { useAuth } from '@/lib/auth'
+import { useState, type SubmitEventHandler } from "react";
+import { Navigate } from "react-router-dom";
+import { $api } from "@/api/client";
+import { Page } from "@/components/Page";
+import { Button } from "@/components/ui/button";
+import { useAuth } from "@/lib/auth";
 
 export function LoginPage() {
-  const { authenticated, setUser } = useAuth()
-  const [userid, setUserid] = useState('')
-  const [password, setPassword] = useState('')
-  const login = $api.useMutation('post', '/api/session', {
+  const { authenticated, setUser } = useAuth();
+  const [userid, setUserid] = useState("");
+  const [password, setPassword] = useState("");
+  const login = $api.useMutation("post", "/api/session", {
     onSuccess: (user) => {
-      setUser(user)
+      setUser(user);
     },
-  })
+  });
 
-  if (authenticated) return <Navigate to="/about" replace />
+  if (authenticated) return <Navigate to="/about" replace />;
 
   const submit: SubmitEventHandler = (event) => {
-    event.preventDefault()
-    login.mutate({ body: { userid, password } })
-  }
+    event.preventDefault();
+    login.mutate({ body: { userid, password } });
+  };
 
   return (
     <Page>
@@ -46,10 +46,10 @@ export function LoginPage() {
           />
         </label>
         {login.isError && <p className="text-sm text-destructive">Invalid user ID or password.</p>}
-        <Button type="submit" disabled={login.isPending || userid === '' || password === ''}>
+        <Button type="submit" disabled={login.isPending || userid === "" || password === ""}>
           Log in
         </Button>
       </form>
     </Page>
-  )
+  );
 }

@@ -1,47 +1,93 @@
-import { useState } from 'react'
-import { Tabs } from 'radix-ui'
-import { Link } from 'react-router-dom'
-import { $api } from '@/api/client'
+import { useState } from "react";
+import { Tabs } from "radix-ui";
+import { Link } from "react-router-dom";
+import { $api } from "@/api/client";
 
 export function ProblemListPage() {
-  const [selected, setSelected] = useState('all')
-  const projectsQuery = $api.useQuery('get', '/api/projects', {}, {
-    retry: false,
-  })
+  const [selected, setSelected] = useState("all");
+  const projectsQuery = $api.useQuery(
+    "get",
+    "/api/projects",
+    {},
+    {
+      retry: false,
+    },
+  );
 
-  if (projectsQuery.isPending) return <main className="p-8" role="status">読み込み中…</main>
-  if (projectsQuery.isError) return <main className="p-8" role="alert"><p className="text-destructive">課題一覧を取得できませんでした。</p></main>
+  if (projectsQuery.isPending)
+    return (
+      <main className="p-8" role="status">
+        読み込み中…
+      </main>
+    );
+  if (projectsQuery.isError)
+    return (
+      <main className="p-8" role="alert">
+        <p className="text-destructive">課題一覧を取得できませんでした。</p>
+      </main>
+    );
 
-  const projects = projectsQuery.data.projects
-  const active = projects.some((project) => project.id === selected) ? selected : 'all'
+  const projects = projectsQuery.data.projects;
+  const active = projects.some((project) => project.id === selected) ? selected : "all";
 
-  return <main className="mx-auto w-full max-w-screen-2xl flex-1 space-y-8 px-4 py-8 sm:px-12 sm:py-10">
-    <h1 className="text-4xl font-bold tracking-tight sm:text-5xl">Problem List</h1>
-    <Tabs.Root value={active} onValueChange={setSelected}>
-      <Tabs.List aria-label="課題の絞り込み" className="flex overflow-x-auto border-b">
-        {[{ id: 'all', name: 'All' }, ...projects].map((project) =>
-          <Tabs.Trigger key={project.id} value={project.id} className="shrink-0 border-b-2 border-transparent px-8 py-4 font-semibold outline-none hover:text-link focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring data-[state=active]:border-link data-[state=active]:text-link">
-            {project.name}
-          </Tabs.Trigger>
-        )}
-      </Tabs.List>
-      <Tabs.Content value={active} className="space-y-12 pt-10 outline-none focus-visible:ring-2 focus-visible:ring-ring">
-        {projects.length === 0 && <p className="text-muted-foreground">表示できる課題はありません。</p>}
-        {projects.filter((project) => active === 'all' || project.id === active).map((project) =>
-          <section key={project.id} aria-labelledby={`project-${project.id}`} className="space-y-4">
-            <div className="min-w-0 space-y-1 break-words">
-              <h2 id={`project-${project.id}`} className="text-3xl font-bold">
-                {project.name}
-              </h2>
-              {project.description &&
-                <p className="text-sm text-muted-foreground">
-                  {project.description}
-                </p>}
-            </div>
-            {project.workflows.length > 0 ? <ul className="divide-y rounded-md border bg-card">{project.workflows.map((workflow) => <li key={workflow.id}><Link to={`/projects/${project.id}/${workflow.id}`} className="block px-6 py-5 font-semibold hover:bg-accent hover:text-link focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring">{workflow.name}</Link></li>)}</ul> : <p className="text-muted-foreground">問題はまだ登録されていません。</p>}
-          </section>
-        )}
-      </Tabs.Content>
-    </Tabs.Root>
-  </main>
+  return (
+    <main className="mx-auto w-full max-w-screen-2xl flex-1 space-y-8 px-4 py-8 sm:px-12 sm:py-10">
+      <h1 className="text-4xl font-bold tracking-tight sm:text-5xl">Problem List</h1>
+      <Tabs.Root value={active} onValueChange={setSelected}>
+        <Tabs.List aria-label="課題の絞り込み" className="flex overflow-x-auto border-b">
+          {[{ id: "all", name: "All" }, ...projects].map((project) => (
+            <Tabs.Trigger
+              key={project.id}
+              value={project.id}
+              className="shrink-0 border-b-2 border-transparent px-8 py-4 font-semibold outline-none hover:text-link focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring data-[state=active]:border-link data-[state=active]:text-link"
+            >
+              {project.name}
+            </Tabs.Trigger>
+          ))}
+        </Tabs.List>
+        <Tabs.Content
+          value={active}
+          className="space-y-12 pt-10 outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          {projects.length === 0 && (
+            <p className="text-muted-foreground">表示できる課題はありません。</p>
+          )}
+          {projects
+            .filter((project) => active === "all" || project.id === active)
+            .map((project) => (
+              <section
+                key={project.id}
+                aria-labelledby={`project-${project.id}`}
+                className="space-y-4"
+              >
+                <div className="min-w-0 space-y-1 break-words">
+                  <h2 id={`project-${project.id}`} className="text-3xl font-bold">
+                    {project.name}
+                  </h2>
+                  {project.description && (
+                    <p className="text-sm text-muted-foreground">{project.description}</p>
+                  )}
+                </div>
+                {project.workflows.length > 0 ? (
+                  <ul className="divide-y rounded-md border bg-card">
+                    {project.workflows.map((workflow) => (
+                      <li key={workflow.id}>
+                        <Link
+                          to={`/projects/${project.id}/${workflow.id}`}
+                          className="block px-6 py-5 font-semibold hover:bg-accent hover:text-link focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+                        >
+                          {workflow.name}
+                        </Link>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="text-muted-foreground">問題はまだ登録されていません。</p>
+                )}
+              </section>
+            ))}
+        </Tabs.Content>
+      </Tabs.Root>
+    </main>
+  );
 }

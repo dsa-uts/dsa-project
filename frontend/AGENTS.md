@@ -14,4 +14,3 @@ Run the following commands from `frontend/`.
 - [You Might Not Need an Effect](https://react.dev/learn/you-might-not-need-an-effect)
 - [デジタル庁デザインシステム](https://design.digital.go.jp/dads/)
 - [Vercel Web Interface Guidelines](https://vercel.com/design/guidelines)
-
