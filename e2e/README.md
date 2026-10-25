@@ -1,6 +1,6 @@
 # E2E
 
-Playwright + TypeScript の E2E テスト用雛形です。実際のテストケースはまだありません。
+Playwright + TypeScript
 
 ## セットアップ
 
@@ -19,6 +19,8 @@ npx playwright install chromium
 
 ```sh
 npm test
+# ブラウザを表示して実行する場合
+npm test -- --headed
 # 接続先を変更する場合
 E2E_BASE_URL=http://localhost:5173 npm test
 ```
@@ -31,4 +33,3 @@ npm run format
 npm run format:check
 npm run typecheck
 ```
-
