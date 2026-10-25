@@ -6,7 +6,7 @@
 
 - [CONTEXT.md](CONTEXT.md) — 用語(ubiquitous language)と Principles。**ここの用語をコード・ドキュメント全体で使う**
 - [docs/agents/coding-standards.md](docs/agents/coding-standards.md) — codegen ポリシー、テストポリシー
-- フロントエンドを実装・レビューするときは [frontend/GUIDELINES.md](frontend/GUIDELINES.md) の参照先に従う。
+- フロントエンドを変更するときは [frontend/AGENTS.md](frontend/AGENTS.md) を読む。
 - 設計・仕様を変更するときは [docs/adr/](docs/adr/) と [docs/spec/](docs/spec/) の関連文書を読む。
 - REST API を変更するときは [api/openapi.yaml](api/openapi.yaml) を正とする。
 

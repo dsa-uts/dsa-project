@@ -37,10 +37,18 @@
   padding-left: 1.5rem;
 }
 
-.markdown-content ul { list-style-type: disc; }
-.markdown-content ol { list-style-type: decimal; }
-.markdown-content li { margin-block: 0.5rem; }
-.markdown-content strong { font-weight: 600; }
+.markdown-content ul {
+  list-style-type: disc;
+}
+.markdown-content ol {
+  list-style-type: decimal;
+}
+.markdown-content li {
+  margin-block: 0.5rem;
+}
+.markdown-content strong {
+  font-weight: 600;
+}
 
 .markdown-content blockquote {
   margin-block: 1.5rem;
@@ -53,7 +61,9 @@
   white-space: nowrap;
 }
 
-.markdown-content blockquote > :last-child { margin-bottom: 0; }
+.markdown-content blockquote > :last-child {
+  margin-bottom: 0;
+}
 
 .markdown-content a {
   color: var(--top-bar);
@@ -61,7 +71,9 @@
   text-underline-offset: 0.2em;
 }
 
-.markdown-content a:hover { color: var(--foreground); }
+.markdown-content a:hover {
+  color: var(--foreground);
+}
 
 .markdown-content code {
   border-radius: 0.25rem;
@@ -118,24 +130,42 @@
 }
 
 .markdown-code-block .hljs-keyword,
-.markdown-code-block .hljs-doctag { color: var(--code-keyword); }
+.markdown-code-block .hljs-doctag {
+  color: var(--code-keyword);
+}
 .markdown-code-block .hljs-string,
-.markdown-code-block .hljs-regexp { color: var(--code-string); }
+.markdown-code-block .hljs-regexp {
+  color: var(--code-string);
+}
 .markdown-code-block .hljs-title,
-.markdown-code-block .hljs-section { color: var(--code-function); }
+.markdown-code-block .hljs-section {
+  color: var(--code-function);
+}
 .markdown-code-block .hljs-number,
 .markdown-code-block .hljs-literal,
-.markdown-code-block .hljs-attr { color: var(--code-number); }
+.markdown-code-block .hljs-attr {
+  color: var(--code-number);
+}
 .markdown-code-block .hljs-variable,
 .markdown-code-block .hljs-name,
-.markdown-code-block .hljs-meta { color: var(--code-variable); }
+.markdown-code-block .hljs-meta {
+  color: var(--code-variable);
+}
 .markdown-code-block .hljs-type,
 .markdown-code-block .hljs-built_in,
-.markdown-code-block .hljs-title.class_ { color: var(--code-type); }
+.markdown-code-block .hljs-title.class_ {
+  color: var(--code-type);
+}
 .markdown-code-block .hljs-symbol,
-.markdown-code-block .hljs-operator { color: var(--code-operator); }
-.markdown-code-block .hljs-emphasis { font-style: italic; }
-.markdown-code-block .hljs-strong { font-weight: 700; }
+.markdown-code-block .hljs-operator {
+  color: var(--code-operator);
+}
+.markdown-code-block .hljs-emphasis {
+  font-style: italic;
+}
+.markdown-code-block .hljs-strong {
+  font-weight: 700;
+}
 
 @media (min-width: 640px) {
   .markdown-content .markdown-code-block pre {
@@ -156,4 +186,6 @@
   vertical-align: top;
 }
 
-.markdown-content th { background: var(--muted); }
+.markdown-content th {
+  background: var(--muted);
+}

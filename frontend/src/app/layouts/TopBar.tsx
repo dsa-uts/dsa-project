@@ -1,34 +1,44 @@
-import { useNavigationGuard } from '@/components/navigation-guard'
-import { Link, NavLink, useMatch } from 'react-router-dom'
-import { $api } from '@/api/client'
-import { useAuth } from '@/lib/auth'
-import { Button } from '@/components/ui/button'
+import { useNavigationGuard } from "@/components/navigation-guard";
+import { Link, NavLink, useMatch } from "react-router-dom";
+import { $api } from "@/api/client";
+import { useAuth } from "@/lib/auth";
+import { Button } from "@/components/ui/button";
 
-const navClass = 'rounded-sm px-2 py-2 outline-none hover:bg-top-bar-hover focus-visible:ring-2 focus-visible:ring-top-bar-foreground aria-[current=page]:bg-top-bar-hover'
+const navClass =
+  "rounded-sm px-2 py-2 outline-none hover:bg-top-bar-hover focus-visible:ring-2 focus-visible:ring-top-bar-foreground aria-[current=page]:bg-top-bar-hover";
 
 export function TopBar() {
-  const adminPage = useMatch('/admin/*')
-  const { canLeave } = useNavigationGuard()
-  const { user, setUser } = useAuth()
-  const logout = $api.useMutation('delete', '/api/session', {
+  const adminPage = useMatch("/admin/*");
+  const { canLeave } = useNavigationGuard();
+  const { user, setUser } = useAuth();
+  const logout = $api.useMutation("delete", "/api/session", {
     onSuccess: () => setUser(null),
-  })
+  });
 
   return (
     <header className="shrink-0 bg-top-bar text-top-bar-foreground">
       <div className="flex min-h-16 flex-wrap items-center justify-between gap-2 px-4 py-2 sm:h-16 sm:flex-nowrap sm:gap-4 sm:px-8 sm:py-0">
         <div className="flex flex-wrap items-center gap-2 sm:flex-nowrap sm:gap-4">
-          <NavLink to="/about" className="rounded-sm px-2 py-1 text-3xl font-bold outline-none transition-opacity hover:bg-top-bar-hover hover:opacity-80 focus-visible:ring-2 focus-visible:ring-top-bar-foreground aria-[current=page]:bg-top-bar-hover">
+          <NavLink
+            to="/about"
+            className="rounded-sm px-2 py-1 text-3xl font-bold outline-none transition-opacity hover:bg-top-bar-hover hover:opacity-80 focus-visible:ring-2 focus-visible:ring-top-bar-foreground aria-[current=page]:bg-top-bar-hover"
+          >
             DSA
           </NavLink>
           <NavLink to="/projects" className={navClass}>
             Dashboard
           </NavLink>
-          <NavLink to="/results" className={navClass}>Results</NavLink>
+          <NavLink to="/results" className={navClass}>
+            Results
+          </NavLink>
         </div>
         <div className="flex items-center gap-2 sm:gap-4">
-          {user?.role === 'admin' && (
-            <Link to="/admin/list" aria-current={adminPage ? 'page' : undefined} className={`${navClass} sm:px-4`}>
+          {user?.role === "admin" && (
+            <Link
+              to="/admin/list"
+              aria-current={adminPage ? "page" : undefined}
+              className={`${navClass} sm:px-4`}
+            >
               Admin
             </Link>
           )}
@@ -36,7 +46,9 @@ export function TopBar() {
             type="button"
             variant="ghost"
             className="h-auto rounded-sm text-base font-normal transition-colors hover:bg-top-bar-hover hover:text-top-bar-foreground focus-visible:ring-top-bar-foreground"
-            onClick={() => { if (canLeave()) logout.mutate({}) }}
+            onClick={() => {
+              if (canLeave()) logout.mutate({});
+            }}
             disabled={logout.isPending}
           >
             Logout
@@ -49,5 +61,5 @@ export function TopBar() {
         </p>
       )}
     </header>
-  )
+  );
 }

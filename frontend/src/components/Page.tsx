@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react'
+import type { ReactNode } from "react";
 
 export function Page({ children }: { children: ReactNode }) {
   return (
@@ -7,5 +7,5 @@ export function Page({ children }: { children: ReactNode }) {
         {children}
       </section>
     </main>
-  )
+  );
 }

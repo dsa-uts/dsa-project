@@ -1,17 +1,26 @@
-import Markdown, { type Components } from 'react-markdown'
-import remarkGfm from 'remark-gfm'
-import remarkMath from 'remark-math'
-import rehypeKatex from 'rehype-katex'
-import rehypeHighlight from 'rehype-highlight'
-import { MarkdownCodeBlock } from '@/components/MarkdownCodeBlock'
-import 'katex/dist/katex.min.css'
-import './markdown.css'
+import Markdown, { type Components } from "react-markdown";
+import remarkGfm from "remark-gfm";
+import remarkMath from "remark-math";
+import rehypeKatex from "rehype-katex";
+import rehypeHighlight from "rehype-highlight";
+import { MarkdownCodeBlock } from "@/components/MarkdownCodeBlock";
+import "katex/dist/katex.min.css";
+import "./markdown.css";
 
-export function MarkdownContent({ children, components }: { children: string; components?: Components }) {
+export function MarkdownContent({
+  children,
+  components,
+}: {
+  children: string;
+  components?: Components;
+}) {
   return (
     <Markdown
       remarkPlugins={[remarkGfm, remarkMath]}
-      rehypePlugins={[rehypeKatex, [rehypeHighlight, { plainText: ['text', 'txt'], ignoreMissing: true }]]}
+      rehypePlugins={[
+        rehypeKatex,
+        [rehypeHighlight, { plainText: ["text", "txt"], ignoreMissing: true }],
+      ]}
       components={{
         pre: MarkdownCodeBlock,
         table: ({ children }) => (
@@ -24,5 +33,5 @@ export function MarkdownContent({ children, components }: { children: string; co
     >
       {children}
     </Markdown>
-  )
+  );
 }
