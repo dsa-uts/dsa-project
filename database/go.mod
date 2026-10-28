@@ -1,6 +1,6 @@
 module github.com/dsa-uts/dsa-project/database
 
-go 1.24.5
+go 1.26.0
 
 require github.com/uptrace/bun v1.2.16
 

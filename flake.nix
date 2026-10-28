@@ -2,7 +2,7 @@
   description = "DSA development environment";
 
   inputs = {
-    nixpkgs.url = "github:NixOS/nixpkgs/nixos-25.11";
+    nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
     devshell.url = "github:numtide/devshell";
     devshell.inputs.nixpkgs.follows = "nixpkgs";
   };
@@ -17,7 +17,7 @@
         default = devshell.legacyPackages.${system}.mkShell {
           name = "dsa";
           packages = with pkgs; [
-            go_1_25
+            go_1_26
             air
             go-swag
             nodejs_24
@@ -25,6 +25,9 @@
             cargo
             stdenv.cc
             python3
+            go-task
+            nushell
+            nufmt
           ];
         };
       }

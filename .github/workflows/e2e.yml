@@ -1,0 +1,59 @@
+name: E2E
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: e2e-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  e2e:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: e2e/package-lock.json
+      - uses: hustcer/setup-nu@v3
+        with:
+          version: '0.116.1'
+      - uses: go-task/setup-task@v2
+        with:
+          version: '3.53.1'
+
+      - name: Check E2E orchestration
+        run: python3 scripts/test_e2e.py
+
+      - name: Install E2E dependencies and sandbox images
+        run: task e2e:install
+
+      - name: Install Chromium system dependencies
+        working-directory: e2e
+        run: npx playwright install-deps chromium
+
+      - name: Run E2E tests
+        id: e2e
+        timeout-minutes: 20
+        run: task e2e:run
+
+      - name: Clean up after unsuccessful E2E run
+        if: ${{ always() && (steps.e2e.outcome == 'failure' || steps.e2e.outcome == 'cancelled') }}
+        run: task e2e:down
+
+      - name: Upload E2E logs and reports
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: e2e-artifacts
+          path: e2e/artifacts/
+          retention-days: 14
