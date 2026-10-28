@@ -37,14 +37,18 @@ axiosClient.interceptors.response.use(
   },
   (error: AxiosError<ErrorResponse>) => {
     if (error.response?.status === 401) {
-      // save current path
-      const currentPath = window.location.pathname;
+      // save current path (relative to the app's base path, as the router expects)
+      const basePath = import.meta.env.BASE_URL; // e.g. "/dsa/"
+      const pathname = window.location.pathname;
+      const currentPath = pathname.startsWith(basePath)
+        ? `/${pathname.slice(basePath.length)}`
+        : pathname;
 
       // Clear stored token and expiry time
       localStorage.removeItem(TOKEN_KEY);
       localStorage.removeItem(TOKEN_EXPIRY_KEY);
 
-      window.location.href = `/login?redirect=${encodeURIComponent(currentPath)}`; // Redirect to login page
+      window.location.href = `${basePath}login?redirect=${encodeURIComponent(currentPath)}`; // Redirect to login page
       return Promise.reject(new Error('Unauthorized'))
     }
 

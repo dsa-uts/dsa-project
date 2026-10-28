@@ -24,10 +24,13 @@ import SingleGradingUpload from './pages/grading/SingleGradingUpload';
 
 const queryClient = new QueryClient();
 
+// import.meta.env.BASE_URL is derived from `base` in vite.config.ts (e.g. "/dsa/")
+const ROUTER_BASENAME = import.meta.env.BASE_URL.replace(/\/$/, '');
+
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
-      <BrowserRouter>
+      <BrowserRouter basename={ROUTER_BASENAME}>
         <Routes>
           <Route path="/login" element={<LoginPage />} />
           <Route element={<ProtectedRoute> <NavigationBarLayout /> </ProtectedRoute>}>

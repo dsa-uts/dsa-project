@@ -74,15 +74,19 @@ flowchart LR
 起動後、localhost:5173にアクセスすると、フロントエンドの画面が表示される。
 
 # デプロイ時
-1. frontendの[.env.production](./dsa-frontend/.env.production)を、実際のドメイン名に合わせて書き換える。
+1. frontendの[.env.production](./dsa-frontend/.env.production)を、実際のURLに合わせて書き換える。
+    アプリは`https://your.domain.name/dsa/`のようにサブパス以下で配信される前提になっている。
     ```env
-    VITE_API_BASE_URL=https://your.domain.name/api
+    VITE_API_BASE_URL=https://your.domain.name/dsa/api
+    VITE_BASE_PATH=/dsa/
     ```
+    前段のリバースプロキシは`/dsa`のプレフィックスを**取り除いて**このnginxへ転送すること(例: `location /dsa/ { proxy_pass http://<host>:3000/; }`)。
 
 2. backendの[.env.production](./dsa-backend/.env.production)を、実際のドメイン名に合わせて書き換える。
     ```env
     CORS_ALLOWED_ORIGINS=https://your.domain.name
     ```
+    (オリジンにはパスを含めない)
 
 3. docker-compose.prod.yamlを編集し、外部からアクセスされるポート番号に合わせてnginxのポートbindingを変更する。
     ```yaml
