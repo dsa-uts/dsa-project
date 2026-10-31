@@ -1,388 +1,592 @@
-import { randomUUID } from 'node:crypto'
-import { expect, test, type APIRequestContext } from '@playwright/test'
-import { baseURL } from '../environment.js'
-import { expectAPIError } from './helpers.js'
+import { randomUUID } from "node:crypto";
+import { expect, test, type APIRequestContext } from "@playwright/test";
+import { baseURL } from "../environment.js";
+import { expectAPIError } from "./helpers.js";
 
-const unknownID = randomUUID()
-const uniqueUserid = () => `u-${randomUUID().slice(0, 20)}`
-const valid = () => ({ userid: uniqueUserid(), name: '山田 🔑', role: 'student', password: 'initial-password' })
-async function cookie(request: APIRequestContext, userid = 'admin', password = 'admin') {
-  const response = await request.post('/api/session', { data: { userid, password } })
-  expect(response.status()).toBe(200)
-  return { Cookie: response.headers()['set-cookie'].split(';')[0] }
+const unknownID = randomUUID();
+const uniqueUserid = () => `u-${randomUUID().slice(0, 20)}`;
+const valid = () => ({
+  userid: uniqueUserid(),
+  name: "山田 🔑",
+  role: "student",
+  password: "initial-password",
+});
+async function cookie(request: APIRequestContext, userid = "admin", password = "admin") {
+  const response = await request.post("/api/session", { data: { userid, password } });
+  expect(response.status()).toBe(200);
+  return { Cookie: response.headers()["set-cookie"].split(";")[0] };
 }
 
-test('every Admin user endpoint requires authentication and Admin Role, before validation', async ({ request }) => {
-  for (const role of [null, 'student', 'manager']) {
-    const headers = role ? await cookie(request, role) : { Cookie: '' }
+test("every Admin user endpoint requires authentication and Admin Role, before validation", async ({
+  request,
+}) => {
+  for (const role of [null, "student", "manager"]) {
+    const headers = role ? await cookie(request, role) : { Cookie: "" };
     for (const response of [
-      await request.get('/api/admin/users', { headers }),
-      await request.post('/api/admin/users', { headers, data: valid() }),
-      await request.patch(`/api/admin/users/${unknownID}`, { headers, data: { name: 'changed' } }),
-      await request.post('/api/admin/users', { headers, data: {} }),
+      await request.get("/api/admin/users", { headers }),
+      await request.post("/api/admin/users", { headers, data: valid() }),
+      await request.patch(`/api/admin/users/${unknownID}`, { headers, data: { name: "changed" } }),
+      await request.post("/api/admin/users", { headers, data: {} }),
       await request.patch(`/api/admin/users/${unknownID}`, { headers, data: {} }),
-      await request.patch('/api/admin/users/not-a-uuid', { headers, data: { name: 'changed' } }),
-      await request.patch('/api/admin/users/not-a-uuid', { headers: { ...headers, 'Content-Type': 'application/json' }, data: '{' }),
+      await request.patch("/api/admin/users/not-a-uuid", { headers, data: { name: "changed" } }),
+      await request.patch("/api/admin/users/not-a-uuid", {
+        headers: { ...headers, "Content-Type": "application/json" },
+        data: "{",
+      }),
     ]) {
-      await expectAPIError(response, role ? 403 : 401)
-      if (!role) expect(response.headers()['set-cookie']).toContain('Max-Age=0')
+      await expectAPIError(response, role ? 403 : 401);
+      if (!role) expect(response.headers()["set-cookie"]).toContain("Max-Age=0");
     }
   }
-})
+});
 
-test('creation appends and validates immutable case-sensitive Userids and Unicode inputs', async ({ request }) => {
-  const headers = await cookie(request)
-  await expectAPIError(await request.patch('/api/admin/users/not-a-uuid', { headers, data: { name: 'changed' } }), 400)
-  await expectAPIError(await request.post('/api/admin/users', { data: '{', headers: { ...headers, 'Content-Type': 'application/json' } }), 400)
-  const before = (await (await request.get('/api/admin/users', { headers })).json()).users
-  expect(before.find((u: { userid: string }) => u.userid === 'disabled')).toMatchObject({ disabled: true })
-  const data = { ...valid(), name: ' 🔑'.repeat(32), password: '🔑'.repeat(256) }
-  const created = await request.post('/api/admin/users', { headers, data })
-  expect(created.status()).toBe(201)
-  const user = await created.json()
-  expect(user).toEqual({ id: expect.any(String), userid: data.userid, name: data.name, role: 'student', disabled: false })
-  const after = (await (await request.get('/api/admin/users', { headers })).json()).users
-  expect(after).toEqual([...before, user])
-  await cookie(request, data.userid, data.password)
-  await expectAPIError(await request.post('/api/admin/users', { headers, data }), 409)
-  expect((await request.post('/api/admin/users', { headers, data: { ...data, userid: data.userid.toUpperCase() } })).status()).toBe(201)
+test("creation appends and validates immutable case-sensitive Userids and Unicode inputs", async ({
+  request,
+}) => {
+  const headers = await cookie(request);
+  await expectAPIError(
+    await request.patch("/api/admin/users/not-a-uuid", { headers, data: { name: "changed" } }),
+    400,
+  );
+  await expectAPIError(
+    await request.post("/api/admin/users", {
+      data: "{",
+      headers: { ...headers, "Content-Type": "application/json" },
+    }),
+    400,
+  );
+  const before = (await (await request.get("/api/admin/users", { headers })).json()).users;
+  expect(before.find((u: { userid: string }) => u.userid === "disabled")).toMatchObject({
+    disabled: true,
+  });
+  const data = { ...valid(), name: " 🔑".repeat(32), password: "🔑".repeat(256) };
+  const created = await request.post("/api/admin/users", { headers, data });
+  expect(created.status()).toBe(201);
+  const user = await created.json();
+  expect(user).toEqual({
+    id: expect.any(String),
+    userid: data.userid,
+    name: data.name,
+    role: "student",
+    disabled: false,
+  });
+  const after = (await (await request.get("/api/admin/users", { headers })).json()).users;
+  expect(after).toEqual([...before, user]);
+  await cookie(request, data.userid, data.password);
+  await expectAPIError(await request.post("/api/admin/users", { headers, data }), 409);
+  expect(
+    (
+      await request.post("/api/admin/users", {
+        headers,
+        data: { ...data, userid: data.userid.toUpperCase() },
+      })
+    ).status(),
+  ).toBe(201);
   for (const invalid of [
-    { userid: '' }, { userid: 'a'.repeat(31) }, { userid: ' leading' }, { userid: '_leading' }, { userid: 'trailing\n' }, { userid: '日本語' },
-    { name: '' }, { name: '🔑'.repeat(65) }, { name: ' \t\u3000' }, { name: 'a\u0085b' }, { name: 'a\nb' },
-    { password: undefined }, { password: null }, { password: '🔑'.repeat(7) }, { password: '🔑'.repeat(257) }, { role: 'system' }, { confirmation: 'extra' },
-  ]) await expectAPIError(await request.post('/api/admin/users', { headers, data: { ...valid(), ...invalid } }), 400)
-  for (const patch of [{}, { userid: 'replacement' }, { password: '' }, { name: null }, { disabled: null }, { name: '\u3000' }, { role: 'invalid' }]) {
-    await expectAPIError(await request.patch(`/api/admin/users/${user.id}`, { headers, data: patch }), 400)
+    { userid: "" },
+    { userid: "a".repeat(31) },
+    { userid: " leading" },
+    { userid: "_leading" },
+    { userid: "trailing\n" },
+    { userid: "日本語" },
+    { name: "" },
+    { name: "🔑".repeat(65) },
+    { name: " \t\u3000" },
+    { name: "a\u0085b" },
+    { name: "a\nb" },
+    { password: undefined },
+    { password: null },
+    { password: "🔑".repeat(7) },
+    { password: "🔑".repeat(257) },
+    { role: "system" },
+    { confirmation: "extra" },
+  ])
+    await expectAPIError(
+      await request.post("/api/admin/users", { headers, data: { ...valid(), ...invalid } }),
+      400,
+    );
+  for (const patch of [
+    {},
+    { userid: "replacement" },
+    { password: "" },
+    { name: null },
+    { disabled: null },
+    { name: "\u3000" },
+    { role: "invalid" },
+  ]) {
+    await expectAPIError(
+      await request.patch(`/api/admin/users/${user.id}`, { headers, data: patch }),
+      400,
+    );
   }
-  await expectAPIError(await request.patch(`/api/admin/users/${randomUUID()}`, { headers, data: { name: 'Unknown' } }), 404)
-})
+  await expectAPIError(
+    await request.patch(`/api/admin/users/${randomUUID()}`, { headers, data: { name: "Unknown" } }),
+    404,
+  );
+});
 
-test('Admin cannot be created or assigned, and rejected promotion is atomic', async ({ request }) => {
-  const headers = await cookie(request)
-  const rejected = { ...valid(), role: 'admin' }
-  await expectAPIError(await request.post('/api/admin/users', { headers, data: rejected }), 400)
-  for (const role of ['student', 'manager']) {
-    const data = { ...valid(), role }
-    const created = await request.post('/api/admin/users', { headers, data })
-    expect(created.status()).toBe(201)
-    const user = await created.json()
-    await expectAPIError(await request.patch(`/api/admin/users/${user.id}`, {
-      headers, data: { role: 'admin', name: 'Must not persist', password: 'must-not-persist', disabled: true },
-    }), 400)
-    const session = await cookie(request, data.userid, data.password)
-    expect(await (await request.get('/api/me', { headers: session })).json()).toMatchObject({ role, name: data.name })
-    expect(await (await request.patch(`/api/admin/users/${user.id}`, {
-      headers, data: { role: role === 'student' ? 'manager' : 'student' },
-    })).json()).toMatchObject({ role: role === 'student' ? 'manager' : 'student' })
+test("Admin cannot be created or assigned, and rejected promotion is atomic", async ({
+  request,
+}) => {
+  const headers = await cookie(request);
+  const rejected = { ...valid(), role: "admin" };
+  await expectAPIError(await request.post("/api/admin/users", { headers, data: rejected }), 400);
+  for (const role of ["student", "manager"]) {
+    const data = { ...valid(), role };
+    const created = await request.post("/api/admin/users", { headers, data });
+    expect(created.status()).toBe(201);
+    const user = await created.json();
+    await expectAPIError(
+      await request.patch(`/api/admin/users/${user.id}`, {
+        headers,
+        data: {
+          role: "admin",
+          name: "Must not persist",
+          password: "must-not-persist",
+          disabled: true,
+        },
+      }),
+      400,
+    );
+    const session = await cookie(request, data.userid, data.password);
+    expect(await (await request.get("/api/me", { headers: session })).json()).toMatchObject({
+      role,
+      name: data.name,
+    });
+    expect(
+      await (
+        await request.patch(`/api/admin/users/${user.id}`, {
+          headers,
+          data: { role: role === "student" ? "manager" : "student" },
+        })
+      ).json(),
+    ).toMatchObject({ role: role === "student" ? "manager" : "student" });
   }
-  const users = (await (await request.get('/api/admin/users', { headers })).json()).users
-  expect(users.filter((user: { role: string }) => user.role === 'admin')).toHaveLength(1)
-  expect(users.some((user: { userid: string }) => user.userid === rejected.userid)).toBe(false)
-})
+  const users = (await (await request.get("/api/admin/users", { headers })).json()).users;
+  expect(users.filter((user: { role: string }) => user.role === "admin")).toHaveLength(1);
+  expect(users.some((user: { userid: string }) => user.userid === rejected.userid)).toBe(false);
+});
 
-test('partial updates preserve order, disable/reset revoke all sessions, and re-enable preserves password', async ({ request }) => {
-  const headers = await cookie(request)
-  const data = valid()
-  const user = await (await request.post('/api/admin/users', { headers, data })).json()
-  const path = `/api/admin/users/${user.id}`
-  const listIDs = async () => (await (await request.get('/api/admin/users', { headers })).json()).users.map((u: { id: string }) => u.id)
-  const order = await listIDs()
-  const sessions = [await cookie(request, data.userid, data.password), await cookie(request, data.userid, data.password)]
-  expect((await request.patch(path, { headers, data: { name: 'Edited', role: 'manager' } })).status()).toBe(200)
-  for (const session of sessions) expect(await (await request.get('/api/me', { headers: session })).json()).toMatchObject({ name: 'Edited', role: 'manager' })
-  for (let i = 0; i < 2; i++) expect(await (await request.patch(path, { headers, data: { disabled: true } })).json()).toMatchObject({ disabled: true })
-  for (const session of sessions) expect((await request.get('/api/me', { headers: session })).status()).toBe(401)
-  await expectAPIError(await request.post('/api/session', { data: { userid: data.userid, password: data.password } }), 401)
-  expect(await (await request.patch(path, { headers, data: { disabled: false } })).json()).toMatchObject({ disabled: false, name: 'Edited', role: 'manager' })
-  for (const session of sessions) expect((await request.get('/api/me', { headers: session })).status()).toBe(401)
-  const newSessions = [await cookie(request, data.userid, data.password), await cookie(request, data.userid, data.password)]
-  expect((await request.patch(path, { headers, data: { password: ' new 🔑 password ' } })).status()).toBe(200)
-  for (const session of newSessions) expect((await request.get('/api/me', { headers: session })).status()).toBe(401)
-  await expectAPIError(await request.post('/api/session', { data: { userid: data.userid, password: data.password } }), 401)
-  await cookie(request, data.userid, ' new 🔑 password ')
-  expect(await listIDs()).toEqual(order)
-  expect((await request.patch(path, { headers, data: { disabled: true } })).status()).toBe(200)
-  expect((await request.patch(path, { headers, data: { disabled: false, password: 'replacement-password' } })).status()).toBe(200)
-  await cookie(request, data.userid, 'replacement-password')
-})
+test("partial updates preserve order, disable/reset revoke all sessions, and re-enable preserves password", async ({
+  request,
+}) => {
+  const headers = await cookie(request);
+  const data = valid();
+  const user = await (await request.post("/api/admin/users", { headers, data })).json();
+  const path = `/api/admin/users/${user.id}`;
+  const listIDs = async () =>
+    (await (await request.get("/api/admin/users", { headers })).json()).users.map(
+      (u: { id: string }) => u.id,
+    );
+  const order = await listIDs();
+  const sessions = [
+    await cookie(request, data.userid, data.password),
+    await cookie(request, data.userid, data.password),
+  ];
+  expect(
+    (await request.patch(path, { headers, data: { name: "Edited", role: "manager" } })).status(),
+  ).toBe(200);
+  for (const session of sessions)
+    expect(await (await request.get("/api/me", { headers: session })).json()).toMatchObject({
+      name: "Edited",
+      role: "manager",
+    });
+  for (let i = 0; i < 2; i++)
+    expect(
+      await (await request.patch(path, { headers, data: { disabled: true } })).json(),
+    ).toMatchObject({ disabled: true });
+  for (const session of sessions)
+    expect((await request.get("/api/me", { headers: session })).status()).toBe(401);
+  await expectAPIError(
+    await request.post("/api/session", { data: { userid: data.userid, password: data.password } }),
+    401,
+  );
+  expect(
+    await (await request.patch(path, { headers, data: { disabled: false } })).json(),
+  ).toMatchObject({ disabled: false, name: "Edited", role: "manager" });
+  for (const session of sessions)
+    expect((await request.get("/api/me", { headers: session })).status()).toBe(401);
+  const newSessions = [
+    await cookie(request, data.userid, data.password),
+    await cookie(request, data.userid, data.password),
+  ];
+  expect(
+    (await request.patch(path, { headers, data: { password: " new 🔑 password " } })).status(),
+  ).toBe(200);
+  for (const session of newSessions)
+    expect((await request.get("/api/me", { headers: session })).status()).toBe(401);
+  await expectAPIError(
+    await request.post("/api/session", { data: { userid: data.userid, password: data.password } }),
+    401,
+  );
+  await cookie(request, data.userid, " new 🔑 password ");
+  expect(await listIDs()).toEqual(order);
+  expect((await request.patch(path, { headers, data: { disabled: true } })).status()).toBe(200);
+  expect(
+    (
+      await request.patch(path, {
+        headers,
+        data: { disabled: false, password: "replacement-password" },
+      })
+    ).status(),
+  ).toBe(200);
+  await cookie(request, data.userid, "replacement-password");
+});
 
-test('self-protection conflicts are atomic', async ({ request }) => {
-  const headers = await cookie(request)
-  const own = headers
-  const user = await (await request.get('/api/me', { headers })).json()
-  for (const patch of [{ role: 'student', name: 'Must not persist' }, { role: 'manager' }, { disabled: true }]) {
-    await expectAPIError(await request.patch(`/api/admin/users/${user.id}`, { headers: own, data: patch }), 409)
+test("self-protection conflicts are atomic", async ({ request }) => {
+  const headers = await cookie(request);
+  const own = headers;
+  const user = await (await request.get("/api/me", { headers })).json();
+  for (const patch of [
+    { role: "student", name: "Must not persist" },
+    { role: "manager" },
+    { disabled: true },
+  ]) {
+    await expectAPIError(
+      await request.patch(`/api/admin/users/${user.id}`, { headers: own, data: patch }),
+      409,
+    );
   }
-  expect(await (await request.get('/api/me', { headers: own })).json()).toMatchObject({ name: user.name, role: 'admin' })
-  expect((await request.patch(`/api/admin/users/${user.id}`, { headers: own, data: { name: user.name } })).status()).toBe(200)
-})
+  expect(await (await request.get("/api/me", { headers: own })).json()).toMatchObject({
+    name: user.name,
+    role: "admin",
+  });
+  expect(
+    (
+      await request.patch(`/api/admin/users/${user.id}`, {
+        headers: own,
+        data: { name: user.name },
+      })
+    ).status(),
+  ).toBe(200);
+});
 
-test('browser Admin creates, filters, edits, confirms disable, and re-enables User Accounts', async ({ page }) => {
-  await page.goto(new URL('/login', baseURL).href)
-  await page.getByLabel('User ID', { exact: true }).fill('admin')
-  await page.getByLabel('Password', { exact: true }).fill('admin')
-  await page.getByRole('button', { name: 'Log in' }).click()
-  await page.getByRole('link', { name: 'Admin', exact: true }).click()
-  await expect(page.getByRole('heading', { name: 'Admin Page' })).toBeVisible()
-  await page.getByRole('link', { name: 'User Management', exact: true }).click()
-  await expect(page).toHaveURL(/\/admin\/users$/)
-  await expect(page.getByRole('navigation', { name: 'パンくず' })).toHaveText('Admin Page / User Management')
-  await expect(page.getByRole('heading', { level: 1 })).toHaveText('User Management')
-  const adminRow = page.getByRole('row').filter({ has: page.getByRole('cell', { name: 'admin', exact: true }) })
-  await adminRow.getByRole('button', { name: 'Edit' }).click()
-  await expect(page.getByRole('dialog')).toContainText('Role: Admin')
-  await expect(page.getByRole('dialog').getByRole('combobox')).toHaveCount(0)
-  await page.getByRole('dialog').getByRole('button', { name: 'Save' }).click()
-  await expect(page.getByRole('dialog')).not.toBeVisible()
-  await page.getByRole('button', { name: 'Create user' }).click()
-  const dialog = page.getByRole('dialog')
-  await expect(dialog.getByRole('option')).toHaveText(['Student', 'Manager'])
-  const userid = uniqueUserid()
-  await dialog.getByLabel('User ID', { exact: true }).fill(userid)
-  await dialog.getByLabel('Display name').fill('Browser User')
-  await dialog.getByLabel('Password', { exact: true }).fill('browser-password')
-  await dialog.getByLabel('Confirm password').fill('mismatch')
-  await dialog.getByRole('button', { name: 'Create' }).click()
-  await expect(dialog.getByText('Passwords do not match.')).toBeVisible()
-  await dialog.getByLabel('Confirm password').fill('browser-password')
-  await dialog.getByRole('button', { name: 'Create' }).click()
-  await expect(dialog).not.toBeVisible()
-  await expect(page.getByRole('status')).toContainText('created')
-  await page.getByLabel('Search users').fill(` ${userid.toUpperCase()} `)
-  const row = page.getByRole('row').filter({ hasText: userid })
-  await expect(row).toHaveCount(1)
-  await row.getByRole('button', { name: 'Edit' }).click()
-  await expect(dialog.getByLabel('User ID', { exact: true })).toBeDisabled()
-  await dialog.getByLabel('Display name').fill('Renamed Browser User')
-  await expect(dialog.getByRole('option')).toHaveText(['Student', 'Manager'])
-  await dialog.getByLabel('Role').selectOption('manager')
-  await dialog.getByRole('button', { name: 'Save' }).click()
-  await expect(row).toContainText('Renamed Browser User')
-  await page.getByLabel('Search users').fill(' renamed browser ')
-  await expect(row).toBeVisible()
-  await row.getByRole('button', { name: 'Disable account' }).click()
-  await expect(dialog).toContainText(userid)
-  await expect(dialog).toContainText('Renamed Browser User')
-  await expect(dialog).toContainText('sessions')
-  await dialog.getByRole('button', { name: 'Cancel' }).click()
-  await expect(row.getByRole('button', { name: 'Disable account' })).toBeVisible()
-  await page.screenshot({ path: 'test-results/user-management.png', fullPage: true })
-  await row.getByRole('button', { name: 'Disable account' }).click()
-  await dialog.getByRole('button', { name: 'Disable account' }).click()
-  await expect(row.getByRole('button', { name: 'Re-enable' })).toBeVisible()
-  await page.getByLabel('State').selectOption('active')
-  await expect(row).toHaveCount(0)
-  await page.getByLabel('State').selectOption('disabled')
-  await row.getByRole('button', { name: 'Re-enable' }).click()
-  await expect(row).toHaveCount(0)
-  await expect(page.getByRole('dialog')).toHaveCount(0)
-  await page.getByLabel('State').selectOption('all')
-  await expect(row.getByRole('button', { name: 'Disable account' })).toBeVisible()
-})
+test("browser Admin creates, filters, edits, confirms disable, and re-enables User Accounts", async ({
+  page,
+}) => {
+  await page.goto(new URL("/login", baseURL).href);
+  await page.getByLabel("User ID", { exact: true }).fill("admin");
+  await page.getByLabel("Password", { exact: true }).fill("admin");
+  await page.getByRole("button", { name: "Log in" }).click();
+  await page.getByRole("link", { name: "Admin", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Admin Page" })).toBeVisible();
+  await page.getByRole("link", { name: "User Management", exact: true }).click();
+  await expect(page).toHaveURL(/\/admin\/users$/);
+  await expect(page.getByRole("navigation", { name: "パンくず" })).toHaveText(
+    "Admin Page / User Management",
+  );
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText("User Management");
+  const adminRow = page
+    .getByRole("row")
+    .filter({ has: page.getByRole("cell", { name: "admin", exact: true }) });
+  await adminRow.getByRole("button", { name: "Edit" }).click();
+  await expect(page.getByRole("dialog")).toContainText("Role: Admin");
+  await expect(page.getByRole("dialog").getByRole("combobox")).toHaveCount(0);
+  await page.getByRole("dialog").getByRole("button", { name: "Save" }).click();
+  await expect(page.getByRole("dialog")).not.toBeVisible();
+  await page.getByRole("button", { name: "Create user" }).click();
+  const dialog = page.getByRole("dialog");
+  await expect(dialog.getByRole("option")).toHaveText(["Student", "Manager"]);
+  const userid = uniqueUserid();
+  await dialog.getByLabel("User ID", { exact: true }).fill(userid);
+  await dialog.getByLabel("Display name").fill("Browser User");
+  await dialog.getByLabel("Password", { exact: true }).fill("browser-password");
+  await dialog.getByLabel("Confirm password").fill("mismatch");
+  await dialog.getByRole("button", { name: "Create" }).click();
+  await expect(dialog.getByText("Passwords do not match.")).toBeVisible();
+  await dialog.getByLabel("Confirm password").fill("browser-password");
+  await dialog.getByRole("button", { name: "Create" }).click();
+  await expect(dialog).not.toBeVisible();
+  await expect(page.getByRole("status")).toContainText("created");
+  await page.getByLabel("Search users").fill(` ${userid.toUpperCase()} `);
+  const row = page.getByRole("row").filter({ hasText: userid });
+  await expect(row).toHaveCount(1);
+  await row.getByRole("button", { name: "Edit" }).click();
+  await expect(dialog.getByLabel("User ID", { exact: true })).toBeDisabled();
+  await dialog.getByLabel("Display name").fill("Renamed Browser User");
+  await expect(dialog.getByRole("option")).toHaveText(["Student", "Manager"]);
+  await dialog.getByLabel("Role").selectOption("manager");
+  await dialog.getByRole("button", { name: "Save" }).click();
+  await expect(row).toContainText("Renamed Browser User");
+  await page.getByLabel("Search users").fill(" renamed browser ");
+  await expect(row).toBeVisible();
+  await row.getByRole("button", { name: "Disable account" }).click();
+  await expect(dialog).toContainText(userid);
+  await expect(dialog).toContainText("Renamed Browser User");
+  await expect(dialog).toContainText("sessions");
+  await dialog.getByRole("button", { name: "Cancel" }).click();
+  await expect(row.getByRole("button", { name: "Disable account" })).toBeVisible();
+  await page.screenshot({ path: "test-results/user-management.png", fullPage: true });
+  await row.getByRole("button", { name: "Disable account" }).click();
+  await dialog.getByRole("button", { name: "Disable account" }).click();
+  await expect(row.getByRole("button", { name: "Re-enable" })).toBeVisible();
+  await page.getByLabel("State").selectOption("active");
+  await expect(row).toHaveCount(0);
+  await page.getByLabel("State").selectOption("disabled");
+  await row.getByRole("button", { name: "Re-enable" }).click();
+  await expect(row).toHaveCount(0);
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await page.getByLabel("State").selectOption("all");
+  await expect(row.getByRole("button", { name: "Disable account" })).toBeVisible();
+});
 
-for (const role of ['student', 'manager']) {
-  test(`browser ${role} has no Admin link and renders 403 on direct navigation`, async ({ page }) => {
-    await page.goto(new URL('/login', baseURL).href)
-    await page.getByLabel('User ID', { exact: true }).fill(role)
-    await page.getByLabel('Password', { exact: true }).fill('admin')
-    await page.getByRole('button', { name: 'Log in' }).click()
-    await expect(page).toHaveURL(new URL('/about', baseURL).href)
-    await expect(page.getByRole('link', { name: 'Admin', exact: true })).toHaveCount(0)
-    await page.goto(new URL('/admin/list', baseURL).href)
-    await expect(page.getByRole('heading', { name: '403 Forbidden' })).toBeVisible()
-    await page.goto(new URL('/admin/users', baseURL).href)
-    await expect(page.getByRole('heading', { name: '403 Forbidden' })).toBeVisible()
-  })
+for (const role of ["student", "manager"]) {
+  test(`browser ${role} has no Admin link and renders 403 on direct navigation`, async ({
+    page,
+  }) => {
+    await page.goto(new URL("/login", baseURL).href);
+    await page.getByLabel("User ID", { exact: true }).fill(role);
+    await page.getByLabel("Password", { exact: true }).fill("admin");
+    await page.getByRole("button", { name: "Log in" }).click();
+    await expect(page).toHaveURL(new URL("/about", baseURL).href);
+    await expect(page.getByRole("link", { name: "Admin", exact: true })).toHaveCount(0);
+    await page.goto(new URL("/admin/list", baseURL).href);
+    await expect(page.getByRole("heading", { name: "403 Forbidden" })).toBeVisible();
+    await page.goto(new URL("/admin/users", baseURL).href);
+    await expect(page.getByRole("heading", { name: "403 Forbidden" })).toBeVisible();
+  });
 }
 
-test('global order is Admin-only, requires every User Account ID once and preserves order on mismatch', async ({ request }) => {
-  for (const role of [null, 'student', 'manager']) {
-    const headers = role ? await cookie(request, role) : { Cookie: '' }
-    await expectAPIError(await request.patch('/api/users/order', { headers, data: { user_ids: [] } }), role ? 403 : 401)
+test("global order is Admin-only, requires every User Account ID once and preserves order on mismatch", async ({
+  request,
+}) => {
+  for (const role of [null, "student", "manager"]) {
+    const headers = role ? await cookie(request, role) : { Cookie: "" };
+    await expectAPIError(
+      await request.patch("/api/users/order", { headers, data: { user_ids: [] } }),
+      role ? 403 : 401,
+    );
   }
-  const headers = await cookie(request)
-  const list = async (): Promise<string[]> => (await (await request.get('/api/admin/users', { headers })).json()).users.map((u: { id: string }) => u.id)
-  const original = await list()
-  const reversed = [...original].reverse()
-  expect((await request.patch('/api/users/order', { headers, data: { user_ids: reversed } })).status()).toBe(204)
-  expect(await list()).toEqual(reversed)
-  for (const ids of [[], reversed.slice(1), [...reversed, reversed[0]], [...reversed, unknownID], [...reversed.slice(1), randomUUID()]]) {
-    await expectAPIError(await request.patch('/api/users/order', { headers, data: { user_ids: ids } }), 422)
-    expect(await list()).toEqual(reversed)
+  const headers = await cookie(request);
+  const list = async (): Promise<string[]> =>
+    (await (await request.get("/api/admin/users", { headers })).json()).users.map(
+      (u: { id: string }) => u.id,
+    );
+  const original = await list();
+  const reversed = [...original].reverse();
+  expect(
+    (await request.patch("/api/users/order", { headers, data: { user_ids: reversed } })).status(),
+  ).toBe(204);
+  expect(await list()).toEqual(reversed);
+  for (const ids of [
+    [],
+    reversed.slice(1),
+    [...reversed, reversed[0]],
+    [...reversed, unknownID],
+    [...reversed.slice(1), randomUUID()],
+  ]) {
+    await expectAPIError(
+      await request.patch("/api/users/order", { headers, data: { user_ids: ids } }),
+      422,
+    );
+    expect(await list()).toEqual(reversed);
   }
-  const newUser = await (await request.post('/api/admin/users', { headers, data: valid() })).json()
-  expect(await list()).toEqual([...reversed, newUser.id])
-  await expectAPIError(await request.patch('/api/users/order', { headers, data: { user_ids: reversed } }), 422)
-})
+  const newUser = await (await request.post("/api/admin/users", { headers, data: valid() })).json();
+  expect(await list()).toEqual([...reversed, newUser.id]);
+  await expectAPIError(
+    await request.patch("/api/users/order", { headers, data: { user_ids: reversed } }),
+    422,
+  );
+});
 
-test('browser bulk import retries failed rows and manual ordering saves or cancels globally', async ({ page, request }) => {
-  await page.goto(new URL('/login', baseURL).href)
-  await page.getByLabel('User ID', { exact: true }).fill('admin')
-  await page.getByLabel('Password', { exact: true }).fill('admin')
-  await page.getByRole('button', { name: 'Log in' }).click()
-  await page.getByRole('link', { name: 'Admin', exact: true }).click()
-  await page.getByRole('link', { name: 'Batch User Registration' }).click()
-  await expect(page.getByRole('navigation', { name: 'パンくず' })).toHaveText('Admin Page / Batch User Registration')
-  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Batch User Registration')
-  const first = uniqueUserid()
-  const second = uniqueUserid()
-  await page.getByLabel('CSV / Excel ファイル').setInputFiles({
-    name: 'users.csv', mimeType: 'text/csv',
-    buffer: Buffer.from(`userid,username,role,password\n${first},一括作成1,student,\nadmin,一括作成2,manager,manual-password\n`),
-  })
-  const password = await page.getByLabel('1行目 password').inputValue()
-  expect(password).toMatch(/^[a-zA-Z0-9]{6}-[a-zA-Z0-9]{6}-[a-zA-Z0-9]{6}$/)
-  const firstDownload = page.waitForEvent('download')
-  await page.getByRole('button', { name: 'Apply', exact: true }).click()
-  const download = await firstDownload
-  const stream = await download.createReadStream()
-  const chunks = []
-  for await (const chunk of stream!) chunks.push(chunk)
-  expect(Buffer.concat(chunks).toString('utf8')).toContain(`${first},一括作成1,student,${password}\r\n,,,\r\n`)
-  await expect(page.getByLabel('1行目 userid')).toBeDisabled()
-  await expect(page.getByRole('alert')).toContainText('already taken')
-  await page.getByLabel('2行目 userid').dblclick()
-  await page.getByLabel('2行目 userid').fill(second)
-  const retryDownload = page.waitForEvent('download')
-  await page.getByRole('button', { name: 'Apply', exact: true }).click()
-  const retryStream = await (await retryDownload).createReadStream()
-  const retryChunks = []
-  for await (const chunk of retryStream!) retryChunks.push(chunk)
-  expect(Buffer.concat(retryChunks).toString('utf8')).toContain(`${first},一括作成1,student,${password}\r\n${second},一括作成2,manager,manual-password\r\n`)
-  await cookie(request, first, password)
-  await cookie(request, second, 'manual-password')
-  await page.getByRole('link', { name: 'User Management', exact: true }).click()
-  await page.getByRole('button', { name: '戻る', exact: true }).click()
-  await expect(page.getByLabel('1行目 password')).toHaveValue(password)
-  await page.getByRole('link', { name: 'User Management', exact: true }).click()
-  await page.getByRole('button', { name: '離れる', exact: true }).click()
-  await page.getByLabel('Search users').fill(first)
+test("browser bulk import retries failed rows and manual ordering saves or cancels globally", async ({
+  page,
+  request,
+}) => {
+  await page.goto(new URL("/login", baseURL).href);
+  await page.getByLabel("User ID", { exact: true }).fill("admin");
+  await page.getByLabel("Password", { exact: true }).fill("admin");
+  await page.getByRole("button", { name: "Log in" }).click();
+  await page.getByRole("link", { name: "Admin", exact: true }).click();
+  await page.getByRole("link", { name: "Batch User Registration" }).click();
+  await expect(page.getByRole("navigation", { name: "パンくず" })).toHaveText(
+    "Admin Page / Batch User Registration",
+  );
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText("Batch User Registration");
+  const first = uniqueUserid();
+  const second = uniqueUserid();
+  await page.getByLabel("CSV / Excel ファイル").setInputFiles({
+    name: "users.csv",
+    mimeType: "text/csv",
+    buffer: Buffer.from(
+      `userid,username,role,password\n${first},一括作成1,student,\nadmin,一括作成2,manager,manual-password\n`,
+    ),
+  });
+  const password = await page.getByLabel("1行目 password").inputValue();
+  expect(password).toMatch(/^[a-zA-Z0-9]{6}-[a-zA-Z0-9]{6}-[a-zA-Z0-9]{6}$/);
+  const firstDownload = page.waitForEvent("download");
+  await page.getByRole("button", { name: "Apply", exact: true }).click();
+  const download = await firstDownload;
+  const stream = await download.createReadStream();
+  const chunks = [];
+  for await (const chunk of stream!) chunks.push(chunk);
+  expect(Buffer.concat(chunks).toString("utf8")).toContain(
+    `${first},一括作成1,student,${password}\r\n,,,\r\n`,
+  );
+  await expect(page.getByLabel("1行目 userid")).toBeDisabled();
+  await expect(page.getByRole("alert")).toContainText("already taken");
+  await page.getByLabel("2行目 userid").dblclick();
+  await page.getByLabel("2行目 userid").fill(second);
+  const retryDownload = page.waitForEvent("download");
+  await page.getByRole("button", { name: "Apply", exact: true }).click();
+  const retryStream = await (await retryDownload).createReadStream();
+  const retryChunks = [];
+  for await (const chunk of retryStream!) retryChunks.push(chunk);
+  expect(Buffer.concat(retryChunks).toString("utf8")).toContain(
+    `${first},一括作成1,student,${password}\r\n${second},一括作成2,manager,manual-password\r\n`,
+  );
+  await cookie(request, first, password);
+  await cookie(request, second, "manual-password");
+  await page.getByRole("link", { name: "User Management", exact: true }).click();
+  await page.getByRole("button", { name: "戻る", exact: true }).click();
+  await expect(page.getByLabel("1行目 password")).toHaveValue(password);
+  await page.getByRole("link", { name: "User Management", exact: true }).click();
+  await page.getByRole("button", { name: "離れる", exact: true }).click();
+  await page.getByLabel("Search users").fill(first);
   // Navigation can reuse the pre-import list until its refresh completes.
-  await expect(page.getByRole('cell', { name: first, exact: true })).toBeVisible()
-  await page.getByLabel('State', { exact: true }).selectOption('active')
-  await page.getByRole('button', { name: '並び順を編集' }).click()
-  await expect(page.getByLabel('Search users')).toHaveCount(0)
-  const rows = page.getByRole('row')
-  const original = await rows.allTextContents()
-  const sourceHandle = page.getByRole('button', { name: `${second} を移動`, exact: true })
-  await sourceHandle.scrollIntoViewIfNeeded()
-  const source = await sourceHandle.boundingBox()
-  const target = await page.getByRole('button', { name: `${first} を移動`, exact: true }).boundingBox()
-  if (!source || !target) throw new Error('Reorder handles are not visible')
-  await page.mouse.move(source.x + source.width / 2, source.y + source.height / 2)
-  await page.mouse.down()
-  await page.mouse.move(source.x + source.width / 2, source.y + source.height / 2 - 6)
-  await expect(sourceHandle).toHaveAttribute('aria-pressed', 'true')
-  await page.mouse.move(target.x + target.width / 2, target.y + target.height / 2, { steps: 10 })
-  await page.mouse.up()
+  await expect(page.getByRole("cell", { name: first, exact: true })).toBeVisible();
+  await page.getByLabel("State", { exact: true }).selectOption("active");
+  await page.getByRole("button", { name: "並び順を編集" }).click();
+  await expect(page.getByLabel("Search users")).toHaveCount(0);
+  const rows = page.getByRole("row");
+  const original = await rows.allTextContents();
+  const sourceHandle = page.getByRole("button", { name: `${second} を移動`, exact: true });
+  await sourceHandle.scrollIntoViewIfNeeded();
+  const source = await sourceHandle.boundingBox();
+  const target = await page
+    .getByRole("button", { name: `${first} を移動`, exact: true })
+    .boundingBox();
+  if (!source || !target) throw new Error("Reorder handles are not visible");
+  await page.mouse.move(source.x + source.width / 2, source.y + source.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(source.x + source.width / 2, source.y + source.height / 2 - 6);
+  await expect(sourceHandle).toHaveAttribute("aria-pressed", "true");
+  await page.mouse.move(target.x + target.width / 2, target.y + target.height / 2, { steps: 10 });
+  await page.mouse.up();
   // dnd-kit suppresses clicks for 50 ms after a pointer drop.
-  await page.waitForTimeout(60)
-  await expect.poll(async () => (await rows.allTextContents()).slice(-2)).toEqual([original.at(-1), original.at(-2)])
-  await page.getByRole('button', { name: 'キャンセル', exact: true }).click()
-  await page.getByRole('button', { name: '並び順を編集' }).click()
-  expect(await rows.allTextContents()).toEqual(original)
-  const handle = page.getByRole('button', { name: `${second} を移動`, exact: true })
-  await handle.focus()
+  await page.waitForTimeout(60);
+  await expect
+    .poll(async () => (await rows.allTextContents()).slice(-2))
+    .toEqual([original.at(-1), original.at(-2)]);
+  await page.getByRole("button", { name: "キャンセル", exact: true }).click();
+  await page.getByRole("button", { name: "並び順を編集" }).click();
+  expect(await rows.allTextContents()).toEqual(original);
+  const handle = page.getByRole("button", { name: `${second} を移動`, exact: true });
+  await handle.focus();
   // Allow the keyboard sensor to attach listeners and measure rows between keys.
-  await page.keyboard.press('Space', { delay: 50 })
-  await page.keyboard.press('ArrowUp', { delay: 50 })
-  await page.keyboard.press('Escape', { delay: 50 })
-  expect(await rows.allTextContents()).toEqual(original)
-  await handle.focus()
-  await page.keyboard.press('Space', { delay: 50 })
-  await page.keyboard.press('ArrowUp', { delay: 50 })
-  await page.keyboard.press('Space', { delay: 50 })
-  await expect.poll(async () => (await rows.allTextContents()).slice(-2)).toEqual([original.at(-1), original.at(-2)])
-  await page.getByRole('button', { name: '保存', exact: true }).click()
-  await expect(page.getByRole('status').filter({ hasText: '並び順を保存しました' })).toBeVisible()
-  await page.reload()
-  const headers = await cookie(request)
-  const users = (await (await request.get('/api/admin/users', { headers })).json()).users
-  expect(users.slice(-2).map((user: { userid: string }) => user.userid)).toEqual([second, first])
+  await page.keyboard.press("Space", { delay: 50 });
+  await page.keyboard.press("ArrowUp", { delay: 50 });
+  await page.keyboard.press("Escape", { delay: 50 });
+  expect(await rows.allTextContents()).toEqual(original);
+  await handle.focus();
+  await page.keyboard.press("Space", { delay: 50 });
+  await page.keyboard.press("ArrowUp", { delay: 50 });
+  await page.keyboard.press("Space", { delay: 50 });
+  await expect
+    .poll(async () => (await rows.allTextContents()).slice(-2))
+    .toEqual([original.at(-1), original.at(-2)]);
+  await page.getByRole("button", { name: "保存", exact: true }).click();
+  await expect(page.getByRole("status").filter({ hasText: "並び順を保存しました" })).toBeVisible();
+  await page.reload();
+  const headers = await cookie(request);
+  const users = (await (await request.get("/api/admin/users", { headers })).json()).users;
+  expect(users.slice(-2).map((user: { userid: string }) => user.userid)).toEqual([second, first]);
   // A newly created account makes the editor's snapshot incomplete.
-  await page.getByRole('button', { name: '並び順を編集' }).click()
-  expect((await request.post('/api/admin/users', { headers, data: valid() })).status()).toBe(201)
-  await page.getByRole('button', { name: '保存', exact: true }).click()
-  await expect(page.getByRole('alert')).toContainText('ユーザー構成が変わりました')
-  await expect(page.getByRole('button', { name: '並び順を編集' })).toBeVisible()
-})
+  await page.getByRole("button", { name: "並び順を編集" }).click();
+  expect((await request.post("/api/admin/users", { headers, data: valid() })).status()).toBe(201);
+  await page.getByRole("button", { name: "保存", exact: true }).click();
+  await expect(page.getByRole("alert")).toContainText("ユーザー構成が変わりました");
+  await expect(page.getByRole("button", { name: "並び順を編集" })).toBeVisible();
+});
 
-test('browser spreadsheet pastes B3:C5, selects, edits and restores a rectangle', async ({ page, context }) => {
-  await context.grantPermissions(['clipboard-read', 'clipboard-write'])
-  await page.goto(new URL('/login', baseURL).href)
-  await page.getByLabel('User ID', { exact: true }).fill('admin')
-  await page.getByLabel('Password', { exact: true }).fill('admin')
-  await page.getByRole('button', { name: 'Log in' }).click()
-  await page.getByRole('link', { name: 'Admin', exact: true }).click()
-  await page.getByRole('link', { name: 'Batch User Registration' }).click()
-  const cell = (row: number, column: string) => page.getByLabel(`${row}行目 ${column}`)
-  await expect(page.getByLabel('選択範囲')).toHaveCount(0)
-  await expect(page.getByRole('columnheader')).toHaveText(['行', 'userid', 'username', 'role', 'password', '状態'])
+test("browser spreadsheet pastes B3:C5, selects, edits and restores a rectangle", async ({
+  page,
+  context,
+}) => {
+  await context.grantPermissions(["clipboard-read", "clipboard-write"]);
+  await page.goto(new URL("/login", baseURL).href);
+  await page.getByLabel("User ID", { exact: true }).fill("admin");
+  await page.getByLabel("Password", { exact: true }).fill("admin");
+  await page.getByRole("button", { name: "Log in" }).click();
+  await page.getByRole("link", { name: "Admin", exact: true }).click();
+  await page.getByRole("link", { name: "Batch User Registration" }).click();
+  const cell = (row: number, column: string) => page.getByLabel(`${row}行目 ${column}`);
+  await expect(page.getByLabel("選択範囲")).toHaveCount(0);
+  await expect(page.getByRole("columnheader")).toHaveText([
+    "行",
+    "userid",
+    "username",
+    "role",
+    "password",
+    "状態",
+  ]);
   const paste = async (text: string) => {
-    await page.evaluate((value) => navigator.clipboard.writeText(value), text)
-    await page.keyboard.press('ControlOrMeta+v')
-  }
-  await expect(page.getByRole('button', { name: 'Apply', exact: true })).toBeDisabled()
-  await cell(1, 'userid').click()
-  await page.keyboard.press('Shift+Tab')
-  await expect(page.getByLabel('CSV / Excel ファイル')).toBeFocused()
-  await page.keyboard.press('Tab')
-  await expect(cell(1, 'userid')).toBeFocused()
-  await paste(Array.from({ length: 8 }, (_, i) => `sample${i}\tName ${i}\tstudent\tpassword${i}`).join('\n'))
-  await cell(3, 'username').click()
-  await paste('佐藤\tstudent\n鈴木\tmanager\n高橋\tstudent')
-  await expect(page.getByRole('gridcell', { selected: true })).toHaveCount(6)
-  await expect(cell(3, 'username').locator('..')).toHaveAttribute('aria-selected', 'true')
-  await expect(cell(5, 'role').locator('..')).toHaveAttribute('aria-selected', 'true')
-  await expect(cell(3, 'username')).toHaveValue('佐藤')
-  await expect(cell(4, 'role')).toHaveValue('manager')
-  await expect(cell(5, 'username')).toHaveValue('高橋')
+    await page.evaluate((value) => navigator.clipboard.writeText(value), text);
+    await page.keyboard.press("ControlOrMeta+v");
+  };
+  await expect(page.getByRole("button", { name: "Apply", exact: true })).toBeDisabled();
+  await cell(1, "userid").click();
+  await page.keyboard.press("Shift+Tab");
+  await expect(page.getByLabel("CSV / Excel ファイル")).toBeFocused();
+  await page.keyboard.press("Tab");
+  await expect(cell(1, "userid")).toBeFocused();
+  await paste(
+    Array.from({ length: 8 }, (_, i) => `sample${i}\tName ${i}\tstudent\tpassword${i}`).join("\n"),
+  );
+  await cell(3, "username").click();
+  await paste("佐藤\tstudent\n鈴木\tmanager\n高橋\tstudent");
+  await expect(page.getByRole("gridcell", { selected: true })).toHaveCount(6);
+  await expect(cell(3, "username").locator("..")).toHaveAttribute("aria-selected", "true");
+  await expect(cell(5, "role").locator("..")).toHaveAttribute("aria-selected", "true");
+  await expect(cell(3, "username")).toHaveValue("佐藤");
+  await expect(cell(4, "role")).toHaveValue("manager");
+  await expect(cell(5, "username")).toHaveValue("高橋");
   for (let i = 0; i < 8; i++) {
-    await expect(cell(i + 1, 'userid')).toHaveValue(`sample${i}`)
-    await expect(cell(i + 1, 'password')).toHaveValue(`password${i}`)
+    await expect(cell(i + 1, "userid")).toHaveValue(`sample${i}`);
+    await expect(cell(i + 1, "password")).toHaveValue(`password${i}`);
   }
-  await expect(cell(9, 'userid')).toHaveValue('')
-  await page.screenshot({ path: 'test-results/bulk-users-selection.png', fullPage: true })
-  await page.keyboard.press('Enter')
-  await expect(cell(3, 'username')).toBeEditable()
-  await page.keyboard.press('Escape')
-  await page.keyboard.press('Delete')
-  await expect(cell(3, 'username')).toHaveValue('')
-  await expect(cell(5, 'role')).toHaveValue('')
-  await page.keyboard.press('ControlOrMeta+z')
-  await expect(cell(3, 'username')).toHaveValue('佐藤')
-  await page.keyboard.press('ControlOrMeta+Shift+z')
-  await expect(cell(3, 'username')).toHaveValue('')
-  await page.getByRole('button', { name: '元に戻す', exact: true }).click()
-  await cell(3, 'username').click()
-  await page.keyboard.press('Shift+ArrowRight')
-  await page.keyboard.press('Shift+ArrowDown')
-  await page.keyboard.press('Shift+ArrowDown')
-  await expect(page.getByRole('gridcell', { selected: true })).toHaveCount(6)
-  await expect(cell(3, 'username').locator('..')).toHaveAttribute('aria-selected', 'true')
-  await expect(cell(5, 'role').locator('..')).toHaveAttribute('aria-selected', 'true')
-  await cell(1, 'username').dblclick()
-  await cell(1, 'username').fill('編集した氏名')
-  await page.keyboard.press('Enter')
-  await page.keyboard.press('ControlOrMeta+z')
-  await expect(cell(1, 'username')).toHaveValue('Name 0')
-  await cell(2, 'username').click()
-  await page.keyboard.type('New name')
-  await page.keyboard.press('Enter')
-  await expect(cell(2, 'username')).toHaveValue('New name')
-  const start = await cell(3, 'username').boundingBox()
-  const end = await cell(5, 'role').boundingBox()
-  if (!start || !end) throw new Error('Missing grid cells')
-  await page.mouse.move(start.x + 10, start.y + 10)
-  await page.mouse.down()
-  await page.mouse.move(end.x + 10, end.y + 10, { steps: 8 })
+  await expect(cell(9, "userid")).toHaveValue("");
+  await page.screenshot({ path: "test-results/bulk-users-selection.png", fullPage: true });
+  await page.keyboard.press("Enter");
+  await expect(cell(3, "username")).toBeEditable();
+  await page.keyboard.press("Escape");
+  await page.keyboard.press("Delete");
+  await expect(cell(3, "username")).toHaveValue("");
+  await expect(cell(5, "role")).toHaveValue("");
+  await page.keyboard.press("ControlOrMeta+z");
+  await expect(cell(3, "username")).toHaveValue("佐藤");
+  await page.keyboard.press("ControlOrMeta+Shift+z");
+  await expect(cell(3, "username")).toHaveValue("");
+  await page.getByRole("button", { name: "元に戻す", exact: true }).click();
+  await cell(3, "username").click();
+  await page.keyboard.press("Shift+ArrowRight");
+  await page.keyboard.press("Shift+ArrowDown");
+  await page.keyboard.press("Shift+ArrowDown");
+  await expect(page.getByRole("gridcell", { selected: true })).toHaveCount(6);
+  await expect(cell(3, "username").locator("..")).toHaveAttribute("aria-selected", "true");
+  await expect(cell(5, "role").locator("..")).toHaveAttribute("aria-selected", "true");
+  await cell(1, "username").dblclick();
+  await cell(1, "username").fill("編集した氏名");
+  await page.keyboard.press("Enter");
+  await page.keyboard.press("ControlOrMeta+z");
+  await expect(cell(1, "username")).toHaveValue("Name 0");
+  await cell(2, "username").click();
+  await page.keyboard.type("New name");
+  await page.keyboard.press("Enter");
+  await expect(cell(2, "username")).toHaveValue("New name");
+  const start = await cell(3, "username").boundingBox();
+  const end = await cell(5, "role").boundingBox();
+  if (!start || !end) throw new Error("Missing grid cells");
+  await page.mouse.move(start.x + 10, start.y + 10);
+  await page.mouse.down();
+  await page.mouse.move(end.x + 10, end.y + 10, { steps: 8 });
   // Releasing outside the table must finish the library's drag session.
-  await page.mouse.move(1, 1)
-  await page.mouse.up()
-  await cell(8, 'username').hover()
-  await expect(page.getByRole('gridcell', { selected: true })).toHaveCount(6)
-  await expect(cell(3, 'username').locator('..')).toHaveAttribute('aria-selected', 'true')
-  await expect(cell(5, 'role').locator('..')).toHaveAttribute('aria-selected', 'true')
-  await page.keyboard.press('Delete')
-  await expect(cell(5, 'role')).toHaveValue('')
-})
+  await page.mouse.move(1, 1);
+  await page.mouse.up();
+  await cell(8, "username").hover();
+  await expect(page.getByRole("gridcell", { selected: true })).toHaveCount(6);
+  await expect(cell(3, "username").locator("..")).toHaveAttribute("aria-selected", "true");
+  await expect(cell(5, "role").locator("..")).toHaveAttribute("aria-selected", "true");
+  await page.keyboard.press("Delete");
+  await expect(cell(5, "role")).toHaveValue("");
+});

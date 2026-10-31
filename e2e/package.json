@@ -1,15 +1,19 @@
 {
   "name": "dsa-e2e",
-  "private": true,
   "version": "0.1.0",
+  "private": true,
   "type": "module",
   "scripts": {
+    "lint": "oxlint",
+    "format": "oxfmt",
     "test": "playwright test",
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
     "@playwright/test": "1.63.0",
     "@types/node": "^24.3.0",
+    "oxfmt": "^0.74.0",
+    "oxlint": "^1.71.0",
     "typescript": "~6.0.2"
   }
 }

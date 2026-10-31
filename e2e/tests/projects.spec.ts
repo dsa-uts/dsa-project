@@ -1,301 +1,484 @@
-import { randomUUID } from 'node:crypto'
-import { expect, test, type APIRequestContext } from '@playwright/test'
-import { expectAPIError } from './helpers.js'
+import { randomUUID } from "node:crypto";
+import { expect, test, type APIRequestContext } from "@playwright/test";
+import { expectAPIError } from "./helpers.js";
 
-test('Dashboard lists actual Projects and filters them without navigation', async ({ page }) => {
-  test.setTimeout(120_000)
-  await page.goto('/login')
-  await page.getByLabel('User ID', { exact: true }).fill('admin')
-  await page.getByLabel('Password', { exact: true }).fill('admin')
-  await page.getByRole('button', { name: 'Log in' }).click()
-  await expect(page.getByRole('link', { name: 'Dashboard' })).toBeVisible()
-  for (const resource_id of ['ex1', 'ex2']) {
-    const response = await page.request.post('/api/admin/resource-imports', { data: { resource_id, version: 'v1.0.0' } })
-    expect(response.status(), await response.text()).toBe(200)
+test("Dashboard lists actual Projects and filters them without navigation", async ({ page }) => {
+  test.setTimeout(120_000);
+  await page.goto("/login");
+  await page.getByLabel("User ID", { exact: true }).fill("admin");
+  await page.getByLabel("Password", { exact: true }).fill("admin");
+  await page.getByRole("button", { name: "Log in" }).click();
+  await expect(page.getByRole("link", { name: "Dashboard" })).toBeVisible();
+  for (const resource_id of ["ex1", "ex2"]) {
+    const response = await page.request.post("/api/admin/resource-imports", {
+      data: { resource_id, version: "v1.0.0" },
+    });
+    expect(response.status(), await response.text()).toBe(200);
   }
-  const response = await page.request.get('/api/projects')
-  expect(response.status()).toBe(200)
-  const { projects } = await response.json()
-  await page.getByRole('link', { name: 'Dashboard' }).click()
-  await expect(page.getByRole('heading', { name: 'Problem List' })).toBeVisible()
-  await expect(page.getByRole('heading', { level: 2 })).toHaveText(projects.map((project: { name: string }) => project.name))
-  await page.getByRole('tab', { name: projects[0].name, exact: true }).click()
-  await expect(page).toHaveURL(/\/projects$/)
-  await expect(page.getByRole('heading', { level: 2 })).toHaveText([projects[0].name])
-  await expect(page.getByRole('tabpanel').getByRole('listitem')).toHaveText(projects[0].workflows.map((workflow: { name: string }) => workflow.name))
-  await page.getByRole('tab', { name: 'All', exact: true }).click()
-  await expect(page.getByRole('heading', { level: 2 })).toHaveCount(projects.length)
-  await page.setViewportSize({ width: 1584, height: 992 })
-  await page.screenshot({ path: 'test-results/problem-list.png', fullPage: true })
-  await page.setViewportSize({ width: 390, height: 844 })
-  await expect(page.getByRole('link', { name: 'Dashboard' })).toBeInViewport()
-  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
-  await page.screenshot({ path: 'test-results/problem-list-mobile.png', fullPage: true })
+  const response = await page.request.get("/api/projects");
+  expect(response.status()).toBe(200);
+  const { projects } = await response.json();
+  await page.getByRole("link", { name: "Dashboard" }).click();
+  await expect(page.getByRole("heading", { name: "Problem List" })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 2 })).toHaveText(
+    projects.map((project: { name: string }) => project.name),
+  );
+  await page.getByRole("tab", { name: projects[0].name, exact: true }).click();
+  await expect(page).toHaveURL(/\/projects$/);
+  await expect(page.getByRole("heading", { level: 2 })).toHaveText([projects[0].name]);
+  await expect(page.getByRole("tabpanel").getByRole("listitem")).toHaveText(
+    projects[0].workflows.map((workflow: { name: string }) => workflow.name),
+  );
+  await page.getByRole("tab", { name: "All", exact: true }).click();
+  await expect(page.getByRole("heading", { level: 2 })).toHaveCount(projects.length);
+  await page.setViewportSize({ width: 1584, height: 992 });
+  await page.screenshot({ path: "test-results/problem-list.png", fullPage: true });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect(page.getByRole("link", { name: "Dashboard" })).toBeInViewport();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(
+    true,
+  );
+  await page.screenshot({ path: "test-results/problem-list-mobile.png", fullPage: true });
 
-  const project = projects[0]
-  const workflow = project.workflows[0]
-  await page.getByRole('tabpanel').getByRole('link', { name: workflow.name, exact: true }).first().click()
-  await expect(page).toHaveURL(new RegExp(`/projects/${project.id}/${workflow.id}$`))
-  await expect(page.getByRole('heading', { level: 1, name: workflow.name, exact: true })).toBeVisible()
-  await page.getByRole('button', { name: 'サンプル提出', exact: true }).click()
-  await expect(page.getByRole('button', { name: '提出する', exact: true })).toBeDisabled()
-  await expect(page.getByRole('button', { name: '提出パネルを閉じる' })).toBeInViewport()
-  await expect(page.getByRole('button', { name: '提出する', exact: true })).toBeInViewport()
-  const mobilePanel = await page.getByRole('dialog').boundingBox()
-  expect(mobilePanel?.width).toBeCloseTo(390, 1)
-  const mobileTopBar = await page.getByRole('banner').boundingBox()
-  expect(mobilePanel!.y).toBeCloseTo(mobileTopBar!.y + mobileTopBar!.height, 1)
-  expect(mobilePanel!.y + mobilePanel!.height).toBeCloseTo(844, 1)
-  await expect(page.getByRole('link', { name: 'Admin', exact: true })).toBeInViewport()
-  await page.screenshot({ path: 'test-results/submission-panel-mobile.png', fullPage: true })
-  await page.getByRole('button', { name: '提出パネルを閉じる' }).click()
-  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
-  await page.screenshot({ path: 'test-results/problem-detail-mobile.png', fullPage: true })
-  await page.setViewportSize({ width: 1920, height: 1086 })
-  const outline = page.getByRole('navigation', { name: '課題の目次' })
-  const sectionLink = outline.locator('a[href*="#workflow-"]').first()
-  const anchor = new URL((await sectionLink.getAttribute('href'))!, page.url()).hash
-  await sectionLink.click()
-  await expect(page.locator(anchor!)).toBeInViewport()
-  await page.reload()
-  await expect(page.locator(anchor!)).toBeInViewport()
-  const detailResponse = await page.request.get(`/api/projects/${project.id}`)
-  expect(detailResponse.status()).toBe(200)
-  const detail = await detailResponse.json()
-  const article = page.getByRole('region', { name: '課題本文' })
-  const readingScroll = await article.evaluate(element => element.scrollTop)
-  await page.getByRole('button', { name: 'サンプル提出', exact: true }).click()
-  const panel = page.getByRole('dialog', { name: `${project.name}を提出（サンプル）` })
-  await expect(panel).toBeVisible()
-  const topBar = await page.getByRole('banner').boundingBox()
-  const panelBounds = await panel.boundingBox()
-  expect(panelBounds!.y).toBeCloseTo(topBar!.y + topBar!.height, 1)
-  expect(panelBounds!.y + panelBounds!.height).toBeCloseTo(1086, 1)
-  expect(await article.evaluate(element => element.scrollTop)).toBe(readingScroll)
-  await expect(page.getByRole('button', { name: '提出パネルを閉じる' })).toBeFocused()
+  const project = projects[0];
+  const workflow = project.workflows[0];
+  await page
+    .getByRole("tabpanel")
+    .getByRole("link", { name: workflow.name, exact: true })
+    .first()
+    .click();
+  await expect(page).toHaveURL(new RegExp(`/projects/${project.id}/${workflow.id}$`));
+  await expect(
+    page.getByRole("heading", { level: 1, name: workflow.name, exact: true }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "サンプル提出", exact: true }).click();
+  await expect(page.getByRole("button", { name: "提出する", exact: true })).toBeDisabled();
+  await expect(page.getByRole("button", { name: "提出パネルを閉じる" })).toBeInViewport();
+  await expect(page.getByRole("button", { name: "提出する", exact: true })).toBeInViewport();
+  const mobilePanel = await page.getByRole("dialog").boundingBox();
+  expect(mobilePanel?.width).toBeCloseTo(390, 1);
+  const mobileTopBar = await page.getByRole("banner").boundingBox();
+  expect(mobilePanel!.y).toBeCloseTo(mobileTopBar!.y + mobileTopBar!.height, 1);
+  expect(mobilePanel!.y + mobilePanel!.height).toBeCloseTo(844, 1);
+  await expect(page.getByRole("link", { name: "Admin", exact: true })).toBeInViewport();
+  await page.screenshot({ path: "test-results/submission-panel-mobile.png", fullPage: true });
+  await page.getByRole("button", { name: "提出パネルを閉じる" }).click();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(
+    true,
+  );
+  await page.screenshot({ path: "test-results/problem-detail-mobile.png", fullPage: true });
+  await page.setViewportSize({ width: 1920, height: 1086 });
+  const outline = page.getByRole("navigation", { name: "課題の目次" });
+  const sectionLink = outline.locator('a[href*="#workflow-"]').first();
+  const anchor = new URL((await sectionLink.getAttribute("href"))!, page.url()).hash;
+  await sectionLink.click();
+  await expect(page.locator(anchor!)).toBeInViewport();
+  await page.reload();
+  await expect(page.locator(anchor!)).toBeInViewport();
+  const detailResponse = await page.request.get(`/api/projects/${project.id}`);
+  expect(detailResponse.status()).toBe(200);
+  const detail = await detailResponse.json();
+  const article = page.getByRole("region", { name: "課題本文" });
+  const readingScroll = await article.evaluate((element) => element.scrollTop);
+  await page.getByRole("button", { name: "サンプル提出", exact: true }).click();
+  const panel = page.getByRole("dialog", { name: `${project.name}を提出（サンプル）` });
+  await expect(panel).toBeVisible();
+  const topBar = await page.getByRole("banner").boundingBox();
+  const panelBounds = await panel.boundingBox();
+  expect(panelBounds!.y).toBeCloseTo(topBar!.y + topBar!.height, 1);
+  expect(panelBounds!.y + panelBounds!.height).toBeCloseTo(1086, 1);
+  expect(await article.evaluate((element) => element.scrollTop)).toBe(readingScroll);
+  await expect(page.getByRole("button", { name: "提出パネルを閉じる" })).toBeFocused();
   if (detail.required_files.length) {
-    await expect(page.getByRole('list', { name: '提出が求められているファイル' }).getByRole('listitem')).toHaveText(detail.required_files)
+    await expect(
+      page.getByRole("list", { name: "提出が求められているファイル" }).getByRole("listitem"),
+    ).toHaveText(detail.required_files);
   }
   if (project.workflows.length > 1) {
-    await outline.getByRole('button', { name: `${project.workflows[1].name}の目次を開閉`, exact: true }).click()
-    await expect(outline.getByRole('button', { name: `${workflow.name}の目次を開閉`, exact: true })).toHaveAttribute('aria-expanded', 'true')
-    await expect(outline.getByRole('button', { name: `${project.workflows[1].name}の目次を開閉`, exact: true })).toHaveAttribute('aria-expanded', 'true')
-    await outline.locator(`a[href="/projects/${project.id}/${project.workflows[1].id}"]`).click()
-    await expect(page.locator(`#workflow-${project.workflows[1].id}`)).toBeInViewport()
-    await expect(outline.getByRole('button', { name: `${workflow.name}の目次を開閉`, exact: true })).toHaveAttribute('aria-expanded', 'true')
-    await expect(page.getByRole('heading', { level: 1, name: project.workflows[1].name, exact: true })).toBeVisible()
+    await outline
+      .getByRole("button", { name: `${project.workflows[1].name}の目次を開閉`, exact: true })
+      .click();
+    await expect(
+      outline.getByRole("button", { name: `${workflow.name}の目次を開閉`, exact: true }),
+    ).toHaveAttribute("aria-expanded", "true");
+    await expect(
+      outline.getByRole("button", {
+        name: `${project.workflows[1].name}の目次を開閉`,
+        exact: true,
+      }),
+    ).toHaveAttribute("aria-expanded", "true");
+    await outline.locator(`a[href="/projects/${project.id}/${project.workflows[1].id}"]`).click();
+    await expect(page.locator(`#workflow-${project.workflows[1].id}`)).toBeInViewport();
+    await expect(
+      outline.getByRole("button", { name: `${workflow.name}の目次を開閉`, exact: true }),
+    ).toHaveAttribute("aria-expanded", "true");
+    await expect(
+      page.getByRole("heading", { level: 1, name: project.workflows[1].name, exact: true }),
+    ).toBeVisible();
   }
-  await outline.getByRole('button', { name: `${workflow.name}の目次を開閉`, exact: true }).click()
-  await expect(page.getByRole('article')).toHaveCount(project.workflows.length)
-  await expect(panel).toBeVisible()
-  await page.screenshot({ path: 'test-results/submission-panel.png', fullPage: true })
-  await page.keyboard.press('Escape')
-  await expect(panel).toBeHidden()
-  await expect(page.getByRole('button', { name: 'サンプル提出', exact: true })).toBeFocused()
-  await page.screenshot({ path: 'test-results/problem-detail.png', fullPage: true })
+  await outline.getByRole("button", { name: `${workflow.name}の目次を開閉`, exact: true }).click();
+  await expect(page.getByRole("article")).toHaveCount(project.workflows.length);
+  await expect(panel).toBeVisible();
+  await page.screenshot({ path: "test-results/submission-panel.png", fullPage: true });
+  await page.keyboard.press("Escape");
+  await expect(panel).toBeHidden();
+  await expect(page.getByRole("button", { name: "サンプル提出", exact: true })).toBeFocused();
+  await page.screenshot({ path: "test-results/problem-detail.png", fullPage: true });
 
-  const linkedListProject = projects.find((item: { resource_id: string }) => item.resource_id === 'ex2')
-  await page.goto(`/projects/${linkedListProject.id}/ex2-1`)
-  const examples = outline.getByRole('listitem').filter({ has: page.getByRole('link', { name: '具体例', exact: true }) }).last()
-  await expect(examples.getByRole('list').getByRole('link')).toHaveText(['入力1', '出力1', '入力2', '出力2'])
-  await expect(outline.getByRole('list').first().locator(':scope > li > ul > li > a')).toHaveText(['test_linked_list.c', '制約', '出力', '具体例'])
-  await outline.screenshot({ path: 'test-results/problem-outline.png' })
-  const inputFormat = page.locator('article blockquote').first()
-  await expect(inputFormat.locator('.katex')).toHaveCount(5)
-  await expect(inputFormat.locator('br')).toHaveCount(4)
-  await expect(inputFormat).not.toContainText('<div')
-  await expect(inputFormat).toHaveCSS('border-top-style', 'solid')
-  await inputFormat.scrollIntoViewIfNeeded()
-  await inputFormat.screenshot({ path: 'test-results/problem-input-format.png' })
-  await page.setViewportSize({ width: 390, height: 844 })
-  await outline.screenshot({ path: 'test-results/problem-outline-mobile.png' })
-  await inputFormat.scrollIntoViewIfNeeded()
-  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
-  await inputFormat.screenshot({ path: 'test-results/problem-input-format-mobile.png' })
-})
+  const linkedListProject = projects.find(
+    (item: { resource_id: string }) => item.resource_id === "ex2",
+  );
+  await page.goto(`/projects/${linkedListProject.id}/ex2-1`);
+  const examples = outline
+    .getByRole("listitem")
+    .filter({ has: page.getByRole("link", { name: "具体例", exact: true }) })
+    .last();
+  await expect(examples.getByRole("list").getByRole("link")).toHaveText([
+    "入力1",
+    "出力1",
+    "入力2",
+    "出力2",
+  ]);
+  await expect(outline.getByRole("list").first().locator(":scope > li > ul > li > a")).toHaveText([
+    "test_linked_list.c",
+    "制約",
+    "出力",
+    "具体例",
+  ]);
+  await outline.screenshot({ path: "test-results/problem-outline.png" });
+  const inputFormat = page.locator("article blockquote").first();
+  await expect(inputFormat.locator(".katex")).toHaveCount(5);
+  await expect(inputFormat.locator("br")).toHaveCount(4);
+  await expect(inputFormat).not.toContainText("<div");
+  await expect(inputFormat).toHaveCSS("border-top-style", "solid");
+  await inputFormat.scrollIntoViewIfNeeded();
+  await inputFormat.screenshot({ path: "test-results/problem-input-format.png" });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await outline.screenshot({ path: "test-results/problem-outline-mobile.png" });
+  await inputFormat.scrollIntoViewIfNeeded();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(
+    true,
+  );
+  await inputFormat.screenshot({ path: "test-results/problem-input-format-mobile.png" });
+});
 
-async function cookie(request: APIRequestContext, role = 'admin') {
-  const response = await request.post('/api/session', { data: { userid: role, password: 'admin' } })
-  expect(response.status()).toBe(200)
-  return { Cookie: response.headers()['set-cookie'].split(';')[0] }
+async function cookie(request: APIRequestContext, role = "admin") {
+  const response = await request.post("/api/session", {
+    data: { userid: role, password: "admin" },
+  });
+  expect(response.status()).toBe(200);
+  return { Cookie: response.headers()["set-cookie"].split(";")[0] };
 }
 
-test('Project authorization precedes input validation', async ({ request }) => {
-  for (const role of [null, 'student', 'manager']) {
-    const headers = role ? await cookie(request, role) : { Cookie: '' }
+test("Project authorization precedes input validation", async ({ request }) => {
+  for (const role of [null, "student", "manager"]) {
+    const headers = role ? await cookie(request, role) : { Cookie: "" };
     for (const response of [
-      await request.patch('/api/admin/projects', { headers, data: {} }),
-      await request.post('/api/admin/resource-imports', { headers, data: { version: 'invalid' } }),
-    ]) await expectAPIError(response, role ? 403 : 401)
+      await request.patch("/api/admin/projects", { headers, data: {} }),
+      await request.post("/api/admin/resource-imports", { headers, data: { version: "invalid" } }),
+    ])
+      await expectAPIError(response, role ? 403 : 401);
   }
-  await expectAPIError(await request.get('/api/projects', { headers: { Cookie: '' } }), 401)
-  await expectAPIError(await request.get('/api/projects/invalid', { headers: { Cookie: '' } }), 401)
-})
+  await expectAPIError(await request.get("/api/projects", { headers: { Cookie: "" } }), 401);
+  await expectAPIError(
+    await request.get("/api/projects/invalid", { headers: { Cookie: "" } }),
+    401,
+  );
+});
 
-test('real Resource import, idempotence, publication and atomic bulk saves', async ({ request }) => {
-  test.setTimeout(120_000)
-  const headers = await cookie(request)
-  const student = await cookie(request, 'student')
-  const manager = await cookie(request, 'manager')
+test("real Resource import, idempotence, publication and atomic bulk saves", async ({
+  request,
+}) => {
+  test.setTimeout(120_000);
+  const headers = await cookie(request);
+  const student = await cookie(request, "student");
+  const manager = await cookie(request, "manager");
   const list = async (auth = headers) => {
-    const response = await request.get('/api/projects', { headers: auth })
-    expect(response.status()).toBe(200)
-    return (await response.json()).projects
-  }
-  const before = await list()
-  if (!before.length) expect((await request.patch('/api/admin/projects', { headers, data: { projects: [] } })).status()).toBe(204)
-  const data = { resource_id: 'ex1', version: 'v1.0.0' }
-  const responses = await Promise.all([1, 2].map(() => request.post('/api/admin/resource-imports', { headers, data })))
-  for (const response of responses) expect(response.status(), await response.text()).toBe(200)
-  const imports = await Promise.all(responses.map(response => response.json()))
-  const result = imports.find(item => item.changed) ?? imports[0]
-  expect(imports[0].project_id).toBe(imports[1].project_id)
-  expect(imports[0].version_id).toBe(imports[1].version_id)
-  expect(imports.filter(item => item.changed)).toHaveLength(before.some((p: { resource_id: string }) => p.resource_id === 'ex1') ? 0 : 1)
-  expect(result).toMatchObject({ ...data, project_id: expect.any(String), version_id: expect.any(String), changed: !before.some((p: { resource_id: string }) => p.resource_id === 'ex1') })
-  const after = await list()
-  const project = after.find((p: { id: string }) => p.id === result.project_id)
-  const detailURL = `/api/projects/${result.project_id}`
-  const detailResponse = await request.get(detailURL, { headers })
-  expect(detailResponse.status()).toBe(200)
-  const detail = await detailResponse.json()
-  expect(detail).toMatchObject(project)
-  expect(Object.keys(detail).sort()).toEqual([...Object.keys(project), 'required_files'].sort())
-  expect(Array.isArray(detail.required_files)).toBe(true)
-  expect(detail.workflows.map((w: { id: string }) => w.id)).toEqual(project.workflows.map((w: { id: string }) => w.id))
+    const response = await request.get("/api/projects", { headers: auth });
+    expect(response.status()).toBe(200);
+    return (await response.json()).projects;
+  };
+  const before = await list();
+  if (!before.length)
+    expect(
+      (await request.patch("/api/admin/projects", { headers, data: { projects: [] } })).status(),
+    ).toBe(204);
+  const data = { resource_id: "ex1", version: "v1.0.0" };
+  const responses = await Promise.all(
+    [1, 2].map(() => request.post("/api/admin/resource-imports", { headers, data })),
+  );
+  for (const response of responses) expect(response.status(), await response.text()).toBe(200);
+  const imports = await Promise.all(responses.map((response) => response.json()));
+  const result = imports.find((item) => item.changed) ?? imports[0];
+  expect(imports[0].project_id).toBe(imports[1].project_id);
+  expect(imports[0].version_id).toBe(imports[1].version_id);
+  expect(imports.filter((item) => item.changed)).toHaveLength(
+    before.some((p: { resource_id: string }) => p.resource_id === "ex1") ? 0 : 1,
+  );
+  expect(result).toMatchObject({
+    ...data,
+    project_id: expect.any(String),
+    version_id: expect.any(String),
+    changed: !before.some((p: { resource_id: string }) => p.resource_id === "ex1"),
+  });
+  const after = await list();
+  const project = after.find((p: { id: string }) => p.id === result.project_id);
+  const detailURL = `/api/projects/${result.project_id}`;
+  const detailResponse = await request.get(detailURL, { headers });
+  expect(detailResponse.status()).toBe(200);
+  const detail = await detailResponse.json();
+  expect(detail).toMatchObject(project);
+  expect(Object.keys(detail).sort()).toEqual([...Object.keys(project), "required_files"].sort());
+  expect(Array.isArray(detail.required_files)).toBe(true);
+  expect(detail.workflows.map((w: { id: string }) => w.id)).toEqual(
+    project.workflows.map((w: { id: string }) => w.id),
+  );
   for (const workflow of detail.workflows) {
-    expect(Object.keys(workflow).sort()).toEqual(['description_markdown', 'id', 'name'])
-    expect(workflow.description_markdown).toEqual(expect.any(String))
-    expect(workflow.description_markdown.length).toBeGreaterThan(0)
+    expect(Object.keys(workflow).sort()).toEqual(["description_markdown", "id", "name"]);
+    expect(workflow.description_markdown).toEqual(expect.any(String));
+    expect(workflow.description_markdown.length).toBeGreaterThan(0);
   }
-  await expectAPIError(await request.get('/api/projects/invalid', { headers }), 400)
-  await expectAPIError(await request.get(`/api/projects/${randomUUID()}`, { headers }), 404)
-  expect(project).toMatchObject({ resource_id: 'ex1', latest_version_id: result.version_id, latest_version: 'v1.0.0' })
-  expect(Object.keys(project).sort()).toEqual(['id','resource_id','name','description','latest_version_id','latest_version','display_order','published_at','deadline','workflows'].sort())
-  expect(project.workflows.length).toBeGreaterThan(0)
-  for (const workflow of project.workflows) expect(Object.keys(workflow).sort()).toEqual(['id', 'name'])
+  await expectAPIError(await request.get("/api/projects/invalid", { headers }), 400);
+  await expectAPIError(await request.get(`/api/projects/${randomUUID()}`, { headers }), 404);
+  expect(project).toMatchObject({
+    resource_id: "ex1",
+    latest_version_id: result.version_id,
+    latest_version: "v1.0.0",
+  });
+  expect(Object.keys(project).sort()).toEqual(
+    [
+      "id",
+      "resource_id",
+      "name",
+      "description",
+      "latest_version_id",
+      "latest_version",
+      "display_order",
+      "published_at",
+      "deadline",
+      "workflows",
+    ].sort(),
+  );
+  expect(project.workflows.length).toBeGreaterThan(0);
+  for (const workflow of project.workflows)
+    expect(Object.keys(workflow).sort()).toEqual(["id", "name"]);
   if (result.changed) {
-    expect(after.at(-1).id).toBe(result.project_id)
-    expect(project).toMatchObject({ published_at: null, deadline: null })
+    expect(after.at(-1).id).toBe(result.project_id);
+    expect(project).toMatchObject({ published_at: null, deadline: null });
   }
-  for (const response of await Promise.all([1,2].map(() => request.post('/api/admin/resource-imports', { headers, data })))) {
-    expect(response.status()).toBe(200)
-    expect(await response.json()).toEqual({ ...result, changed: false })
+  for (const response of await Promise.all(
+    [1, 2].map(() => request.post("/api/admin/resource-imports", { headers, data })),
+  )) {
+    expect(response.status()).toBe(200);
+    expect(await response.json()).toEqual({ ...result, changed: false });
   }
-  await expectAPIError(await request.post('/api/admin/resource-imports', { headers, data: { ...data, version: 'v0.9.0' } }), 409)
-  for (const version of ['1.0.0','v1.0','v01.0.0','v1.0.0-rc.1','v1.0.0+build']) {
-    await expectAPIError(await request.post('/api/admin/resource-imports', { headers, data: { ...data, version } }), 422)
+  await expectAPIError(
+    await request.post("/api/admin/resource-imports", {
+      headers,
+      data: { ...data, version: "v0.9.0" },
+    }),
+    409,
+  );
+  for (const version of ["1.0.0", "v1.0", "v01.0.0", "v1.0.0-rc.1", "v1.0.0+build"]) {
+    await expectAPIError(
+      await request.post("/api/admin/resource-imports", { headers, data: { ...data, version } }),
+      422,
+    );
   }
-  await expectAPIError(await request.post('/api/admin/resource-imports', { headers, data: { ...data, repository: 'https://evil.test' } }), 400)
-  await expectAPIError(await request.post('/api/admin/resource-imports', { headers, data: { resource_id: `missing-${randomUUID()}`, version: 'v1.0.0' } }), 404)
-  expect(await list()).toEqual(after)
+  await expectAPIError(
+    await request.post("/api/admin/resource-imports", {
+      headers,
+      data: { ...data, repository: "https://evil.test" },
+    }),
+    400,
+  );
+  await expectAPIError(
+    await request.post("/api/admin/resource-imports", {
+      headers,
+      data: { resource_id: `missing-${randomUUID()}`, version: "v1.0.0" },
+    }),
+    404,
+  );
+  expect(await list()).toEqual(after);
 
-  const original = after.map((p: { id: string; published_at: string | null; deadline: string | null }) => ({ id: p.id, published_at: p.published_at, deadline: p.deadline }))
-  const save = (projects: unknown) => request.patch('/api/admin/projects', { headers, data: { projects } })
+  const original = after.map(
+    (p: { id: string; published_at: string | null; deadline: string | null }) => ({
+      id: p.id,
+      published_at: p.published_at,
+      deadline: p.deadline,
+    }),
+  );
+  const save = (projects: unknown) =>
+    request.patch("/api/admin/projects", { headers, data: { projects } });
   try {
-    const updates = original.toReversed().map((p: { id: string }) => ({ id: p.id, published_at: '2020-01-01T00:00:00Z', deadline: '2020-01-01T00:00:00Z' }))
-    expect((await save(updates)).status()).toBe(204)
-    const saved = await list()
-    expect(saved.map((p: { id: string }) => p.id)).toEqual(updates.map((p: { id: string }) => p.id))
-    expect((await list(student)).map((p: { id: string }) => p.id)).toEqual(updates.map((p: { id: string }) => p.id))
-    const studentDetail = await request.get(detailURL, { headers: student })
-    expect(studentDetail.status()).toBe(200)
-    expect(await studentDetail.json()).toMatchObject({ id: result.project_id, workflows: detail.workflows, required_files: detail.required_files })
-    for (const projects of [updates.slice(1), [...updates, updates[0]], [{ ...updates[0], id: randomUUID() }, ...updates.slice(1)]]) {
-      await expectAPIError(await save(projects), 409)
-      expect(await list()).toEqual(saved)
+    const updates = original.toReversed().map((p: { id: string }) => ({
+      id: p.id,
+      published_at: "2020-01-01T00:00:00Z",
+      deadline: "2020-01-01T00:00:00Z",
+    }));
+    expect((await save(updates)).status()).toBe(204);
+    const saved = await list();
+    expect(saved.map((p: { id: string }) => p.id)).toEqual(
+      updates.map((p: { id: string }) => p.id),
+    );
+    expect((await list(student)).map((p: { id: string }) => p.id)).toEqual(
+      updates.map((p: { id: string }) => p.id),
+    );
+    const studentDetail = await request.get(detailURL, { headers: student });
+    expect(studentDetail.status()).toBe(200);
+    expect(await studentDetail.json()).toMatchObject({
+      id: result.project_id,
+      workflows: detail.workflows,
+      required_files: detail.required_files,
+    });
+    for (const projects of [
+      updates.slice(1),
+      [...updates, updates[0]],
+      [{ ...updates[0], id: randomUUID() }, ...updates.slice(1)],
+    ]) {
+      await expectAPIError(await save(projects), 409);
+      expect(await list()).toEqual(saved);
     }
-    await expectAPIError(await save([{ ...updates[0], deadline: '1999-01-01T00:00:00Z' }, ...updates.slice(1)]), 422)
-    expect(await list()).toEqual(saved)
+    await expectAPIError(
+      await save([{ ...updates[0], deadline: "1999-01-01T00:00:00Z" }, ...updates.slice(1)]),
+      422,
+    );
+    expect(await list()).toEqual(saved);
     for (const invalid of [
       { id: result.project_id, published_at: null },
-      { ...updates[0], published_at: 'invalid' },
-      { ...updates[0], published_at: '2020-01-01T09:00:00+09:00' },
-      { ...updates[0], name: 'Must not change' },
+      { ...updates[0], published_at: "invalid" },
+      { ...updates[0], published_at: "2020-01-01T09:00:00+09:00" },
+      { ...updates[0], name: "Must not change" },
     ]) {
-      await expectAPIError(await save([invalid, ...updates.slice(1)]), 400)
-      expect(await list()).toEqual(saved)
+      await expectAPIError(await save([invalid, ...updates.slice(1)]), 400);
+      expect(await list()).toEqual(saved);
     }
-    expect((await save(updates.map((p: { id: string }) => ({ ...p, published_at: null })))).status()).toBe(204)
-    expect(await list(student)).toEqual([])
-    expect(await list(manager)).toHaveLength(updates.length)
-    await expectAPIError(await request.get(detailURL, { headers: student }), 404)
-    expect((await request.get(detailURL, { headers: manager })).status()).toBe(200)
-    expect((await save(updates.map((p: { id: string }) => ({ ...p, published_at: '2999-01-01T00:00:00Z', deadline: null })))).status()).toBe(204)
-    expect(await list(student)).toEqual([])
-    await expectAPIError(await request.get(detailURL, { headers: student }), 404)
-    expect((await request.get(detailURL, { headers })).status()).toBe(200)
-    const scheduled = await list()
-    expect((await request.post('/api/admin/resource-imports', { headers, data })).status()).toBe(200)
-    expect(await list()).toEqual(scheduled)
+    expect(
+      (await save(updates.map((p: { id: string }) => ({ ...p, published_at: null })))).status(),
+    ).toBe(204);
+    expect(await list(student)).toEqual([]);
+    expect(await list(manager)).toHaveLength(updates.length);
+    await expectAPIError(await request.get(detailURL, { headers: student }), 404);
+    expect((await request.get(detailURL, { headers: manager })).status()).toBe(200);
+    expect(
+      (
+        await save(
+          updates.map((p: { id: string }) => ({
+            ...p,
+            published_at: "2999-01-01T00:00:00Z",
+            deadline: null,
+          })),
+        )
+      ).status(),
+    ).toBe(204);
+    expect(await list(student)).toEqual([]);
+    await expectAPIError(await request.get(detailURL, { headers: student }), 404);
+    expect((await request.get(detailURL, { headers })).status()).toBe(200);
+    const scheduled = await list();
+    expect((await request.post("/api/admin/resource-imports", { headers, data })).status()).toBe(
+      200,
+    );
+    expect(await list()).toEqual(scheduled);
   } finally {
-    expect((await save(original)).status()).toBe(204)
+    expect((await save(original)).status()).toBe(204);
   }
-})
+});
 
-test('Admin imports two Projects and saves their order and JST schedules', async ({ page }) => {
-  test.setTimeout(120_000)
-  await page.goto('/login')
-  await page.getByLabel('User ID', { exact: true }).fill('admin')
-  await page.getByLabel('Password', { exact: true }).fill('admin')
-  await page.getByRole('button', { name: 'Log in' }).click()
-  await page.getByRole('link', { name: 'Admin', exact: true }).click()
-  await page.getByRole('link', { name: 'Project Management', exact: true }).click()
-  await expect(page.getByRole('heading', { name: 'Project Management', exact: true })).toBeVisible()
-  await page.getByLabel('リソースID', { exact: true }).fill('Invalid_ID')
-  await page.getByLabel('バージョン', { exact: true }).fill('v1.0.0')
-  expect(await page.getByLabel('リソースID', { exact: true }).evaluate((input: HTMLInputElement) => input.validity.patternMismatch)).toBe(true)
-  for (const resourceId of ['ex1', 'ex2']) {
-    await page.getByLabel('リソースID', { exact: true }).fill(resourceId)
-    await page.getByLabel('バージョン', { exact: true }).fill('v1.0.0')
-    await page.getByRole('button', { name: '登録', exact: true }).click()
-    await expect(page.getByRole('status').filter({ hasText: /登録|保存/ })).toContainText(/登録しました|登録済み/, { timeout: 65_000 })
-    await expect(page.getByRole('cell', { name: resourceId, exact: true })).toBeVisible()
+test("Admin imports two Projects and saves their order and JST schedules", async ({ page }) => {
+  test.setTimeout(120_000);
+  await page.goto("/login");
+  await page.getByLabel("User ID", { exact: true }).fill("admin");
+  await page.getByLabel("Password", { exact: true }).fill("admin");
+  await page.getByRole("button", { name: "Log in" }).click();
+  await page.getByRole("link", { name: "Admin", exact: true }).click();
+  await page.getByRole("link", { name: "Project Management", exact: true }).click();
+  await expect(
+    page.getByRole("heading", { name: "Project Management", exact: true }),
+  ).toBeVisible();
+  await page.getByLabel("リソースID", { exact: true }).fill("Invalid_ID");
+  await page.getByLabel("バージョン", { exact: true }).fill("v1.0.0");
+  expect(
+    await page
+      .getByLabel("リソースID", { exact: true })
+      .evaluate((input: HTMLInputElement) => input.validity.patternMismatch),
+  ).toBe(true);
+  for (const resourceId of ["ex1", "ex2"]) {
+    await page.getByLabel("リソースID", { exact: true }).fill(resourceId);
+    await page.getByLabel("バージョン", { exact: true }).fill("v1.0.0");
+    await page.getByRole("button", { name: "登録", exact: true }).click();
+    await expect(page.getByRole("status").filter({ hasText: /登録|保存/ })).toContainText(
+      /登録しました|登録済み/,
+      { timeout: 65_000 },
+    );
+    await expect(page.getByRole("cell", { name: resourceId, exact: true })).toBeVisible();
   }
-  const response = await page.request.get('/api/projects')
-  expect(response.status()).toBe(200)
-  const projects = (await response.json()).projects
-  const original = projects.map((p: { id: string; published_at: string | null; deadline: string | null }) => ({ id: p.id, published_at: p.published_at, deadline: p.deadline }))
-  const expectedOrder: string[] = projects.map((p: { resource_id: string }) => p.resource_id)
-  ;[expectedOrder[0], expectedOrder[1]] = [expectedOrder[1], expectedOrder[0]]
-  const resourceCells = page.locator('tbody tr td:nth-child(3)')
-  const row = page.getByRole('row').filter({ has: page.getByRole('cell', { name: 'ex1', exact: true }) })
+  const response = await page.request.get("/api/projects");
+  expect(response.status()).toBe(200);
+  const projects = (await response.json()).projects;
+  const original = projects.map(
+    (p: { id: string; published_at: string | null; deadline: string | null }) => ({
+      id: p.id,
+      published_at: p.published_at,
+      deadline: p.deadline,
+    }),
+  );
+  const expectedOrder: string[] = projects.map((p: { resource_id: string }) => p.resource_id);
+  [expectedOrder[0], expectedOrder[1]] = [expectedOrder[1], expectedOrder[0]];
+  const resourceCells = page.locator("tbody tr td:nth-child(3)");
+  const row = page
+    .getByRole("row")
+    .filter({ has: page.getByRole("cell", { name: "ex1", exact: true }) });
   try {
-    const handles = page.getByRole('button', { name: /を移動$/ })
-    const source = await handles.nth(0).boundingBox()
-    const target = await handles.nth(1).boundingBox()
-    expect(source).not.toBeNull()
-    expect(target).not.toBeNull()
-    await page.mouse.move(source!.x + source!.width / 2, source!.y + source!.height / 2)
-    await page.mouse.down()
-    await page.mouse.move(target!.x + target!.width / 2, target!.y + target!.height / 2, { steps: 10 })
-    await page.mouse.up()
-    await expect(resourceCells).toHaveText(expectedOrder)
-    await row.getByLabel(/の公開日時/).fill('2026-09-12T19:59')
-    await row.getByLabel(/の締切日時/).fill('2026-09-19T19:59')
-    await page.getByRole('button', { name: '変更を保存' }).click()
-    await expect(page.getByRole('status').filter({ hasText: /登録|保存/ })).toHaveText('日時・表示順を保存しました。')
-    await expect(page.getByRole('button', { name: '変更を保存' })).toBeDisabled()
-    await page.reload()
-    await expect(resourceCells).toHaveText(expectedOrder)
-    await expect(row.getByLabel(/の公開日時/)).toHaveValue('2026-09-12T19:59')
-    await expect(row.getByLabel(/の締切日時/)).toHaveValue('2026-09-19T19:59')
-    const saved = (await (await page.request.get('/api/projects')).json()).projects.find((p: { resource_id: string }) => p.resource_id === 'ex1')
-    expect(saved).toMatchObject({ published_at: '2026-09-12T10:59:00Z', deadline: '2026-09-19T10:59:00Z' })
-    await row.getByLabel(/の公開日時/).fill('')
-    await row.getByLabel(/の締切日時/).fill('')
-    await page.getByRole('button', { name: '変更を保存' }).click()
-    await expect(page.getByRole('status').filter({ hasText: /登録|保存/ })).toHaveText('日時・表示順を保存しました。')
-    await expect(page.getByRole('button', { name: '変更を保存' })).toBeDisabled()
-    await page.reload()
-    await expect(row.getByLabel(/の公開日時/)).toHaveValue('')
-    await expect(row.getByLabel(/の締切日時/)).toHaveValue('')
-    await page.screenshot({ path: 'test-results/project-management.png', fullPage: true })
-    await page.setViewportSize({ width: 390, height: 844 })
-    await expect(page.getByRole('button', { name: '登録', exact: true })).toBeInViewport()
-    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
-    await page.screenshot({ path: 'test-results/project-management-mobile.png', fullPage: true })
+    const handles = page.getByRole("button", { name: /を移動$/ });
+    const source = await handles.nth(0).boundingBox();
+    const target = await handles.nth(1).boundingBox();
+    expect(source).not.toBeNull();
+    expect(target).not.toBeNull();
+    await page.mouse.move(source!.x + source!.width / 2, source!.y + source!.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(target!.x + target!.width / 2, target!.y + target!.height / 2, {
+      steps: 10,
+    });
+    await page.mouse.up();
+    await expect(resourceCells).toHaveText(expectedOrder);
+    await row.getByLabel(/の公開日時/).fill("2026-09-12T19:59");
+    await row.getByLabel(/の締切日時/).fill("2026-09-19T19:59");
+    await page.getByRole("button", { name: "変更を保存" }).click();
+    await expect(page.getByRole("status").filter({ hasText: /登録|保存/ })).toHaveText(
+      "日時・表示順を保存しました。",
+    );
+    await expect(page.getByRole("button", { name: "変更を保存" })).toBeDisabled();
+    await page.reload();
+    await expect(resourceCells).toHaveText(expectedOrder);
+    await expect(row.getByLabel(/の公開日時/)).toHaveValue("2026-09-12T19:59");
+    await expect(row.getByLabel(/の締切日時/)).toHaveValue("2026-09-19T19:59");
+    const saved = (await (await page.request.get("/api/projects")).json()).projects.find(
+      (p: { resource_id: string }) => p.resource_id === "ex1",
+    );
+    expect(saved).toMatchObject({
+      published_at: "2026-09-12T10:59:00Z",
+      deadline: "2026-09-19T10:59:00Z",
+    });
+    await row.getByLabel(/の公開日時/).fill("");
+    await row.getByLabel(/の締切日時/).fill("");
+    await page.getByRole("button", { name: "変更を保存" }).click();
+    await expect(page.getByRole("status").filter({ hasText: /登録|保存/ })).toHaveText(
+      "日時・表示順を保存しました。",
+    );
+    await expect(page.getByRole("button", { name: "変更を保存" })).toBeDisabled();
+    await page.reload();
+    await expect(row.getByLabel(/の公開日時/)).toHaveValue("");
+    await expect(row.getByLabel(/の締切日時/)).toHaveValue("");
+    await page.screenshot({ path: "test-results/project-management.png", fullPage: true });
+    await page.setViewportSize({ width: 390, height: 844 });
+    await expect(page.getByRole("button", { name: "登録", exact: true })).toBeInViewport();
+    expect(
+      await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
+    ).toBe(true);
+    await page.screenshot({ path: "test-results/project-management-mobile.png", fullPage: true });
   } finally {
-    expect((await page.request.patch('/api/admin/projects', { data: { projects: original } })).status()).toBe(204)
+    expect(
+      (await page.request.patch("/api/admin/projects", { data: { projects: original } })).status(),
+    ).toBe(204);
   }
-})
+});
