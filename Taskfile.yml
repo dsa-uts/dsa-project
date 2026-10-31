@@ -98,6 +98,12 @@ tasks:
     cmds:
       - npm run typecheck
 
+  e2e:lint:
+    desc: Lint the E2E tests
+    dir: e2e
+    cmds:
+      - npm run lint
+
   e2e:diagnostics:
     desc: Print E2E workload logs and events
     cmds:
@@ -146,4 +152,5 @@ tasks:
       - task: frontend:typecheck
       - task: frontend:lint
       - task: e2e:typecheck
+      - task: e2e:lint
       - task: codegen:check
