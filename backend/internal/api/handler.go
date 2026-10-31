@@ -11,10 +11,12 @@ import (
 )
 
 // Local aliases give the embedded feature handlers distinct field names.
-type sessionHandler = sessions.Handler
-type userHandler = users.Handler
-type projectHandler = projects.Handler
-type requestHandler = requests.Handler
+type (
+	sessionHandler = sessions.Handler
+	userHandler    = users.Handler
+	projectHandler = projects.Handler
+	requestHandler = requests.Handler
+)
 
 // handler composes the feature handlers into the generated interface.
 type handler struct {
@@ -26,7 +28,12 @@ type handler struct {
 
 var _ generated.StrictServerInterface = (*handler)(nil)
 
-func newHandler(accountStore *store.AccountStore, projectStore *store.ProjectStore, requestStore *store.RequestStore, source *resourceimport.Source) *handler {
+func newHandler(
+	accountStore *store.AccountStore,
+	projectStore *store.ProjectStore,
+	requestStore *store.RequestStore,
+	source *resourceimport.Source,
+) *handler {
 	return &handler{
 		sessionHandler: sessions.NewHandler(accountStore),
 		projectHandler: projects.NewHandler(projectStore, source),

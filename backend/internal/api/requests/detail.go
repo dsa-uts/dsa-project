@@ -16,7 +16,10 @@ import (
 	"github.com/labstack/echo/v4"
 )
 
-func (h *Handler) GetValidation(ctx context.Context, req generated.GetValidationRequestObject) (generated.GetValidationResponseObject, error) {
+func (h *Handler) GetValidation(
+	ctx context.Context,
+	req generated.GetValidationRequestObject,
+) (generated.GetValidationResponseObject, error) {
 	actor := httpauth.Actor(ctx)
 	detail, err := h.requests.GetValidation(ctx, req.RequestId, actor.ID, store.Role(actor.Role))
 	if err != nil {
@@ -87,8 +90,17 @@ func validationDetail(detail store.ValidationDetail) (generated.ValidationDetail
 			jobResult, exists := jobs[jobID]
 			job := validationJob(definition.Jobs[jobID], jobResult, exists)
 			job.Id = jobID
-			job.Artifacts = validationArtifacts(id, jobID, definition.Jobs[jobID], jobResult, detail.Artifacts)
-			body.Result.PeakMemoryBytes = maximumMeasurement(body.Result.PeakMemoryBytes, job.PeakMemoryBytes)
+			job.Artifacts = validationArtifacts(
+				id,
+				jobID,
+				definition.Jobs[jobID],
+				jobResult,
+				detail.Artifacts,
+			)
+			body.Result.PeakMemoryBytes = maximumMeasurement(
+				body.Result.PeakMemoryBytes,
+				job.PeakMemoryBytes,
+			)
 			workflow.Jobs = append(workflow.Jobs, job)
 		}
 		body.Result.Workflows = append(body.Result.Workflows, workflow)
@@ -96,7 +108,11 @@ func validationDetail(detail store.ValidationDetail) (generated.ValidationDetail
 	return body, nil
 }
 
-func validationJob(definition resource.Job, saved store.JobResult, exists bool) generated.ValidationJob {
+func validationJob(
+	definition resource.Job,
+	saved store.JobResult,
+	exists bool,
+) generated.ValidationJob {
 	job := generated.ValidationJob{
 		Name:      definition.Name,
 		Steps:     []generated.ValidationStep{},
@@ -160,7 +176,10 @@ func expectedOutput(output *resource.OutputExpectation) *generated.ExpectedOutpu
 	if output == nil {
 		return nil
 	}
-	return &generated.ExpectedOutput{Data: base64.StdEncoding.EncodeToString(output.Content), Match: generated.ExpectedOutputMatch(output.Match)}
+	return &generated.ExpectedOutput{
+		Data:  base64.StdEncoding.EncodeToString(output.Content),
+		Match: generated.ExpectedOutputMatch(output.Match),
+	}
 }
 
 func maximumMeasurement(a, b *int64) *int64 {
@@ -170,7 +189,12 @@ func maximumMeasurement(a, b *int64) *int64 {
 	return a
 }
 
-func validationArtifacts(workflowID, jobID string, definition resource.Job, saved store.JobResult, metadata []store.ArtifactMetadata) []generated.ValidationArtifact {
+func validationArtifacts(
+	workflowID, jobID string,
+	definition resource.Job,
+	saved store.JobResult,
+	metadata []store.ArtifactMetadata,
+) []generated.ValidationArtifact {
 	artifacts := []generated.ValidationArtifact{}
 	if definition.Artifacts == nil {
 		return artifacts
@@ -179,7 +203,11 @@ func validationArtifacts(workflowID, jobID string, definition resource.Job, save
 		if output.Visibility != "public" {
 			continue
 		}
-		item := generated.ValidationArtifact{Name: output.Name, Path: string(output.Path), ContentType: output.ContentType}
+		item := generated.ValidationArtifact{
+			Name:        output.Name,
+			Path:        string(output.Path),
+			ContentType: output.ContentType,
+		}
 		for _, result := range saved.Artifacts {
 			if result.Name == output.Name {
 				item.Status = new(generated.ValidationArtifactStatus(result.Status))
@@ -192,7 +220,8 @@ func validationArtifacts(workflowID, jobID string, definition resource.Job, save
 					item.SizeBytes = file.SizeBytes
 				} else if file.Error != nil {
 					item.Error = new("Artifact capture failed.")
-					if item.Status != nil && *item.Status == generated.ValidationArtifactStatus(store.OLE) {
+					if item.Status != nil &&
+						*item.Status == generated.ValidationArtifactStatus(store.OLE) {
 						item.Error = new("Artifact exceeds the size limit.")
 					}
 				}

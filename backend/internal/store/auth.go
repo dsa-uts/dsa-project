@@ -62,7 +62,12 @@ func (s *AccountStore) DeleteSession(ctx context.Context, tokenHash []byte) erro
 	return err
 }
 
-func (s *AccountStore) CreateSession(ctx context.Context, verifiedUser *UserAccount, tokenHash []byte, now, expiresAt time.Time) error {
+func (s *AccountStore) CreateSession(
+	ctx context.Context,
+	verifiedUser *UserAccount,
+	tokenHash []byte,
+	now, expiresAt time.Time,
+) error {
 	return s.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
 		lockedUser := new(UserAccount)
 		if err := tx.NewSelect().Model(lockedUser).
@@ -74,7 +79,8 @@ func (s *AccountStore) CreateSession(ctx context.Context, verifiedUser *UserAcco
 		}
 		lockedUserID := lockedUser.ID
 		if _, err := tx.NewDelete().Model((*Session)(nil)).
-			Where("user_account_id = ?", lockedUserID).Where("expires_at <= ?", now).Exec(ctx); err != nil {
+			Where("user_account_id = ?", lockedUserID).
+			Where("expires_at <= ?", now).Exec(ctx); err != nil {
 			return err
 		}
 
@@ -104,7 +110,11 @@ func (s *AccountStore) CreateSession(ctx context.Context, verifiedUser *UserAcco
 	})
 }
 
-func (s *AccountStore) CurrentUser(ctx context.Context, tokenHash []byte, now time.Time) (*UserAccount, error) {
+func (s *AccountStore) CurrentUser(
+	ctx context.Context,
+	tokenHash []byte,
+	now time.Time,
+) (*UserAccount, error) {
 	user := new(UserAccount)
 	err := s.db.NewSelect().Model(user).
 		Join("JOIN sessions AS session ON session.user_account_id = user_account.id").

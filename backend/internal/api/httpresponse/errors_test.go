@@ -28,7 +28,8 @@ func TestErrorHandler(t *testing.T) {
 			for _, method := range []string{http.MethodGet, http.MethodHead} {
 				t.Run(method, func(t *testing.T) {
 					rec := httptest.NewRecorder()
-					c := echo.New().NewContext(httptest.NewRequest(method, "/api/example", nil), rec)
+					c := echo.New().
+						NewContext(httptest.NewRequest(method, "/api/example", nil), rec)
 					ErrorHandler(tc.err, c)
 					if rec.Code != tc.status || rec.Header().Get("Cache-Control") != "no-store" {
 						t.Fatalf("status=%d headers=%v", rec.Code, rec.Header())
@@ -43,7 +44,8 @@ func TestErrorHandler(t *testing.T) {
 					if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
 						t.Fatal(err)
 					}
-					if len(body) != 2 || body["code"] != float64(tc.status) || body["message"] != tc.message {
+					if len(body) != 2 || body["code"] != float64(tc.status) ||
+						body["message"] != tc.message {
 						t.Fatalf("unexpected error body: %s", rec.Body)
 					}
 				})

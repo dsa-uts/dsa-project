@@ -15,7 +15,10 @@ func upload(parts ...uploadPart) *multipart.Reader {
 	var b bytes.Buffer
 	w := multipart.NewWriter(&b)
 	for _, p := range parts {
-		h := textproto.MIMEHeader{"Content-Disposition": {fmt.Sprintf(`form-data; name=%q`, p.name)}, "Content-Type": {"application/octet-stream"}}
+		h := textproto.MIMEHeader{
+			"Content-Disposition": {fmt.Sprintf(`form-data; name=%q`, p.name)},
+			"Content-Type":        {"application/octet-stream"},
+		}
 		if p.name == "metadata" {
 			h.Set("Content-Type", "application/json")
 		}
@@ -27,12 +30,28 @@ func upload(parts ...uploadPart) *multipart.Reader {
 }
 
 func TestUpload(t *testing.T) {
-	meta := uploadPart{"metadata", `{"files":[{"part":"a","path":"answer/./main.c"},{"part":"b","path":"Makefile"}]}`}
-	files, hash, err := readUpload(upload(meta, uploadPart{"a", "\x00\xffsource"}, uploadPart{"b", ""}))
-	if err != nil || len(files) != 2 || files[0].Path != "Makefile" || files[1].Path != "answer/main.c" || string(files[1].Content) != "\x00\xffsource" {
+	meta := uploadPart{
+		"metadata",
+		`{"files":[{"part":"a","path":"answer/./main.c"},{"part":"b","path":"Makefile"}]}`,
+	}
+	files, hash, err := readUpload(
+		upload(meta, uploadPart{"a", "\x00\xffsource"}, uploadPart{"b", ""}),
+	)
+	if err != nil || len(files) != 2 || files[0].Path != "Makefile" ||
+		files[1].Path != "answer/main.c" ||
+		string(files[1].Content) != "\x00\xffsource" {
 		t.Fatalf("files=%+v err=%v", files, err)
 	}
-	_, reordered, err := readUpload(upload(uploadPart{"b", ""}, uploadPart{"a", "\x00\xffsource"}, uploadPart{"metadata", `{"files":[{"part":"b","path":"Makefile"},{"part":"a","path":"answer//main.c"}]}`}))
+	_, reordered, err := readUpload(
+		upload(
+			uploadPart{"b", ""},
+			uploadPart{"a", "\x00\xffsource"},
+			uploadPart{
+				"metadata",
+				`{"files":[{"part":"b","path":"Makefile"},{"part":"a","path":"answer//main.c"}]}`,
+			},
+		),
+	)
 	if err != nil || reordered != hash {
 		t.Fatalf("identity depends on part/path ordering: %s %s %v", hash, reordered, err)
 	}
@@ -43,7 +62,10 @@ func TestUpload(t *testing.T) {
 }
 
 func TestUploadRejectsInvalidParts(t *testing.T) {
-	meta := uploadPart{"metadata", `{"files":[{"part":"a","path":"main.c"},{"part":"b","path":"Makefile"}]}`}
+	meta := uploadPart{
+		"metadata",
+		`{"files":[{"part":"a","path":"main.c"},{"part":"b","path":"Makefile"}]}`,
+	}
 	for _, tc := range []struct {
 		name  string
 		parts []uploadPart
@@ -67,15 +89,26 @@ func TestUploadRejectsInvalidParts(t *testing.T) {
 }
 
 func TestUploadFileSizeLimit(t *testing.T) {
-	meta := uploadPart{"metadata", `{"files":[{"part":"a","path":"main.c"},{"part":"b","path":"Makefile"}]}`}
+	meta := uploadPart{
+		"metadata",
+		`{"files":[{"part":"a","path":"main.c"},{"part":"b","path":"Makefile"}]}`,
+	}
 	for _, size := range []int{maxFileBytes, maxFileBytes + 1} {
-		_, _, err := readUpload(upload(meta, uploadPart{"a", strings.Repeat("x", size)}, uploadPart{"b", ""}))
+		_, _, err := readUpload(
+			upload(meta, uploadPart{"a", strings.Repeat("x", size)}, uploadPart{"b", ""}),
+		)
 		if size == maxFileBytes && err != nil || size > maxFileBytes && err != errFilesTooLarge {
 			t.Fatalf("size %d: %v", size, err)
 		}
 	}
 	// The limit applies to the sum, even when each individual file fits.
-	if _, _, err := readUpload(upload(meta, uploadPart{"a", strings.Repeat("x", maxFileBytes/2)}, uploadPart{"b", strings.Repeat("x", maxFileBytes/2+1)})); err != errFilesTooLarge {
+	if _, _, err := readUpload(
+		upload(
+			meta,
+			uploadPart{"a", strings.Repeat("x", maxFileBytes/2)},
+			uploadPart{"b", strings.Repeat("x", maxFileBytes/2+1)},
+		),
+	); err != errFilesTooLarge {
 		t.Fatalf("combined file size: %v", err)
 	}
 }

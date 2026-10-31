@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"net"
 	"time"
@@ -13,33 +14,43 @@ import (
 )
 
 func main() {
+	if err := run(); err != nil {
+		log.Fatal(err)
+	}
+}
+
+func run() error {
 	startupCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	cfg, err := config.LoadServer()
 	if err != nil {
-		log.Fatalf("load configuration: %v", err)
+		return fmt.Errorf("load configuration: %w", err)
 	}
 	source, err := resourceimport.NewSource(cfg.ResourceRepositoryURL, cfg.ResourceGitHubToken)
 	if err != nil {
-		log.Fatalf("configure Resource source: %v", err)
+		return fmt.Errorf("configure Resource source: %w", err)
 	}
 
 	db, err := store.ConnectDatabase(startupCtx, cfg.DatabaseURL)
 	if err != nil {
-		log.Fatalf("initialize datastores: %v", err)
+		return fmt.Errorf("initialize datastores: %w", err)
 	}
-	defer db.Close()
+	defer func() {
+		if err := db.Close(); err != nil {
+			log.Printf("close database: %v", err)
+		}
+	}()
 
 	if err := store.MigrateSchema(startupCtx, db); err != nil {
-		log.Fatalf("migrate database: %v", err)
+		return fmt.Errorf("migrate database: %w", err)
 	}
 
 	if cfg.DevelopmentSeed {
 		if err := store.SeedDevelopment(startupCtx, db); err != nil {
-			log.Fatalf("seed development: %v", err)
+			return fmt.Errorf("seed development: %w", err)
 		}
 	}
 
 	e := server.New(db, source)
-	log.Fatal(e.Start(net.JoinHostPort("", cfg.Port)))
+	return e.Start(net.JoinHostPort("", cfg.Port))
 }

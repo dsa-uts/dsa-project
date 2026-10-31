@@ -31,10 +31,10 @@ func Run(ctx context.Context, db *bun.DB, ownerID uuid.UUID, docker *client.Clie
 		ownerID:  ownerID,
 		docker:   docker,
 	}
-	if err := os.MkdirAll(workspaceDirectory, 0700); err != nil {
+	if err := os.MkdirAll(workspaceDirectory, 0o700); err != nil {
 		return fmt.Errorf("create workspace directory: %w", err)
 	}
-	if err := os.Chmod(workspaceDirectory, 0700); err != nil {
+	if err := os.Chmod(workspaceDirectory, 0o700); err != nil {
 		return err
 	}
 	for {
@@ -134,7 +134,15 @@ func (w *worker) runRequest(ctx context.Context, req *store.Request) error {
 	saveCtx, cancelSave := context.WithTimeout(ctx, 10*time.Second)
 	defer cancelSave()
 
-	err = w.requests.FinishAttempt(saveCtx, req.ID, w.ownerID, req.AttemptCount, results, state, status)
+	err = w.requests.FinishAttempt(
+		saveCtx,
+		req.ID,
+		w.ownerID,
+		req.AttemptCount,
+		results,
+		state,
+		status,
+	)
 	if errors.Is(err, store.ErrLeaseLost) {
 		return nil
 	}
@@ -165,7 +173,11 @@ func (w *worker) maintainLease(ctx context.Context, req *store.Request) error {
 }
 
 // attemptOutcome decides whether to retry and which status to save on completion.
-func attemptOutcome(attempt int32, results []store.WorkflowResult, executionErr error) (store.RequestState, *store.Status, error) {
+func attemptOutcome(
+	attempt int32,
+	results []store.WorkflowResult,
+	executionErr error,
+) (store.RequestState, *store.Status, error) {
 	if executionErr != nil {
 		if !errors.Is(executionErr, errFilePlacement) && attempt < 3 {
 			return store.RetryingState, nil, nil

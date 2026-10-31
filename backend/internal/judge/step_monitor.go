@@ -16,7 +16,14 @@ type stepObservation struct {
 	oomKilled, containerLost bool
 }
 
-func (w *worker) monitorStep(ctx context.Context, sb *sandbox, execID string, baseline memorySample, softMemory int64, streams *stepIO) (int, stepObservation, error) {
+func (w *worker) monitorStep(
+	ctx context.Context,
+	sb *sandbox,
+	execID string,
+	baseline memorySample,
+	softMemory int64,
+	streams *stepIO,
+) (int, stepObservation, error) {
 	observed := stepObservation{peakMemory: baseline.bytes}
 	inputDone, outputDone := streams.inputDone, streams.outputDone
 	ticker := time.NewTicker(execPollInterval)
@@ -54,7 +61,8 @@ func (w *worker) monitorStep(ctx context.Context, sb *sandbox, execID string, ba
 		case <-inputDone:
 			inputDone = nil
 			// Programs may legitimately close stdin before consuming all input.
-			if err := streams.inputErr; err != nil && !errors.Is(err, syscall.EPIPE) && !errors.Is(err, net.ErrClosed) {
+			if err := streams.inputErr; err != nil && !errors.Is(err, syscall.EPIPE) &&
+				!errors.Is(err, net.ErrClosed) {
 				return exitCodeUnavailable, observed, fmt.Errorf("send step stdin: %w", err)
 			}
 		case <-outputDone:
@@ -68,7 +76,13 @@ func (w *worker) monitorStep(ctx context.Context, sb *sandbox, execID string, ba
 }
 
 // observeStepExit checks for OOM even when the exec stream failed or was closed.
-func (w *worker) observeStepExit(ctx context.Context, sb *sandbox, baseline memorySample, startedAt time.Time, observed *stepObservation) error {
+func (w *worker) observeStepExit(
+	ctx context.Context,
+	sb *sandbox,
+	baseline memorySample,
+	startedAt time.Time,
+	observed *stepObservation,
+) error {
 	var observationErr error
 	if sample, err := sampleMemory(sb); err == nil {
 		observed.peakMemory = max(observed.peakMemory, sample.bytes)

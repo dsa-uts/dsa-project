@@ -20,14 +20,55 @@ func TestAttemptOutcome(t *testing.T) {
 		wantStatus   store.Status // Empty means SQL NULL for a retry.
 		wantErr      bool
 	}{
-		{name: "accepted", results: []store.WorkflowResult{{Status: store.AC}}, wantState: store.CompletedState, wantStatus: store.AC},
-		{name: "worst workflow wins", results: []store.WorkflowResult{{Status: store.WA}, {Status: store.TLE}, {Status: store.AC}}, wantState: store.CompletedState, wantStatus: store.TLE},
-		{name: "retry first attempt", attempt: 1, executionErr: internalErr, wantState: store.RetryingState},
-		{name: "retry second attempt with partial results", attempt: 2, results: []store.WorkflowResult{{Status: store.WA}}, executionErr: internalErr, wantState: store.RetryingState},
-		{name: "complete final attempt", attempt: 3, executionErr: internalErr, wantState: store.CompletedState, wantStatus: store.IE},
-		{name: "placement failure is terminal", attempt: 1, executionErr: fmt.Errorf("place: %w", errFilePlacement), wantState: store.CompletedState, wantStatus: store.IE},
+		{
+			name:       "accepted",
+			results:    []store.WorkflowResult{{Status: store.AC}},
+			wantState:  store.CompletedState,
+			wantStatus: store.AC,
+		},
+		{
+			name: "worst workflow wins",
+			results: []store.WorkflowResult{
+				{Status: store.WA},
+				{Status: store.TLE},
+				{Status: store.AC},
+			},
+			wantState:  store.CompletedState,
+			wantStatus: store.TLE,
+		},
+		{
+			name:         "retry first attempt",
+			attempt:      1,
+			executionErr: internalErr,
+			wantState:    store.RetryingState,
+		},
+		{
+			name:         "retry second attempt with partial results",
+			attempt:      2,
+			results:      []store.WorkflowResult{{Status: store.WA}},
+			executionErr: internalErr,
+			wantState:    store.RetryingState,
+		},
+		{
+			name:         "complete final attempt",
+			attempt:      3,
+			executionErr: internalErr,
+			wantState:    store.CompletedState,
+			wantStatus:   store.IE,
+		},
+		{
+			name:         "placement failure is terminal",
+			attempt:      1,
+			executionErr: fmt.Errorf("place: %w", errFilePlacement),
+			wantState:    store.CompletedState,
+			wantStatus:   store.IE,
+		},
 		{name: "missing results", wantErr: true},
-		{name: "invalid status", results: []store.WorkflowResult{{Status: "invalid"}}, wantErr: true},
+		{
+			name:    "invalid status",
+			results: []store.WorkflowResult{{Status: "invalid"}},
+			wantErr: true,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -56,19 +97,30 @@ func TestJudgeStep(t *testing.T) {
 	zero := 0
 	expected := resource.Expected{
 		ExitCode: &zero,
-		Stdout:   &resource.OutputExpectation{Content: []byte("expected"), Match: resource.MatchExact},
+		Stdout: &resource.OutputExpectation{
+			Content: []byte("expected"),
+			Match:   resource.MatchExact,
+		},
 	}
 	tests := []struct {
 		name   string
 		result store.StepResult
 		want   store.Status
 	}{
-		{"accepted", store.StepResult{Stdout: store.OutputResult{Data: []byte("expected")}}, store.AC},
+		{
+			"accepted",
+			store.StepResult{Stdout: store.OutputResult{Data: []byte("expected")}},
+			store.AC,
+		},
 		{"wrong output", store.StepResult{}, store.WA},
 		{"exit mismatch beats output mismatch", store.StepResult{ExitCode: 1}, store.RE},
 		{"time limit beats exit mismatch", store.StepResult{TLE: true, ExitCode: 1}, store.TLE},
 		{"memory limit beats time limit", store.StepResult{MLE: true, TLE: true}, store.MLE},
-		{"output limit beats memory limit", store.StepResult{OLE: true, MLE: true, TLE: true}, store.OLE},
+		{
+			"output limit beats memory limit",
+			store.StepResult{OLE: true, MLE: true, TLE: true},
+			store.OLE,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -112,13 +164,43 @@ func TestJudgeStepOutputComparison(t *testing.T) {
 		want     store.Status
 	}{
 		{"omitted expectation", nil, "anything", store.AC},
-		{"empty expectation", &resource.OutputExpectation{Match: resource.MatchExact}, "unexpected", store.WA},
-		{"easy mode", &resource.OutputExpectation{Content: []byte("a b"), Match: resource.MatchEasy}, "a  b\n", store.AC},
-		{"sorted mode", &resource.OutputExpectation{Content: []byte("a b"), Match: resource.MatchSorted}, "b a", store.AC},
-		{"unknown mode equal", &resource.OutputExpectation{Content: []byte("a b"), Match: "invalid"}, "a b", store.AC},
-		{"unknown mode uses exact", &resource.OutputExpectation{Content: []byte("a b"), Match: "invalid"}, "a  b", store.WA},
+		{
+			"empty expectation",
+			&resource.OutputExpectation{Match: resource.MatchExact},
+			"unexpected",
+			store.WA,
+		},
+		{
+			"easy mode",
+			&resource.OutputExpectation{Content: []byte("a b"), Match: resource.MatchEasy},
+			"a  b\n",
+			store.AC,
+		},
+		{
+			"sorted mode",
+			&resource.OutputExpectation{Content: []byte("a b"), Match: resource.MatchSorted},
+			"b a",
+			store.AC,
+		},
+		{
+			"unknown mode equal",
+			&resource.OutputExpectation{Content: []byte("a b"), Match: "invalid"},
+			"a b",
+			store.AC,
+		},
+		{
+			"unknown mode uses exact",
+			&resource.OutputExpectation{Content: []byte("a b"), Match: "invalid"},
+			"a  b",
+			store.WA,
+		},
 		{"empty mode equal", &resource.OutputExpectation{Content: []byte("a b")}, "a b", store.AC},
-		{"empty mode uses exact", &resource.OutputExpectation{Content: []byte("a b")}, "a  b", store.WA},
+		{
+			"empty mode uses exact",
+			&resource.OutputExpectation{Content: []byte("a b")},
+			"a  b",
+			store.WA,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -138,7 +220,13 @@ func TestJudgeStepOutputComparison(t *testing.T) {
 						want = store.CE
 					}
 					if got := judgeStep(step, result); got != want {
-						t.Errorf("judgeStep(stderr=%v, compile=%v) = %q, want %q", stderr, compile, got, want)
+						t.Errorf(
+							"judgeStep(stderr=%v, compile=%v) = %q, want %q",
+							stderr,
+							compile,
+							got,
+							want,
+						)
 					}
 				}
 			}
@@ -150,8 +238,17 @@ func TestSummarizeWorkflow(t *testing.T) {
 	duration, memory := int64(12), int64(300)
 	shorter, larger := int64(4), int64(500)
 	result := store.WorkflowResult{Details: store.WorkflowDetails{Jobs: []store.JobResult{
-		{Status: store.AC, Steps: []store.StepResult{{DurationMS: &duration, MemoryBytes: &memory}}},
-		{Status: store.IE, Steps: []store.StepResult{{DurationMS: &shorter, MemoryBytes: &larger}, {Status: store.IE}}},
+		{
+			Status: store.AC,
+			Steps:  []store.StepResult{{DurationMS: &duration, MemoryBytes: &memory}},
+		},
+		{
+			Status: store.IE,
+			Steps: []store.StepResult{
+				{DurationMS: &shorter, MemoryBytes: &larger},
+				{Status: store.IE},
+			},
+		},
 	}}}
 	summarizeWorkflow(&result, errors.New("execute job failed"))
 	if result.Status != store.IE {
@@ -180,9 +277,22 @@ func TestSummarizeWorkflowStatus(t *testing.T) {
 		{name: "no jobs", want: store.AC},
 		{name: "accepted", statuses: []store.Status{store.AC}, want: store.AC},
 		{name: "last job fails", statuses: []store.Status{store.AC, store.IE}, want: store.IE},
-		{name: "earlier failure survives", statuses: []store.Status{store.TLE, store.AC}, want: store.TLE},
-		{name: "error before first job", executionErr: errors.New("invalid dependencies"), want: store.IE},
-		{name: "error between jobs", statuses: []store.Status{store.AC}, executionErr: errors.New("canceled"), want: store.IE},
+		{
+			name:     "earlier failure survives",
+			statuses: []store.Status{store.TLE, store.AC},
+			want:     store.TLE,
+		},
+		{
+			name:         "error before first job",
+			executionErr: errors.New("invalid dependencies"),
+			want:         store.IE,
+		},
+		{
+			name:         "error between jobs",
+			statuses:     []store.Status{store.AC},
+			executionErr: errors.New("canceled"),
+			want:         store.IE,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

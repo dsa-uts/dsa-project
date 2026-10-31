@@ -1,0 +1,36 @@
+version: "2"
+
+linters:
+  default: standard
+  enable:
+    - gocritic
+    - revive
+    - loggercheck
+  settings:
+    revive:
+      enable-default-rules: true
+      rules:
+        # Require comments where they explain intent, not for every exported name.
+        - name: exported
+          disabled: true
+        - name: package-comments
+          disabled: true
+    loggercheck:
+      require-string-key: true
+      no-printf-like: true
+  exclusions:
+    generated: strict
+
+formatters:
+  enable:
+    - gofumpt
+    - golines
+  settings:
+    gofumpt:
+      extra:
+        balance-calls: true
+    golines:
+      max-len: 100
+      reformat-tags: false
+  exclusions:
+    generated: strict

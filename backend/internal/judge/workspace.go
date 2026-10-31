@@ -26,7 +26,7 @@ type workspace struct {
 func newWorkspace() (*workspace, error) {
 	name := uuid.NewString()
 	path := filepath.Join(workspaceDirectory, name)
-	if err := os.Mkdir(path, 0700); err != nil {
+	if err := os.Mkdir(path, 0o700); err != nil {
 		return nil, err
 	}
 	return &workspace{path: path}, nil
@@ -51,22 +51,31 @@ func (ws *workspace) presetPath() string {
 
 func (ws *workspace) mount(ctx context.Context, size int64) error {
 	data := filepath.Join(ws.path, "data")
-	if err := os.Mkdir(data, 0700); err != nil {
+	if err := os.Mkdir(data, 0o700); err != nil {
 		return err
 	}
 	options := fmt.Sprintf("size=%d,noswap,nosuid,nodev,mode=0700", size)
-	if err := filesystemCommand(ctx, "mount", "-t", "tmpfs", "-o", options, "tmpfs", data); err != nil {
+	if err := filesystemCommand(
+		ctx,
+		"mount",
+		"-t",
+		"tmpfs",
+		"-o",
+		options,
+		"tmpfs",
+		data,
+	); err != nil {
 		return err
 	}
 	for _, path := range []string{ws.workspacePath(), ws.tmpPath(), ws.shmPath()} {
-		if err := os.Mkdir(path, 0755); err != nil {
+		if err := os.Mkdir(path, 0o755); err != nil {
 			return err
 		}
 		if err := os.Chown(path, submissionUID, submissionUID); err != nil {
 			return err
 		}
 	}
-	return os.Mkdir(ws.presetPath(), 0755)
+	return os.Mkdir(ws.presetPath(), 0o755)
 }
 
 func filesystemCommand(ctx context.Context, command string, args ...string) error {
@@ -108,7 +117,12 @@ type fileOptions struct {
 
 // Placement happens before the Sandbox starts, so all existing entries were
 // created by the Judge. Artifact inputs may replace submission files/directories.
-func placeFile(ctx context.Context, directory, name string, content []byte, options fileOptions) error {
+func placeFile(
+	ctx context.Context,
+	directory, name string,
+	content []byte,
+	options fileOptions,
+) error {
 	if !validFilePath(name) {
 		return fmt.Errorf("invalid relative path %q", name)
 	}
@@ -116,7 +130,7 @@ func placeFile(ctx context.Context, directory, name string, content []byte, opti
 	if err != nil {
 		return err
 	}
-	defer root.Close()
+	defer func() { _ = root.Close() }()
 
 	parts := strings.Split(name, "/")
 	parent := "."
@@ -134,7 +148,7 @@ func placeFile(ctx context.Context, directory, name string, content []byte, opti
 				return err
 			}
 		}
-		if err := root.MkdirAll(parent, 0755); err != nil {
+		if err := root.MkdirAll(parent, 0o755); err != nil {
 			return err
 		}
 		if err := root.Chown(parent, options.uid, options.uid); err != nil {
@@ -147,11 +161,11 @@ func placeFile(ctx context.Context, directory, name string, content []byte, opti
 			return err
 		}
 	}
-	file, err := root.OpenFile(path, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0600)
+	file, err := root.OpenFile(path, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o600)
 	if err != nil {
 		return err
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 
 	for len(content) > 0 {
 		if err := ctx.Err(); err != nil {
@@ -170,9 +184,9 @@ func placeFile(ctx context.Context, directory, name string, content []byte, opti
 	if err := file.Chown(options.uid, options.uid); err != nil {
 		return err
 	}
-	mode := fs.FileMode(0644)
+	mode := fs.FileMode(0o644)
 	if options.executable {
-		mode = 0755
+		mode = 0o755
 	}
 	if err := file.Chmod(mode); err != nil {
 		return err
@@ -189,7 +203,8 @@ func (ws *workspace) placeSubmission(ctx context.Context, files []store.Submissi
 			file.Content,
 			fileOptions{
 				uid: submissionUID,
-			}); err != nil {
+			},
+		); err != nil {
 			return fmt.Errorf("submission file %q: %w", file.Path, err)
 		}
 	}
@@ -211,14 +226,19 @@ func (ws *workspace) placePresets(ctx context.Context, presets []resource.Preset
 			preset.Content,
 			fileOptions{
 				executable: preset.Executable,
-			}); err != nil {
+			},
+		); err != nil {
 			return fmt.Errorf("preset file %q: %w", preset.Path, err)
 		}
 	}
 	return ctx.Err()
 }
 
-func (ws *workspace) captureArtifact(ctx context.Context, output resource.ArtifactOutput, limit int64) (store.Artifact, store.ArtifactResult, error) {
+func (ws *workspace) captureArtifact(
+	ctx context.Context,
+	output resource.ArtifactOutput,
+	limit int64,
+) (store.Artifact, store.ArtifactResult, error) {
 	artifact := store.Artifact{Name: output.Name}
 	result := store.ArtifactResult{Name: output.Name, Path: string(output.Path), Status: store.AC}
 	content, executable, err := readArtifact(
@@ -228,7 +248,8 @@ func (ws *workspace) captureArtifact(ctx context.Context, output resource.Artifa
 		limit,
 	)
 	if err != nil {
-		if !errors.Is(err, fs.ErrNotExist) && !errors.Is(err, errArtifactInvalid) && !errors.Is(err, errArtifactTooLarge) {
+		if !errors.Is(err, fs.ErrNotExist) && !errors.Is(err, errArtifactInvalid) &&
+			!errors.Is(err, errArtifactTooLarge) {
 			return artifact, result, err
 		}
 		result.Status = store.WA
@@ -244,8 +265,10 @@ func (ws *workspace) captureArtifact(ctx context.Context, output resource.Artifa
 	return artifact, result, nil
 }
 
-var errArtifactTooLarge = errors.New("artifact size limit exceeded")
-var errArtifactInvalid = errors.New("invalid artifact")
+var (
+	errArtifactTooLarge = errors.New("artifact size limit exceeded")
+	errArtifactInvalid  = errors.New("invalid artifact")
+)
 
 func readArtifact(ctx context.Context, directory, name string, limit int64) ([]byte, bool, error) {
 	if !validFilePath(name) {
@@ -255,7 +278,7 @@ func readArtifact(ctx context.Context, directory, name string, limit int64) ([]b
 	if err != nil {
 		return nil, false, err
 	}
-	defer root.Close()
+	defer func() { _ = root.Close() }()
 
 	// os.Root confines traversal. Inspect each component without following its
 	// final symlink; the checks below require directories and a regular file,
@@ -277,7 +300,7 @@ func readArtifact(ctx context.Context, directory, name string, limit int64) ([]b
 	if err != nil {
 		return nil, false, err
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 	info, err := file.Stat()
 	if err != nil {
 		return nil, false, err
@@ -296,7 +319,7 @@ func readArtifact(ctx context.Context, directory, name string, limit int64) ([]b
 	if int64(len(content)) > limit {
 		return nil, false, errArtifactTooLarge
 	}
-	return content, info.Mode().Perm()&0111 != 0, nil
+	return content, info.Mode().Perm()&0o111 != 0, nil
 }
 
 type contextReader struct {

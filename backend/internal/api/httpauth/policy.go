@@ -22,7 +22,8 @@ func ValidateAccessPolicies(spec *openapi3.T) error {
 		return fmt.Errorf("sessionAuth security scheme is required")
 	}
 	ref := spec.Components.SecuritySchemes["sessionAuth"]
-	if ref == nil || ref.Value == nil || ref.Value.Type != "apiKey" || ref.Value.In != "cookie" || ref.Value.Name != auth.SessionCookieName {
+	if ref == nil || ref.Value == nil || ref.Value.Type != "apiKey" || ref.Value.In != "cookie" ||
+		ref.Value.Name != auth.SessionCookieName {
 		return fmt.Errorf("sessionAuth must be an apiKey cookie named %s", auth.SessionCookieName)
 	}
 	return nil

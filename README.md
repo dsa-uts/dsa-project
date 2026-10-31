@@ -39,10 +39,15 @@ task frontend:test
 task frontend:typecheck
 task frontend:lint
 task backend:test
+task backend:fmt                # Goコードの自動整形
+task backend:lint               # Goコード・整形の検証
 task e2e:install                # task checkで使うE2E依存も導入
 task check                      # unit test・typecheck・lint・codegen確認
 task images:build               # Dockerfileからビルドしてローカルへロード
 ```
+
+Goの整形は`backend/.golangci.yml`に統一する。エディターからも`task backend:fmt`を実行するよう設定する
+（goplsのgofumpt設定だけではgolinesによる長い行の折り返しは適用されない）。
 
 REST API変更は`api/openapi.yaml`から始め、`task codegen:generate`で生成物を更新する。
 利用可能なコマンドは`task --list`、証明書・CI・障害調査の詳細は

@@ -26,7 +26,13 @@ func (w *worker) inspectExec(ctx context.Context, id string) (client.ExecInspect
 	return w.docker.ExecInspect(ctx, id, client.ExecInspectOptions{})
 }
 
-func (w *worker) executeStep(ctx context.Context, sb *sandbox, index int, step resource.Step, limits resource.Limits) (result store.StepResult, executionErr error) {
+func (w *worker) executeStep(
+	ctx context.Context,
+	sb *sandbox,
+	index int,
+	step resource.Step,
+	limits resource.Limits,
+) (result store.StepResult, executionErr error) {
 	result = store.StepResult{
 		Index:     index,
 		Status:    store.AC,
@@ -52,9 +58,22 @@ func (w *worker) executeStep(ctx context.Context, sb *sandbox, index int, step r
 	result.MemoryBytes = &peakMemory
 	createCtx, cancelCreate := context.WithTimeout(ctx, apiTimeout)
 	created, err := w.docker.ExecCreate(createCtx, sb.id, client.ExecCreateOptions{
-		User: submissionUser, WorkingDir: "/workspace",
-		Cmd:         []string{"stdbuf", "-oL", "-eL", "/bin/bash", "-e", "-o", "pipefail", "-c", step.Run},
-		AttachStdin: true, AttachStdout: true, AttachStderr: true,
+		User:       submissionUser,
+		WorkingDir: "/workspace",
+		Cmd: []string{
+			"stdbuf",
+			"-oL",
+			"-eL",
+			"/bin/bash",
+			"-e",
+			"-o",
+			"pipefail",
+			"-c",
+			step.Run,
+		},
+		AttachStdin:  true,
+		AttachStdout: true,
+		AttachStderr: true,
 	})
 	cancelCreate()
 	if err != nil {
@@ -75,7 +94,14 @@ func (w *worker) executeStep(ctx context.Context, sb *sandbox, index int, step r
 		stopClosing := context.AfterFunc(ctx, stream.Close)
 		defer stopClosing()
 		streams = startStepIO(stream, step.Stdin, limits)
-		result.ExitCode, observed, runErr = w.monitorStep(stepCtx, sb, created.ID, baseline, limits.Memory, streams)
+		result.ExitCode, observed, runErr = w.monitorStep(
+			stepCtx,
+			sb,
+			created.ID,
+			baseline,
+			limits.Memory,
+			streams,
+		)
 	}
 	elapsed := time.Since(execStartedAt)
 	durationMS := elapsed.Milliseconds()
@@ -106,7 +132,11 @@ func (w *worker) executeStep(ctx context.Context, sb *sandbox, index int, step r
 	// Preserve a normally collected exit code. Interrupted Steps may have no
 	// exit code yet; a known limit verdict does not depend on obtaining one.
 	if result.ExitCode == exitCodeUnavailable {
-		if final, err := w.inspectExec(finishCtx, created.ID); err == nil && final.PID != 0 && !final.Running {
+		if final, err := w.inspectExec(
+			finishCtx,
+			created.ID,
+		); err == nil && final.PID != 0 &&
+			!final.Running {
 			result.ExitCode = final.ExitCode
 		}
 	}

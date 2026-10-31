@@ -185,7 +185,10 @@ func (s *RequestStore) CreateValidation(
 			ContentHash:   hash,
 		}
 		if submissionID != nil {
-			if err := tx.NewSelect().Model(submission).Where("id = ?", *submissionID).Scan(ctx); err != nil {
+			if err := tx.NewSelect().
+				Model(submission).
+				Where("id = ?", *submissionID).
+				Scan(ctx); err != nil {
 				if errors.Is(err, sql.ErrNoRows) {
 					return ErrNotFound
 				}

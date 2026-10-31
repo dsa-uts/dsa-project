@@ -40,13 +40,25 @@ func TestSourceValidation(t *testing.T) {
 }
 
 func TestPinnedFetchAndFailures(t *testing.T) {
-	r := resource.Resource{Metadata: resource.Metadata{ID: "ex1", Name: "Example", Version: "v1.0.0"},
+	r := resource.Resource{
+		Metadata:      resource.Metadata{ID: "ex1", Name: "Example", Version: "v1.0.0"},
 		RequiredFiles: []string{"main.c", "*.h", "レポート.pdf（任意）"},
-		Workflows: map[string]resource.Workflow{"judge": {Name: "Judge", Jobs: map[string]resource.Job{"test": {
-			Visibility: "private", SandboxImage: "ghcr.io/example/judge:latest",
-			Limits: resource.Limits{CPU: 1, PIDs: 1, Memory: 1, StdoutSize: 1, StderrSize: 1, WorkspaceSize: 1, ArtifactSize: 1},
-			Steps:  []resource.Step{{Run: "true", Timeout: time.Second}},
-		}}}},
+		Workflows: map[string]resource.Workflow{
+			"judge": {Name: "Judge", Jobs: map[string]resource.Job{"test": {
+				Visibility:   "private",
+				SandboxImage: "ghcr.io/example/judge:latest",
+				Limits: resource.Limits{
+					CPU:           1,
+					PIDs:          1,
+					Memory:        1,
+					StdoutSize:    1,
+					StderrSize:    1,
+					WorkspaceSize: 1,
+					ArtifactSize:  1,
+				},
+				Steps: []resource.Step{{Run: "true", Timeout: time.Second}},
+			}}},
+		},
 	}
 	snapshot, err := json.MarshalIndent(r, "", "  ")
 	if err != nil {
@@ -57,7 +69,10 @@ func TestPinnedFetchAndFailures(t *testing.T) {
 		t.Fatal(err)
 	}
 	sha := strings.Repeat("a", 40)
-	index := `{"resources":{"ex1":{"v1.0.0":{"path":"release/ex1/v1.0.0.json","source-commit":"` + strings.Repeat("b", 40) + `","resource-hash":"` + hash + `"}}}}`
+	index := `{"resources":{"ex1":{"v1.0.0":{"path":"release/ex1/v1.0.0.json","source-commit":"` + strings.Repeat(
+		"b",
+		40,
+	) + `","resource-hash":"` + hash + `"}}}}`
 	for _, tc := range []struct {
 		name, index, snapshot string
 		status                int
@@ -84,27 +99,35 @@ func TestPinnedFetchAndFailures(t *testing.T) {
 				t.Fatal(err)
 			}
 			calls := 0
-			source.client.Transport = transportFunc(func(req *http.Request) (*http.Response, error) {
-				calls++
-				if req.URL.Host != "api.github.com" || req.Header.Get("Authorization") != "Bearer private-token" {
-					t.Fatal("unexpected host or authentication")
-				}
-				body := ""
-				switch req.URL.Path {
-				case "/repos/example/resources/commits/main":
-					body = `{"sha":"` + sha + `"}`
-				case "/repos/example/resources/contents/release/index.json":
-					body = tc.index
-				case "/repos/example/resources/contents/release/ex1/v1.0.0.json":
-					body = tc.snapshot
-				default:
-					t.Fatalf("unexpected request %s", req.URL)
-				}
-				if calls > 1 && (req.URL.Query().Get("ref") != sha || req.Header.Get("Accept") != "application/vnd.github.raw+json") {
-					t.Fatal("read not pinned to main SHA")
-				}
-				return &http.Response{StatusCode: tc.status, Body: io.NopCloser(strings.NewReader(body)), Header: make(http.Header)}, nil
-			})
+			source.client.Transport = transportFunc(
+				func(req *http.Request) (*http.Response, error) {
+					calls++
+					if req.URL.Host != "api.github.com" ||
+						req.Header.Get("Authorization") != "Bearer private-token" {
+						t.Fatal("unexpected host or authentication")
+					}
+					body := ""
+					switch req.URL.Path {
+					case "/repos/example/resources/commits/main":
+						body = `{"sha":"` + sha + `"}`
+					case "/repos/example/resources/contents/release/index.json":
+						body = tc.index
+					case "/repos/example/resources/contents/release/ex1/v1.0.0.json":
+						body = tc.snapshot
+					default:
+						t.Fatalf("unexpected request %s", req.URL)
+					}
+					if calls > 1 &&
+						(req.URL.Query().Get("ref") != sha || req.Header.Get("Accept") != "application/vnd.github.raw+json") {
+						t.Fatal("read not pinned to main SHA")
+					}
+					return &http.Response{
+						StatusCode: tc.status,
+						Body:       io.NopCloser(strings.NewReader(body)),
+						Header:     make(http.Header),
+					}, nil
+				},
+			)
 			got, err := source.Fetch(t.Context(), "ex1", "v1.0.0")
 			if !errors.Is(err, tc.want) {
 				t.Fatalf("got %v, want %v", err, tc.want)
@@ -112,7 +135,8 @@ func TestPinnedFetchAndFailures(t *testing.T) {
 			if tc.want == nil && (got.Metadata.Name != "Example" || calls != 3) {
 				t.Fatalf("unexpected import: %v, calls %d", got, calls)
 			}
-			if tc.want == nil && strings.Join(got.RequiredFiles, "|") != strings.Join(r.RequiredFiles, "|") {
+			if tc.want == nil &&
+				strings.Join(got.RequiredFiles, "|") != strings.Join(r.RequiredFiles, "|") {
 				t.Fatalf("required-files changed during import: %v", got.RequiredFiles)
 			}
 		})

@@ -114,7 +114,11 @@ func (w *worker) loadJobArtifacts(
 				input.FromJob, input.Name, err)
 		}
 		if artifact == nil || artifact.Error != nil {
-			reason := fmt.Sprintf("required artifact %s/%s is unavailable", input.FromJob, input.Name)
+			reason := fmt.Sprintf(
+				"required artifact %s/%s is unavailable",
+				input.FromJob,
+				input.Name,
+			)
 			return nil, reason, nil
 		}
 		inputs = append(inputs, jobArtifactInput{path: string(input.Path), artifact: artifact})
@@ -150,7 +154,8 @@ func prepareJobFiles(
 					executable: artifact.Executable,
 					replace:    true,
 					uid:        submissionUID,
-				}); err != nil {
+				},
+			); err != nil {
 				return fmt.Errorf("input artifact %q: %w", input.path, err)
 			}
 		}

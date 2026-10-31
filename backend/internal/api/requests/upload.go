@@ -31,17 +31,17 @@ func readUpload(reader *multipart.Reader) ([]store.SubmissionFile, string, error
 			break
 		}
 		if err != nil {
-			return nil, "", fmt.Errorf("Invalid multipart: %w", err)
+			return nil, "", fmt.Errorf("invalid multipart: %w", err)
 		}
 		name := part.FormName()
 		if _, exists := parts[name]; exists || name == "" {
-			return nil, "", fmt.Errorf("Duplicate or empty part name: %q.", name)
+			return nil, "", fmt.Errorf("duplicate or empty part name: %q", name)
 		}
 		if part.Header.Get("Content-Transfer-Encoding") != "" {
-			return nil, "", fmt.Errorf("Part %q must contain unencoded bytes.", name)
+			return nil, "", fmt.Errorf("part %q must contain unencoded bytes", name)
 		}
 		if len(parts) >= 51 {
-			return nil, "", fmt.Errorf("At most 50 file parts are allowed.")
+			return nil, "", fmt.Errorf("at most 50 file parts are allowed")
 		}
 		data, err := io.ReadAll(io.LimitReader(part, maxFileBytes+1))
 		if err != nil {
@@ -51,7 +51,7 @@ func readUpload(reader *multipart.Reader) ([]store.SubmissionFile, string, error
 		if name == "metadata" {
 			media, _, err := mime.ParseMediaType(part.Header.Get("Content-Type"))
 			if err != nil || media != "application/json" {
-				return nil, "", fmt.Errorf("metadata must have Content-Type application/json.")
+				return nil, "", fmt.Errorf("metadata must have Content-Type application/json")
 			}
 			if err := json.Unmarshal(data, &metadata); err != nil {
 				return nil, "", err
@@ -64,7 +64,7 @@ func readUpload(reader *multipart.Reader) ([]store.SubmissionFile, string, error
 		}
 	}
 	if _, exists := parts["metadata"]; !exists {
-		return nil, "", fmt.Errorf("Missing metadata part.")
+		return nil, "", fmt.Errorf("missing metadata part")
 	}
 	delete(parts, "metadata")
 	files := make([]store.SubmissionFile, 0, len(metadata.Files))
@@ -72,7 +72,7 @@ func readUpload(reader *multipart.Reader) ([]store.SubmissionFile, string, error
 	for _, file := range metadata.Files {
 		content, exists := parts[file.Part]
 		if !exists {
-			return nil, "", fmt.Errorf("Missing or repeated file part: %q.", file.Part)
+			return nil, "", fmt.Errorf("missing or repeated file part: %q", file.Part)
 		}
 		delete(parts, file.Part)
 		normalized, err := normalizePath(file.Path)
@@ -80,22 +80,25 @@ func readUpload(reader *multipart.Reader) ([]store.SubmissionFile, string, error
 			return nil, "", err
 		}
 		if paths[normalized] {
-			return nil, "", fmt.Errorf("Duplicate path: %q.", normalized)
+			return nil, "", fmt.Errorf("duplicate path: %q", normalized)
 		}
 		paths[normalized] = true
 		files = append(files, store.SubmissionFile{Path: normalized, Content: content})
 	}
 	if len(parts) != 0 {
-		return nil, "", fmt.Errorf("Unreferenced file parts.")
+		return nil, "", fmt.Errorf("unreferenced file parts")
 	}
 	for name := range paths {
 		for parent := path.Dir(name); parent != "."; parent = path.Dir(parent) {
 			if paths[parent] {
-				return nil, "", fmt.Errorf("Conflicting paths: %q and %q.", parent, name)
+				return nil, "", fmt.Errorf("conflicting paths: %q and %q", parent, name)
 			}
 		}
 	}
-	slices.SortFunc(files, func(a, b store.SubmissionFile) int { return strings.Compare(a.Path, b.Path) })
+	slices.SortFunc(
+		files,
+		func(a, b store.SubmissionFile) int { return strings.Compare(a.Path, b.Path) },
+	)
 	h := sha256.New()
 	for _, file := range files {
 		// Length prefixes make the tree encoding unambiguous, including binary content.
@@ -113,12 +116,12 @@ func normalizePath(name string) (string, error) {
 
 	// Refuse NUL and "C://"
 	if strings.ContainsRune(normalized, '\x00') || (len(normalized) >= 2 && normalized[1] == ':') {
-		return "", fmt.Errorf("Invalid relative path: %q.", name)
+		return "", fmt.Errorf("invalid relative path: %q", name)
 	}
 
 	normalized = strings.TrimPrefix(path.Clean("/"+normalized), "/")
 	if normalized == "" {
-		return "", fmt.Errorf("Invalid relative path: %q.", name)
+		return "", fmt.Errorf("invalid relative path: %q", name)
 	}
 
 	return normalized, nil
