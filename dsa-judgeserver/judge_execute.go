@@ -11,13 +11,12 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/docker/docker/api/types/container"
-	"github.com/docker/docker/api/types/volume"
-	"github.com/docker/docker/client"
-	"github.com/docker/docker/pkg/stdcopy"
 	"github.com/dsa-uts/dsa-project/database/model"
 	"github.com/dsa-uts/dsa-project/database/model/requeststatus"
 	"github.com/google/uuid"
+	"github.com/moby/moby/api/pkg/stdcopy"
+	"github.com/moby/moby/api/types/container"
+	"github.com/moby/moby/client"
 )
 
 type JobExecutor struct {
@@ -37,7 +36,7 @@ const MAX_MEMORY_LIMIT_MB = 1024          // 1 GB
 
 func NewJobExecutor() (*JobExecutor, error) {
 	// Create API Client
-	apiClient, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
+	apiClient, err := client.New(client.FromEnv)
 	if err != nil {
 		return nil, err
 	}
@@ -51,7 +50,7 @@ func (executor *JobExecutor) ExecuteJob(ctx context.Context, job *model.JobDetai
 	// Create Docker Volume to store user program files and compilation results
 	volume_name := fmt.Sprintf("job-%s", uuid.New().String())
 
-	volume, err := executor.client.VolumeCreate(ctx, volume.CreateOptions{
+	volume, err := executor.client.VolumeCreate(ctx, client.VolumeCreateOptions{
 		Name: volume_name,
 	})
 
@@ -59,17 +58,17 @@ func (executor *JobExecutor) ExecuteJob(ctx context.Context, job *model.JobDetai
 		return nil, err
 	}
 
-	defer executor.RemoveVolume(ctx, volume.Name)
+	defer executor.RemoveVolume(ctx, volume.Volume.Name)
 
 	requestLog := model.RequestLog{}
 
-	buildLog, err := executor.executeBuildTasks(ctx, job, volume.Name)
+	buildLog, err := executor.executeBuildTasks(ctx, job, volume.Volume.Name)
 	if err != nil {
 		requestLog.ConstructFromTaskLogs(buildLog, nil)
 		return &requestLog, err
 	}
 
-	judgeLog, err := executor.executeJudgeTasks(ctx, job, volume.Name)
+	judgeLog, err := executor.executeJudgeTasks(ctx, job, volume.Volume.Name)
 
 	requestLog.ConstructFromTaskLogs(buildLog, judgeLog)
 	return &requestLog, err
@@ -86,8 +85,8 @@ func (executor *JobExecutor) executeBuildTasks(ctx context.Context, job *model.J
 	totalMemoryInBytes := min(
 		(job.MemoryMB+32)*1024*1024, MAX_MEMORY_LIMIT_MB*1024*1024)
 
-	buildContainer_createResponse, err := executor.client.ContainerCreate(ctx,
-		&container.Config{
+	buildContainer_createResponse, err := executor.client.ContainerCreate(ctx, client.ContainerCreateOptions{
+		Config: &container.Config{
 			User:  "root",
 			Cmd:   []string{"/bin/sh", "-c", "sleep 3600"},
 			Image: "checker-lang-gcc",
@@ -98,7 +97,7 @@ func (executor *JobExecutor) executeBuildTasks(ctx context.Context, job *model.J
 			NetworkDisabled: true,
 			StopTimeout:     &timeout,
 		},
-		&container.HostConfig{
+		HostConfig: &container.HostConfig{
 			Binds: []string{fmt.Sprintf("%s:/home/guest", volumeName)},
 			Resources: container.Resources{
 				CpusetCpus: cpuSet, // only 1 CPU core can be used.
@@ -133,10 +132,8 @@ func (executor *JobExecutor) executeBuildTasks(ctx context.Context, job *model.J
 			// 	"size": "256m", // limit container writable layer size
 			// },
 		},
-		nil,
-		nil,
-		build_container_name,
-	)
+		Name: build_container_name,
+	})
 
 	if buildContainer_createResponse.Warnings != nil {
 		for _, warning := range buildContainer_createResponse.Warnings {
@@ -151,13 +148,13 @@ func (executor *JobExecutor) executeBuildTasks(ctx context.Context, job *model.J
 	defer executor.RemoveContainer(ctx, buildContainer_createResponse.ID)
 
 	// Start the build container
-	err = executor.client.ContainerStart(ctx, buildContainer_createResponse.ID, container.StartOptions{})
+	_, err = executor.client.ContainerStart(ctx, buildContainer_createResponse.ID, client.ContainerStartOptions{})
 	if err != nil {
 		return nil, err
 	}
 
 	timeoutBeforeStop := 0
-	defer executor.client.ContainerStop(ctx, buildContainer_createResponse.ID, container.StopOptions{
+	defer executor.client.ContainerStop(ctx, buildContainer_createResponse.ID, client.ContainerStopOptions{
 		Signal:  "SIGKILL",
 		Timeout: &timeoutBeforeStop, // do not wait before killing the container
 	})
@@ -349,8 +346,8 @@ func (executor *JobExecutor) executeJudgeTasks(ctx context.Context, job *model.J
 	totalMemoryInBytes := min(
 		(job.MemoryMB+32)*1024*1024, MAX_MEMORY_LIMIT_MB*1024*1024)
 
-	judgeContainer_createResponse, err := executor.client.ContainerCreate(ctx,
-		&container.Config{
+	judgeContainer_createResponse, err := executor.client.ContainerCreate(ctx, client.ContainerCreateOptions{
+		Config: &container.Config{
 			User:  "root",
 			Cmd:   []string{"/bin/sh", "-c", "sleep 3600"},
 			Image: "binary-runner",
@@ -361,7 +358,7 @@ func (executor *JobExecutor) executeJudgeTasks(ctx context.Context, job *model.J
 			NetworkDisabled: true,
 			StopTimeout:     &timeout,
 		},
-		&container.HostConfig{
+		HostConfig: &container.HostConfig{
 			Binds: []string{fmt.Sprintf("%s:/home/guest", volumeName)},
 			Resources: container.Resources{
 				CpusetCpus: cpuSet, // only 1 CPU core can be used.
@@ -396,10 +393,8 @@ func (executor *JobExecutor) executeJudgeTasks(ctx context.Context, job *model.J
 			// 	"size": "256m", // limit container writable layer size
 			// },
 		},
-		nil,
-		nil,
-		judge_container_name,
-	)
+		Name: judge_container_name,
+	})
 
 	if judgeContainer_createResponse.Warnings != nil {
 		for _, warning := range judgeContainer_createResponse.Warnings {
@@ -414,12 +409,12 @@ func (executor *JobExecutor) executeJudgeTasks(ctx context.Context, job *model.J
 	defer executor.RemoveContainer(ctx, judgeContainer_createResponse.ID)
 
 	// Start the judge container
-	err = executor.client.ContainerStart(ctx, judgeContainer_createResponse.ID, container.StartOptions{})
+	_, err = executor.client.ContainerStart(ctx, judgeContainer_createResponse.ID, client.ContainerStartOptions{})
 	if err != nil {
 		return nil, err
 	}
 	timeoutBeforeStop := 0
-	defer executor.client.ContainerStop(ctx, judgeContainer_createResponse.ID, container.StopOptions{
+	defer executor.client.ContainerStop(ctx, judgeContainer_createResponse.ID, client.ContainerStopOptions{
 		Signal:  "SIGKILL",
 		Timeout: &timeoutBeforeStop, // do not wait before killing the container
 	})
@@ -602,7 +597,9 @@ func (executor *JobExecutor) CopyContentsToContainer(ctx context.Context, srcInH
 	}
 
 	// Copy tar archive to container
-	err = executor.client.CopyToContainer(ctx, containerID, dstInContainer, tarReader, container.CopyToContainerOptions{
+	_, err = executor.client.CopyToContainer(ctx, containerID, client.CopyToContainerOptions{
+		DestinationPath: dstInContainer,
+		Content:         tarReader,
 		// it will be an error if unpacking the given content would cause an existing directory to be replaced with a non-directory and vice versa.
 		AllowOverwriteDirWithFile: false,
 		CopyUIDGID:                false,
@@ -643,10 +640,10 @@ func (executor *JobExecutor) ExecuteCommand(ctx context.Context, containerID str
 	}
 
 	// Prepare exec configuration
-	execOptions := container.ExecOptions{
+	execOptions := client.ExecCreateOptions{
 		User:         config.User,
 		Privileged:   false,
-		Tty:          false,
+		TTY:          false,
 		AttachStdin:  config.Stdin != "",
 		AttachStdout: true,
 		AttachStderr: true,
@@ -656,15 +653,14 @@ func (executor *JobExecutor) ExecuteCommand(ctx context.Context, containerID str
 	}
 
 	// Create exec instance
-	execResp, err := executor.client.ContainerExecCreate(ctx, containerID, execOptions)
+	execResp, err := executor.client.ExecCreate(ctx, containerID, execOptions)
 	if err != nil {
 		return result, fmt.Errorf("failed to create exec instance: %w", err)
 	}
 
 	// Attach to exec instance
-	attachResp, err := executor.client.ContainerExecAttach(ctx, execResp.ID, container.ExecAttachOptions{
-		Detach: false,
-		Tty:    false,
+	attachResp, err := executor.client.ExecAttach(ctx, execResp.ID, client.ExecAttachOptions{
+		TTY: false,
 	})
 	if err != nil {
 		return result, fmt.Errorf("failed to attach to exec instance: %w", err)
@@ -708,7 +704,7 @@ func (executor *JobExecutor) ExecuteCommand(ctx context.Context, containerID str
 	}
 
 	// Get exec inspect information to retrieve exit code
-	inspectResp, err := executor.client.ContainerExecInspect(context.Background(), execResp.ID)
+	inspectResp, err := executor.client.ExecInspect(context.Background(), execResp.ID, client.ExecInspectOptions{})
 	if err != nil {
 		return result, fmt.Errorf("failed to inspect exec instance: %w", err)
 	}
@@ -754,14 +750,16 @@ func (executor *JobExecutor) Close() error {
 }
 
 func (executor *JobExecutor) RemoveVolume(ctx context.Context, volumeName string) error {
-	return executor.client.VolumeRemove(ctx, volumeName, true)
+	_, err := executor.client.VolumeRemove(ctx, volumeName, client.VolumeRemoveOptions{Force: true})
+	return err
 }
 
 func (executor *JobExecutor) RemoveContainer(ctx context.Context, containerID string) error {
-	return executor.client.ContainerRemove(ctx, containerID, container.RemoveOptions{
+	_, err := executor.client.ContainerRemove(ctx, containerID, client.ContainerRemoveOptions{
 		// Remove anonymous volumes associated with the container.
 		Force: true,
 		// If the container is running, kill it before removing it.
 		RemoveVolumes: true,
 	})
+	return err
 }

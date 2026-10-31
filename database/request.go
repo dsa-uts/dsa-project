@@ -89,7 +89,7 @@ func (r *RequestStore) GetValidationResults(ctx context.Context, usercode int64,
 		return nil, errors.New("invalid direction")
 	}
 
-	err := intermediate.Limit(limit).Scan(ctx)
+	err := intermediate.Limit(int64(limit)).Scan(ctx)
 	return results, err
 }
 
