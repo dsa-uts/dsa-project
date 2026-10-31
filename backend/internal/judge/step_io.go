@@ -59,9 +59,17 @@ func startStepIO(stream client.ExecAttachResult, stdin []byte, limits resource.L
 	overflow := make(chan struct{})
 	once := new(sync.Once)
 	streams := &stepIO{
-		stream:     stream,
-		stdout:     &outputBuffer{limit: int(min(limits.StdoutSize, maxOutputBytes)), overflow: overflow, once: once},
-		stderr:     &outputBuffer{limit: int(min(limits.StderrSize, maxOutputBytes)), overflow: overflow, once: once},
+		stream: stream,
+		stdout: &outputBuffer{
+			limit:    int(min(limits.StdoutSize, maxOutputBytes)),
+			overflow: overflow,
+			once:     once,
+		},
+		stderr: &outputBuffer{
+			limit:    int(min(limits.StderrSize, maxOutputBytes)),
+			overflow: overflow,
+			once:     once,
+		},
 		overflow:   overflow,
 		inputDone:  make(chan struct{}),
 		outputDone: make(chan struct{}),
@@ -90,7 +98,11 @@ func (s *stepIO) finish(ctx context.Context, sandboxID string, stepIndex int) er
 		s.stream.Close()
 		<-s.outputDone
 		s.outputErr = nil
-		log.Printf("sandbox %s step %d: output stream did not close after UID cleanup", sandboxID, stepIndex)
+		log.Printf(
+			"sandbox %s step %d: output stream did not close after UID cleanup",
+			sandboxID,
+			stepIndex,
+		)
 	}
 	s.stream.Close()
 	<-s.inputDone

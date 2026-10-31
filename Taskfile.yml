@@ -8,6 +8,18 @@ tasks:
     cmds:
       - task --list
 
+  backend:fmt:
+    desc: Format backend Go code
+    dir: backend
+    cmds:
+      - golangci-lint fmt
+
+  backend:lint:
+    desc: Check backend Go code and formatting
+    dir: backend
+    cmds:
+      - golangci-lint run
+
   backend:test:
     desc: Run backend unit tests
     dir: backend
@@ -142,6 +154,7 @@ tasks:
     desc: Run unit tests, type checks, lint, and codegen drift checks
     cmds:
       - task: backend:test
+      - task: backend:lint
       - task: frontend:test
       - task: frontend:typecheck
       - task: frontend:lint

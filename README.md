@@ -39,6 +39,8 @@ task frontend:test
 task frontend:typecheck
 task frontend:lint
 task backend:test
+task backend:fmt                # Goコードの自動整形
+task backend:lint               # Goコード・整形の検証
 task e2e:install                # task checkで使うE2E依存も導入
 task check                      # unit test・typecheck・lint・codegen確認
 task images:build               # Dockerfileからビルドしてローカルへロード

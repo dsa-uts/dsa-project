@@ -9,6 +9,7 @@
           nodejs_24
           go_1_27
           gopls
+          golangci-lint
           nushell
           go-task
           docker-client

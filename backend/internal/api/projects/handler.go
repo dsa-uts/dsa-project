@@ -23,7 +23,10 @@ func NewHandler(projects *store.ProjectStore, source *resourceimport.Source) *Ha
 	return &Handler{projects: projects, source: source}
 }
 
-func (h *Handler) ListProjects(ctx context.Context, req generated.ListProjectsRequestObject) (generated.ListProjectsResponseObject, error) {
+func (h *Handler) ListProjects(
+	ctx context.Context,
+	req generated.ListProjectsRequestObject,
+) (generated.ListProjectsResponseObject, error) {
 	projects, err := h.projects.ListProjects(ctx, httpauth.Actor(ctx).Role == "student")
 	if err != nil {
 		return nil, err
@@ -52,13 +55,19 @@ func (h *Handler) ListProjects(ctx context.Context, req generated.ListProjectsRe
 				Name string `json:"name"`
 			}{id, workflow.Name})
 		}
-		sort.Slice(item.Workflows, func(i, j int) bool { return item.Workflows[i].Id < item.Workflows[j].Id })
+		sort.Slice(
+			item.Workflows,
+			func(i, j int) bool { return item.Workflows[i].Id < item.Workflows[j].Id },
+		)
 		result = append(result, item)
 	}
 	return generated.ListProjects200JSONResponse{Projects: result}, nil
 }
 
-func (h *Handler) GetProject(ctx context.Context, req generated.GetProjectRequestObject) (generated.GetProjectResponseObject, error) {
+func (h *Handler) GetProject(
+	ctx context.Context,
+	req generated.GetProjectRequestObject,
+) (generated.GetProjectResponseObject, error) {
 	p, err := h.projects.GetProject(ctx, req.ProjectId, httpauth.Actor(ctx).Role == "student")
 	if err != nil {
 		return nil, err
@@ -96,21 +105,36 @@ func projectDetail(p *store.ProjectLatest) generated.ProjectDetail {
 			Name                string `json:"name"`
 		}{workflow.Description, id, workflow.Name})
 	}
-	sort.Slice(detail.Workflows, func(i, j int) bool { return detail.Workflows[i].Id < detail.Workflows[j].Id })
+	sort.Slice(
+		detail.Workflows,
+		func(i, j int) bool { return detail.Workflows[i].Id < detail.Workflows[j].Id },
+	)
 	return detail
 }
 
-func (h *Handler) UpdateProjects(ctx context.Context, req generated.UpdateProjectsRequestObject) (generated.UpdateProjectsResponseObject, error) {
+func (h *Handler) UpdateProjects(
+	ctx context.Context,
+	req generated.UpdateProjectsRequestObject,
+) (generated.UpdateProjectsResponseObject, error) {
 	updates := make([]store.ProjectUpdate, 0, len(req.Body.Projects))
 	for _, p := range req.Body.Projects {
 		if p.PublishedAt != nil && p.Deadline != nil && p.PublishedAt.After(*p.Deadline) {
-			return nil, echo.NewHTTPError(http.StatusUnprocessableEntity, "Deadline must not precede publication")
+			return nil, echo.NewHTTPError(
+				http.StatusUnprocessableEntity,
+				"Deadline must not precede publication",
+			)
 		}
-		updates = append(updates, store.ProjectUpdate{ID: p.Id, PublishedAt: p.PublishedAt, Deadline: p.Deadline})
+		updates = append(
+			updates,
+			store.ProjectUpdate{ID: p.Id, PublishedAt: p.PublishedAt, Deadline: p.Deadline},
+		)
 	}
 	err := h.projects.UpdateProjects(ctx, updates)
 	if errors.Is(err, store.ErrProjectIDsMismatch) {
-		return nil, echo.NewHTTPError(http.StatusConflict, "Projects changed. Reload the complete list and save again.")
+		return nil, echo.NewHTTPError(
+			http.StatusConflict,
+			"Projects changed. Reload the complete list and save again.",
+		)
 	}
 	if err != nil {
 		return nil, err
@@ -118,10 +142,16 @@ func (h *Handler) UpdateProjects(ctx context.Context, req generated.UpdateProjec
 	return generated.UpdateProjects204Response{}, nil
 }
 
-func (h *Handler) ImportResource(ctx context.Context, req generated.ImportResourceRequestObject) (generated.ImportResourceResponseObject, error) {
+func (h *Handler) ImportResource(
+	ctx context.Context,
+	req generated.ImportResourceRequestObject,
+) (generated.ImportResourceResponseObject, error) {
 	id, version := req.Body.ResourceId, req.Body.Version
 	if !resourceimport.ValidVersion(version) {
-		return nil, echo.NewHTTPError(http.StatusUnprocessableEntity, "Version must be a formal vMAJOR.MINOR.PATCH.")
+		return nil, echo.NewHTTPError(
+			http.StatusUnprocessableEntity,
+			"Version must be a formal vMAJOR.MINOR.PATCH.",
+		)
 	}
 	current, err := h.projects.CurrentVersion(ctx, id)
 	if err != nil {
@@ -147,7 +177,13 @@ func (h *Handler) ImportResource(ctx context.Context, req generated.ImportResour
 }
 
 func importResponse(p *store.ProjectLatest, changed bool) generated.ImportResource200JSONResponse {
-	return generated.ImportResource200JSONResponse{ProjectId: p.ID, VersionId: p.LatestVersionID, ResourceId: p.ResourceID, Version: p.Version, Changed: changed}
+	return generated.ImportResource200JSONResponse{
+		ProjectId:  p.ID,
+		VersionId:  p.LatestVersionID,
+		ResourceId: p.ResourceID,
+		Version:    p.Version,
+		Changed:    changed,
+	}
 }
 
 func importError(err error) error {

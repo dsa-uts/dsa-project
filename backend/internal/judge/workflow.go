@@ -11,7 +11,10 @@ import (
 	resource "github.com/dsa-uts/dsa-resource-spec"
 )
 
-func (w *worker) executeWorkflows(ctx context.Context, req *store.Request) ([]store.WorkflowResult, error) {
+func (w *worker) executeWorkflows(
+	ctx context.Context,
+	req *store.Request,
+) ([]store.WorkflowResult, error) {
 	if req == nil {
 		return nil, fmt.Errorf("execute: req must not be nil")
 	}
@@ -68,7 +71,12 @@ func (w *worker) cleanupPreviousAttempts(ctx context.Context, req *store.Request
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 
-	if err := w.requests.DeletePreviousExecution(ctx, req.ID, w.ownerID, req.AttemptCount); err != nil {
+	if err := w.requests.DeletePreviousExecution(
+		ctx,
+		req.ID,
+		w.ownerID,
+		req.AttemptCount,
+	); err != nil {
 		return fmt.Errorf("delete previous execution: %w", err)
 	}
 

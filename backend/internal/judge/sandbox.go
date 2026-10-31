@@ -58,7 +58,8 @@ func (w *worker) startSandbox(
 	req *store.Request,
 	ws *workspace,
 	workflowID, jobID string,
-	job resource.Job) (*sandbox, error) {
+	job resource.Job,
+) (*sandbox, error) {
 	ctx, cancel := context.WithTimeout(ctx, startupTimeout)
 	defer cancel()
 
@@ -164,7 +165,11 @@ func (w *worker) stopSandbox(ctx context.Context, sb *sandbox) error {
 	if !state.State.Running {
 		return nil
 	}
-	if _, err := w.docker.ContainerKill(ctx, sb.id, client.ContainerKillOptions{Signal: "SIGKILL"}); err != nil {
+	if _, err := w.docker.ContainerKill(
+		ctx,
+		sb.id,
+		client.ContainerKillOptions{Signal: "SIGKILL"},
+	); err != nil {
 		return err
 	}
 	for {
@@ -182,7 +187,11 @@ func (w *worker) stopSandbox(ctx context.Context, sb *sandbox) error {
 }
 
 func (w *worker) removeContainer(ctx context.Context, id string) error {
-	_, err := w.docker.ContainerRemove(ctx, id, client.ContainerRemoveOptions{Force: true, RemoveVolumes: true})
+	_, err := w.docker.ContainerRemove(
+		ctx,
+		id,
+		client.ContainerRemoveOptions{Force: true, RemoveVolumes: true},
+	)
 	if errdefs.IsNotFound(err) {
 		return nil
 	}
@@ -275,7 +284,7 @@ func (w *worker) ensureSandboxImage(ctx context.Context, image string) error {
 	if err != nil {
 		return fmt.Errorf("pull sandbox image: %w", err)
 	}
-	defer pull.Close()
+	defer func() { _ = pull.Close() }()
 	if err := pull.Wait(ctx); err != nil {
 		return fmt.Errorf("pull sandbox image: %w", err)
 	}
@@ -283,7 +292,12 @@ func (w *worker) ensureSandboxImage(ctx context.Context, image string) error {
 	return nil
 }
 
-func (w *worker) sandboxOptions(req *store.Request, ws *workspace, workflowID, jobID string, job resource.Job) client.ContainerCreateOptions {
+func (w *worker) sandboxOptions(
+	req *store.Request,
+	ws *workspace,
+	workflowID, jobID string,
+	job resource.Job,
+) client.ContainerCreateOptions {
 	pidLimit := int64(job.Limits.PIDs)
 	initEnabled := true
 	hardMemory := job.Limits.Memory * memoryHardMultiplier
@@ -294,7 +308,9 @@ func (w *worker) sandboxOptions(req *store.Request, ws *workspace, workflowID, j
 			User:       initUser,
 			WorkingDir: "/workspace",
 			Entrypoint: []string{"/bin/bash", "-c"},
-			Cmd:        []string{`trap 'exit 0' TERM INT; while :; do sleep 86400 & wait "$!"; done`},
+			Cmd: []string{
+				`trap 'exit 0' TERM INT; while :; do sleep 86400 & wait "$!"; done`,
+			},
 			Labels: map[string]string{
 				workspaceLabel: filepath.Base(ws.path),
 				"dsa.owner":    w.ownerID.String(),
@@ -323,7 +339,6 @@ func (w *worker) sandboxOptions(req *store.Request, ws *workspace, workflowID, j
 			},
 		},
 	}
-
 }
 
 type memorySample struct {
@@ -366,7 +381,12 @@ func sampleMemory(sb *sandbox) (memorySample, error) {
 	return memorySample{}, errors.New("memory.events has no oom_kill counter")
 }
 
-func (w *worker) runControlExec(ctx context.Context, sb *sandbox, command []string, stdout io.Writer) error {
+func (w *worker) runControlExec(
+	ctx context.Context,
+	sb *sandbox,
+	command []string,
+	stdout io.Writer,
+) error {
 	created, err := w.docker.ExecCreate(ctx, sb.id, client.ExecCreateOptions{
 		User: submissionUser, WorkingDir: "/workspace", Cmd: command,
 		AttachStdout: true, AttachStderr: true,
@@ -408,7 +428,12 @@ func (w *worker) cleanupSubmission(ctx context.Context, sb *sandbox) error {
 	// With no capabilities, kill(-1) can signal only this UID's processes.
 	// PID 1 uses another UID; the calling shell is excluded by Linux itself.
 	// ponytail: best-effort UID cleanup races with fork; Job teardown kills all.
-	return w.runControlExec(ctx, sb, []string{"/bin/bash", "-c", "kill -KILL -- -1 || true"}, io.Discard)
+	return w.runControlExec(
+		ctx,
+		sb,
+		[]string{"/bin/bash", "-c", "kill -KILL -- -1 || true"},
+		io.Discard,
+	)
 }
 
 func (w *worker) verifySubmissionUser(ctx context.Context, sb *sandbox) error {

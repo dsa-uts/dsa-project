@@ -23,6 +23,11 @@ func TestNewTokenIsOpaqueAndRandom(t *testing.T) {
 		t.Fatal(err)
 	}
 	if len(first) < 40 || first == second {
-		t.Fatalf("NewToken() returned unsuitable tokens: lengths %d/%d, equal=%v", len(first), len(second), first == second)
+		t.Fatalf(
+			"NewToken() returned unsuitable tokens: lengths %d/%d, equal=%v",
+			len(first),
+			len(second),
+			first == second,
+		)
 	}
 }

@@ -44,7 +44,11 @@ func run() error {
 	if err != nil {
 		return fmt.Errorf("connect database: %w", err)
 	}
-	defer db.Close()
+	defer func() {
+		if err := db.Close(); err != nil {
+			log.Printf("close database: %v", err)
+		}
+	}()
 
 	dockerClient, err := client.New(
 		client.FromEnv,
@@ -52,7 +56,11 @@ func run() error {
 	if err != nil {
 		return fmt.Errorf("create Docker client: %w", err)
 	}
-	defer dockerClient.Close()
+	defer func() {
+		if err := dockerClient.Close(); err != nil {
+			log.Printf("close Docker client: %v", err)
+		}
+	}()
 
 	if err := waitForDocker(startupCtx, dockerClient); err != nil {
 		return err

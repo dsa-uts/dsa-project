@@ -39,7 +39,10 @@ type ProjectLatest struct {
 	ResourceJSON resource.Resource `bun:"resource_json,type:json"`
 }
 
-func (s *ProjectStore) ListProjects(ctx context.Context, publishedOnly bool) ([]ProjectLatest, error) {
+func (s *ProjectStore) ListProjects(
+	ctx context.Context,
+	publishedOnly bool,
+) ([]ProjectLatest, error) {
 	projects := []ProjectLatest{}
 	query := s.db.NewSelect().TableExpr("projects AS p").
 		ColumnExpr("p.*, v.version, v.resource_json").
@@ -53,7 +56,11 @@ func (s *ProjectStore) ListProjects(ctx context.Context, publishedOnly bool) ([]
 }
 
 // GetProject applies the same publication boundary as ListProjects.
-func (s *ProjectStore) GetProject(ctx context.Context, id uuid.UUID, publishedOnly bool) (*ProjectLatest, error) {
+func (s *ProjectStore) GetProject(
+	ctx context.Context,
+	id uuid.UUID,
+	publishedOnly bool,
+) (*ProjectLatest, error) {
 	project := new(ProjectLatest)
 	query := s.db.NewSelect().TableExpr("projects AS p").
 		ColumnExpr("p.*, v.version, v.resource_json").
@@ -71,7 +78,10 @@ func (s *ProjectStore) GetProject(ctx context.Context, id uuid.UUID, publishedOn
 	return project, nil
 }
 
-func (s *ProjectStore) CurrentVersion(ctx context.Context, resourceID string) (*ProjectLatest, error) {
+func (s *ProjectStore) CurrentVersion(
+	ctx context.Context,
+	resourceID string,
+) (*ProjectLatest, error) {
 	project := new(ProjectLatest)
 	err := s.db.NewSelect().TableExpr("projects AS p").ColumnExpr("p.*, v.version").
 		Join("JOIN project_versions AS v ON v.id = p.latest_version_id").
@@ -92,11 +102,17 @@ func (s *ProjectStore) UpdateProjects(ctx context.Context, updates []ProjectUpda
 	return s.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
 		// ponytail: table-level serialization for a small course; use per-Project
 		// locking if concurrent administrative writes become significant.
-		if _, err := tx.ExecContext(ctx, "LOCK TABLE projects IN SHARE ROW EXCLUSIVE MODE"); err != nil {
+		if _, err := tx.ExecContext(
+			ctx,
+			"LOCK TABLE projects IN SHARE ROW EXCLUSIVE MODE",
+		); err != nil {
 			return err
 		}
 		projects := []Project{}
-		if err := tx.NewSelect().Model(&projects).OrderExpr("display_order ASC").Scan(ctx); err != nil {
+		if err := tx.NewSelect().
+			Model(&projects).
+			OrderExpr("display_order ASC").
+			Scan(ctx); err != nil {
 			return err
 		}
 		if len(updates) != len(projects) {
@@ -112,14 +128,18 @@ func (s *ProjectStore) UpdateProjects(ctx context.Context, updates []ProjectUpda
 			}
 			delete(remaining, u.ID)
 		}
-		if _, err := tx.ExecContext(ctx, "SET CONSTRAINTS projects_display_order_key DEFERRED"); err != nil {
+		if _, err := tx.ExecContext(
+			ctx,
+			"SET CONSTRAINTS projects_display_order_key DEFERRED",
+		); err != nil {
 			return err
 		}
 		for i, u := range updates {
 			// Reuse sequence positions so subsequent imports still append.
 			if _, err := tx.NewUpdate().Model((*Project)(nil)).
 				Set("published_at = ?", u.PublishedAt).Set("deadline = ?", u.Deadline).
-				Set("display_order = ?", projects[i].DisplayOrder).Where("id = ?", u.ID).Exec(ctx); err != nil {
+				Set("display_order = ?", projects[i].DisplayOrder).
+				Where("id = ?", u.ID).Exec(ctx); err != nil {
 				return err
 			}
 		}
@@ -128,7 +148,10 @@ func (s *ProjectStore) UpdateProjects(ctx context.Context, updates []ProjectUpda
 }
 
 // ImportVersion receives an already validated snapshot. Fetching never holds a DB lock.
-func (s *ProjectStore) ImportVersion(ctx context.Context, snapshot resource.Resource) (*ProjectLatest, bool, error) {
+func (s *ProjectStore) ImportVersion(
+	ctx context.Context,
+	snapshot resource.Resource,
+) (*ProjectLatest, bool, error) {
 	resourceID := snapshot.Metadata.ID
 	name := snapshot.Metadata.Name
 	version := snapshot.Metadata.Version
@@ -136,7 +159,10 @@ func (s *ProjectStore) ImportVersion(ctx context.Context, snapshot resource.Reso
 	changed := false
 	err := s.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
 		// Share the bulk-update lock, including first imports without an existing row.
-		if _, err := tx.ExecContext(ctx, "LOCK TABLE projects IN SHARE ROW EXCLUSIVE MODE"); err != nil {
+		if _, err := tx.ExecContext(
+			ctx,
+			"LOCK TABLE projects IN SHARE ROW EXCLUSIVE MODE",
+		); err != nil {
 			return err
 		}
 		err := tx.NewSelect().TableExpr("projects AS p").ColumnExpr("p.*, v.version").
@@ -165,7 +191,11 @@ func (s *ProjectStore) ImportVersion(ctx context.Context, snapshot resource.Reso
 				return err
 			}
 		} else {
-			if _, err := tx.NewUpdate().Model(&project.Project).Column("name", "latest_version_id").WherePK().Exec(ctx); err != nil {
+			if _, err := tx.NewUpdate().
+				Model(&project.Project).
+				Column("name", "latest_version_id").
+				WherePK().
+				Exec(ctx); err != nil {
 				return err
 			}
 		}

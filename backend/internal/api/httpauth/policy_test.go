@@ -11,7 +11,10 @@ import (
 
 func TestAccessPoliciesRejectUndeclaredNewOperation(t *testing.T) {
 	spec := minimalSpec()
-	spec.Paths.Set("/api/new", &openapi3.PathItem{Get: &openapi3.Operation{OperationID: "newOperation"}})
+	spec.Paths.Set(
+		"/api/new",
+		&openapi3.PathItem{Get: &openapi3.Operation{OperationID: "newOperation"}},
+	)
 	if err := httpauth.ValidateAccessPolicies(spec); err == nil {
 		t.Fatal("undeclared operation must prevent registration")
 	}

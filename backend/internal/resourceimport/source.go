@@ -37,11 +37,14 @@ type Source struct {
 
 func NewSource(repositoryURL, token string) (*Source, error) {
 	u, err := url.Parse(repositoryURL)
-	if err != nil || u.Scheme != "https" || u.Host != "github.com" || u.User != nil || u.RawQuery != "" || u.Fragment != "" {
+	if err != nil || u.Scheme != "https" || u.Host != "github.com" || u.User != nil ||
+		u.RawQuery != "" ||
+		u.Fragment != "" {
 		return nil, errors.New("RESOURCE_REPOSITORY_URL must be an HTTPS github.com repository URL")
 	}
 	repository := strings.TrimSuffix(strings.Trim(strings.TrimSuffix(u.Path, ".git"), "/"), ".git")
-	if !repositoryPattern.MatchString(repository) || strings.HasSuffix(repository, "/.") || strings.HasSuffix(repository, "/..") {
+	if !repositoryPattern.MatchString(repository) || strings.HasSuffix(repository, "/.") ||
+		strings.HasSuffix(repository, "/..") {
 		return nil, errors.New("RESOURCE_REPOSITORY_URL must identify one owner/repository")
 	}
 	return &Source{repository: repository, token: token, client: &http.Client{
@@ -67,7 +70,11 @@ func (s *Source) Fetch(ctx context.Context, id, version string) (*resource.Resou
 	if json.Unmarshal(data, &commit) != nil || !commitPattern.MatchString(commit.SHA) {
 		return nil, ErrUnavailable
 	}
-	data, err = s.get(ctx, "/contents/release/index.json?ref="+commit.SHA, "application/vnd.github.raw+json")
+	data, err = s.get(
+		ctx,
+		"/contents/release/index.json?ref="+commit.SHA,
+		"application/vnd.github.raw+json",
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -75,7 +82,11 @@ func (s *Source) Fetch(ctx context.Context, id, version string) (*resource.Resou
 	if err != nil {
 		return nil, err
 	}
-	data, err = s.get(ctx, "/contents/"+entry.Path+"?ref="+commit.SHA, "application/vnd.github.raw+json")
+	data, err = s.get(
+		ctx,
+		"/contents/"+entry.Path+"?ref="+commit.SHA,
+		"application/vnd.github.raw+json",
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -83,7 +94,12 @@ func (s *Source) Fetch(ctx context.Context, id, version string) (*resource.Resou
 }
 
 func (s *Source) get(ctx context.Context, path, accept string) ([]byte, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "https://api.github.com/repos/"+s.repository+path, nil)
+	req, err := http.NewRequestWithContext(
+		ctx,
+		http.MethodGet,
+		"https://api.github.com/repos/"+s.repository+path,
+		nil,
+	)
 	if err != nil {
 		return nil, ErrUnavailable
 	}
@@ -96,7 +112,7 @@ func (s *Source) get(ctx context.Context, path, accept string) ([]byte, error) {
 	if err != nil {
 		return nil, ErrUnavailable
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusOK {
 		return nil, ErrUnavailable
 	}
@@ -121,7 +137,8 @@ func decodeIndex(data []byte, id, version string) (indexEntry, error) {
 	}
 	decoder := json.NewDecoder(bytes.NewReader(data))
 	decoder.DisallowUnknownFields()
-	if decoder.Decode(&index) != nil || decoder.Decode(new(any)) != io.EOF || index.Resources == nil {
+	if decoder.Decode(&index) != nil || decoder.Decode(new(any)) != io.EOF ||
+		index.Resources == nil {
 		return indexEntry{}, ErrInvalid
 	}
 	versionList, ok := index.Resources[id]
@@ -133,8 +150,8 @@ func decodeIndex(data []byte, id, version string) (indexEntry, error) {
 		return indexEntry{}, ErrNotFound
 	}
 	if entry.Path != "release/"+id+"/"+version+".json" {
-        return indexEntry{}, ErrInvalid
-  }
+		return indexEntry{}, ErrInvalid
+	}
 	return entry, nil
 }
 

@@ -26,7 +26,14 @@ func TestMonitorStepCancellation(t *testing.T) {
 			stepCtx, cancelStep := context.WithDeadline(ctx, deadline)
 			defer cancelStep()
 			worker := &worker{}
-			exitCode, observed, err := worker.monitorStep(stepCtx, nil, "", memorySample{bytes: 123}, 1000, &stepIO{})
+			exitCode, observed, err := worker.monitorStep(
+				stepCtx,
+				nil,
+				"",
+				memorySample{bytes: 123},
+				1000,
+				&stepIO{},
+			)
 			if !errors.Is(err, wantErr) {
 				t.Fatalf("monitor = %+v, %v; want %v", observed, err, wantErr)
 			}

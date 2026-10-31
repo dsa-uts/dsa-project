@@ -42,7 +42,11 @@ type UserUpdate struct {
 
 // UpdateUser locks the account shared with session creation. Only supplied fields
 // are written; session invalidation and the account change commit together.
-func (s *AccountStore) UpdateUser(ctx context.Context, actorID, userID uuid.UUID, update UserUpdate) (*UserAccount, error) {
+func (s *AccountStore) UpdateUser(
+	ctx context.Context,
+	actorID, userID uuid.UUID,
+	update UserUpdate,
+) (*UserAccount, error) {
 	user := new(UserAccount)
 	err := s.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
 		err := tx.NewSelect().Model(user).Where("id = ?", userID).For("UPDATE").Scan(ctx)
@@ -52,7 +56,8 @@ func (s *AccountStore) UpdateUser(ctx context.Context, actorID, userID uuid.UUID
 		if err != nil {
 			return err
 		}
-		if actorID == userID && ((update.Role != nil && *update.Role != user.Role) || (update.Disabled != nil && *update.Disabled)) {
+		if actorID == userID &&
+			((update.Role != nil && *update.Role != user.Role) || (update.Disabled != nil && *update.Disabled)) {
 			return ErrCannotModifySelf
 		}
 		columns := []string{}
@@ -80,12 +85,19 @@ func (s *AccountStore) UpdateUser(ctx context.Context, actorID, userID uuid.UUID
 			columns = append(columns, "disabled_at")
 		}
 		if len(columns) > 0 {
-			if _, err := tx.NewUpdate().Model(user).Column(columns...).WherePK().Exec(ctx); err != nil {
+			if _, err := tx.NewUpdate().
+				Model(user).
+				Column(columns...).
+				WherePK().
+				Exec(ctx); err != nil {
 				return err
 			}
 		}
 		if invalidate {
-			if _, err := tx.NewDelete().Model((*Session)(nil)).Where("user_account_id = ?", userID).Exec(ctx); err != nil {
+			if _, err := tx.NewDelete().
+				Model((*Session)(nil)).
+				Where("user_account_id = ?", userID).
+				Exec(ctx); err != nil {
 				return err
 			}
 		}
@@ -99,11 +111,17 @@ func (s *AccountStore) UpdateUser(ctx context.Context, actorID, userID uuid.UUID
 // deferred uniqueness allows a permutation without temporary positions.
 func (s *AccountStore) ReorderUsers(ctx context.Context, ids []uuid.UUID) error {
 	return s.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
-		if _, err := tx.ExecContext(ctx, "LOCK TABLE user_accounts IN SHARE ROW EXCLUSIVE MODE"); err != nil {
+		if _, err := tx.ExecContext(
+			ctx,
+			"LOCK TABLE user_accounts IN SHARE ROW EXCLUSIVE MODE",
+		); err != nil {
 			return err
 		}
 		users := []UserAccount{}
-		if err := tx.NewSelect().Model(&users).OrderExpr("display_order ASC").Scan(ctx); err != nil {
+		if err := tx.NewSelect().
+			Model(&users).
+			OrderExpr("display_order ASC").
+			Scan(ctx); err != nil {
 			return err
 		}
 		if len(ids) != len(users) {
@@ -119,11 +137,18 @@ func (s *AccountStore) ReorderUsers(ctx context.Context, ids []uuid.UUID) error 
 			}
 			delete(remaining, id)
 		}
-		if _, err := tx.ExecContext(ctx, "SET CONSTRAINTS user_accounts_display_order_key DEFERRED"); err != nil {
+		if _, err := tx.ExecContext(
+			ctx,
+			"SET CONSTRAINTS user_accounts_display_order_key DEFERRED",
+		); err != nil {
 			return err
 		}
 		for i, id := range ids {
-			if _, err := tx.NewUpdate().Model((*UserAccount)(nil)).Set("display_order = ?", users[i].DisplayOrder).Where("id = ?", id).Exec(ctx); err != nil {
+			if _, err := tx.NewUpdate().
+				Model((*UserAccount)(nil)).
+				Set("display_order = ?", users[i].DisplayOrder).
+				Where("id = ?", id).
+				Exec(ctx); err != nil {
 				return err
 			}
 		}

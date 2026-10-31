@@ -44,7 +44,11 @@ func Authenticate(accountStore *store.AccountStore) openapi3filter.Authenticatio
 		// echo-middleware supplies a background context to this callback. Use the
 		// original request for DB cancellation and install the actor there for strict handlers.
 		requestContext := c.Request().Context()
-		user, err := accountStore.CurrentUser(requestContext, auth.HashToken(cookie.Value), time.Now())
+		user, err := accountStore.CurrentUser(
+			requestContext,
+			auth.HashToken(cookie.Value),
+			time.Now(),
+		)
 		if errors.Is(err, store.ErrNotFound) {
 			return unauthorized()
 		}
@@ -52,7 +56,8 @@ func Authenticate(accountStore *store.AccountStore) openapi3filter.Authenticatio
 			slog.ErrorContext(requestContext, "authenticate session", "error", err)
 			// The middleware preserves direct HTTP errors in SecurityRequirementsError.
 			// Wrapping this error would turn a database failure into a 403.
-			return echo.NewHTTPError(http.StatusInternalServerError, "Internal server error.").SetInternal(err)
+			return echo.NewHTTPError(http.StatusInternalServerError, "Internal server error.").
+				SetInternal(err)
 		}
 		// kin-openapi passes the required Roles through its Scopes field.
 		// Startup validation permits at most one minimum Role.
@@ -60,15 +65,20 @@ func Authenticate(accountStore *store.AccountStore) openapi3filter.Authenticatio
 		for _, scope := range input.Scopes {
 			requiredRole := auth.Role(scope)
 			if !auth.AllowsRole(actualRole, requiredRole) {
-				return echo.NewHTTPError(http.StatusForbidden, fmt.Sprintf("%s Role is required.", requiredRole))
+				return echo.NewHTTPError(
+					http.StatusForbidden,
+					fmt.Sprintf("%s Role is required.", requiredRole),
+				)
 			}
 		}
-		c.SetRequest(c.Request().WithContext(context.WithValue(requestContext, actorContextKey{}, UserInfo{
-			ID:     user.ID,
-			Userid: user.Userid,
-			Name:   user.Name,
-			Role:   actualRole,
-		})))
+		c.SetRequest(
+			c.Request().WithContext(context.WithValue(requestContext, actorContextKey{}, UserInfo{
+				ID:     user.ID,
+				Userid: user.Userid,
+				Name:   user.Name,
+				Role:   actualRole,
+			})),
+		)
 		return nil
 	}
 }

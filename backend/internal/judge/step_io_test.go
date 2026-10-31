@@ -60,12 +60,23 @@ func TestStepIOFinish(t *testing.T) {
 	for _, consumed := range []bool{false, true} {
 		t.Run(fmt.Sprintf("outputConsumed=%v", consumed), func(t *testing.T) {
 			conn, peer := net.Pipe()
-			defer conn.Close()
-			defer peer.Close()
+			defer func() { _ = conn.Close() }()
+			defer func() { _ = peer.Close() }()
 			// Docker multiplexed frames: stream ID, padding, big-endian payload size.
-			output := bytes.NewReader([]byte("\x01\x00\x00\x00\x00\x00\x00\x06abcdef\x02\x00\x00\x00\x00\x00\x00\x03err"))
-			stream := client.ExecAttachResult{HijackedResponse: client.HijackedResponse{Conn: conn, Reader: bufio.NewReader(output)}}
-			streams := startStepIO(stream, []byte("unread input"), resource.Limits{StdoutSize: 3, StderrSize: 10})
+			output := bytes.NewReader(
+				[]byte("\x01\x00\x00\x00\x00\x00\x00\x06abcdef\x02\x00\x00\x00\x00\x00\x00\x03err"),
+			)
+			stream := client.ExecAttachResult{
+				HijackedResponse: client.HijackedResponse{
+					Conn:   conn,
+					Reader: bufio.NewReader(output),
+				},
+			}
+			streams := startStepIO(
+				stream,
+				[]byte("unread input"),
+				resource.Limits{StdoutSize: 3, StderrSize: 10},
+			)
 			if consumed {
 				<-streams.outputDone
 			}
@@ -99,10 +110,16 @@ func TestStepIOFinishExpiredBudget(t *testing.T) {
 func testStepIOFinishInterrupted(t *testing.T, canceled bool) {
 	t.Helper()
 	conn, peer := net.Pipe()
-	defer conn.Close()
-	defer peer.Close()
-	stream := client.ExecAttachResult{HijackedResponse: client.HijackedResponse{Conn: conn, Reader: bufio.NewReader(conn)}}
-	streams := startStepIO(stream, []byte("unread input"), resource.Limits{StdoutSize: 3, StderrSize: 10})
+	defer func() { _ = conn.Close() }()
+	defer func() { _ = peer.Close() }()
+	stream := client.ExecAttachResult{
+		HijackedResponse: client.HijackedResponse{Conn: conn, Reader: bufio.NewReader(conn)},
+	}
+	streams := startStepIO(
+		stream,
+		[]byte("unread input"),
+		resource.Limits{StdoutSize: 3, StderrSize: 10},
+	)
 	// Both an exhausted finish budget and Request cancellation must join the copies.
 	deadline := time.Now().Add(-time.Second)
 	if canceled {

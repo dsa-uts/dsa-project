@@ -25,7 +25,10 @@ func TestLoadServer(t *testing.T) {
 		t.Errorf("Port = %q, want %q", cfg.Port, "8080")
 	}
 	if cfg.ResourceRepositoryURL != "https://github.com/dsa-uts/dsa-resource-spec" {
-		t.Errorf("ResourceRepositoryURL = %q, want configured repository", cfg.ResourceRepositoryURL)
+		t.Errorf(
+			"ResourceRepositoryURL = %q, want configured repository",
+			cfg.ResourceRepositoryURL,
+		)
 	}
 	if cfg.DevelopmentSeed {
 		t.Error("DevelopmentSeed = true, want false by default")

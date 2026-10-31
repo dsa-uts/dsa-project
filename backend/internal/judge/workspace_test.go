@@ -20,7 +20,12 @@ func TestPlaceFile(t *testing.T) {
 		{name: "existing file is preserved", existing: "main", target: "main", wantErr: true},
 		{name: "replace file", existing: "main", target: "main", replace: true},
 		{name: "file blocks parent", existing: "a", target: "a/main", wantErr: true},
-		{name: "replace blocking file with directory", existing: "a", target: "a/main", replace: true},
+		{
+			name:     "replace blocking file with directory",
+			existing: "a",
+			target:   "a/main",
+			replace:  true,
+		},
 		{name: "replace directory with file", existing: "a/child", target: "a", replace: true},
 		{name: "reject parent traversal", target: "../outside", replace: true, wantErr: true},
 	}
@@ -29,10 +34,10 @@ func TestPlaceFile(t *testing.T) {
 			directory := t.TempDir()
 			if tt.existing != "" {
 				path := filepath.Join(directory, tt.existing)
-				if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+				if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 					t.Fatal(err)
 				}
-				if err := os.WriteFile(path, []byte("original"), 0644); err != nil {
+				if err := os.WriteFile(path, []byte("original"), 0o644); err != nil {
 					t.Fatal(err)
 				}
 			}
@@ -60,9 +65,9 @@ func TestPlaceFile(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			wantMode := os.FileMode(0644)
+			wantMode := os.FileMode(0o644)
 			if tt.executable {
-				wantMode = 0755
+				wantMode = 0o755
 			}
 			if info.Mode().Perm() != wantMode {
 				t.Errorf("mode = %o, want %o", info.Mode().Perm(), wantMode)
@@ -74,13 +79,19 @@ func TestPlaceFile(t *testing.T) {
 func TestPlaceFileReplacesSymlinkWithoutTouchingTarget(t *testing.T) {
 	directory, outside := t.TempDir(), t.TempDir()
 	target := filepath.Join(outside, "keep")
-	if err := os.WriteFile(target, []byte("original"), 0644); err != nil {
+	if err := os.WriteFile(target, []byte("original"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.Symlink(outside, filepath.Join(directory, "link")); err != nil {
 		t.Fatal(err)
 	}
-	if err := placeFile(context.Background(), directory, "link/keep", []byte("placed"), fileOptions{uid: -1, replace: true}); err != nil {
+	if err := placeFile(
+		context.Background(),
+		directory,
+		"link/keep",
+		[]byte("placed"),
+		fileOptions{uid: -1, replace: true},
+	); err != nil {
 		t.Fatal(err)
 	}
 	data, err := os.ReadFile(target)

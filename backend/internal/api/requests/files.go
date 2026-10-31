@@ -14,9 +14,17 @@ import (
 	"github.com/dsa-uts/dsa-project/backend/internal/store"
 )
 
-func (h *Handler) GetValidationFiles(ctx context.Context, req generated.GetValidationFilesRequestObject) (generated.GetValidationFilesResponseObject, error) {
+func (h *Handler) GetValidationFiles(
+	ctx context.Context,
+	req generated.GetValidationFilesRequestObject,
+) (generated.GetValidationFilesResponseObject, error) {
 	actor := httpauth.Actor(ctx)
-	files, err := h.requests.GetValidationFiles(ctx, req.RequestId, actor.ID, store.Role(actor.Role))
+	files, err := h.requests.GetValidationFiles(
+		ctx,
+		req.RequestId,
+		actor.ID,
+		store.Role(actor.Role),
+	)
 	if err != nil {
 		return nil, validationReadError(err)
 	}
@@ -28,9 +36,17 @@ func (h *Handler) GetValidationFiles(ctx context.Context, req generated.GetValid
 	return generated.GetValidationFiles200MultipartResponse(write), nil
 }
 
-func (h *Handler) GetValidationArtifacts(ctx context.Context, req generated.GetValidationArtifactsRequestObject) (generated.GetValidationArtifactsResponseObject, error) {
+func (h *Handler) GetValidationArtifacts(
+	ctx context.Context,
+	req generated.GetValidationArtifactsRequestObject,
+) (generated.GetValidationArtifactsResponseObject, error) {
 	actor := httpauth.Actor(ctx)
-	files, err := h.requests.GetValidationArtifacts(ctx, req.RequestId, actor.ID, store.Role(actor.Role))
+	files, err := h.requests.GetValidationArtifacts(
+		ctx,
+		req.RequestId,
+		actor.ID,
+		store.Role(actor.Role),
+	)
 	if err != nil {
 		return nil, validationReadError(err)
 	}
@@ -42,7 +58,9 @@ func (h *Handler) GetValidationArtifacts(ctx context.Context, req generated.GetV
 	return generated.GetValidationArtifacts200MultipartResponse(write), nil
 }
 
-func artifactFiles(files store.ValidationArtifacts) (generated.ValidationArtifactsMetadata, []downloadFile) {
+func artifactFiles(
+	files store.ValidationArtifacts,
+) (generated.ValidationArtifactsMetadata, []downloadFile) {
 	metadata := generated.ValidationArtifactsMetadata{
 		Files: []generated.ArtifactPart{},
 	}
@@ -79,7 +97,9 @@ type downloadFile struct {
 	contentType string
 }
 
-func validationFiles(files store.ValidationFiles) (generated.ValidationFilesMetadata, []downloadFile) {
+func validationFiles(
+	files store.ValidationFiles,
+) (generated.ValidationFilesMetadata, []downloadFile) {
 	metadata := generated.ValidationFilesMetadata{
 		SubmissionFiles: []generated.FilePart{},
 		Presets:         []generated.PresetFiles{},
@@ -126,8 +146,10 @@ func fileMultipart(metadata any, files []downloadFile) (func(*multipart.Writer) 
 		}
 		for i, file := range files {
 			part, err := writer.CreatePart(textproto.MIMEHeader{
-				"Content-Disposition": {fmt.Sprintf(`form-data; name="file%d"; filename="file%d"`, i, i)},
-				"Content-Type":        {file.contentType},
+				"Content-Disposition": {
+					fmt.Sprintf(`form-data; name="file%d"; filename="file%d"`, i, i),
+				},
+				"Content-Type": {file.contentType},
 			})
 			if err != nil {
 				return err

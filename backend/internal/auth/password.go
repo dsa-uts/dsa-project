@@ -25,8 +25,23 @@ func HashPassword(password string) (string, error) {
 	if _, err := rand.Read(salt); err != nil {
 		return "", err
 	}
-	key := argon2.IDKey([]byte(password), salt, passwordIterations, passwordMemory, passwordParallelism, passwordKeyLength)
-	return fmt.Sprintf("$argon2id$v=%d$m=%d,t=%d,p=%d$%s$%s", argon2.Version, passwordMemory, passwordIterations, passwordParallelism, base64.RawStdEncoding.EncodeToString(salt), base64.RawStdEncoding.EncodeToString(key)), nil
+	key := argon2.IDKey(
+		[]byte(password),
+		salt,
+		passwordIterations,
+		passwordMemory,
+		passwordParallelism,
+		passwordKeyLength,
+	)
+	return fmt.Sprintf(
+		"$argon2id$v=%d$m=%d,t=%d,p=%d$%s$%s",
+		argon2.Version,
+		passwordMemory,
+		passwordIterations,
+		passwordParallelism,
+		base64.RawStdEncoding.EncodeToString(salt),
+		base64.RawStdEncoding.EncodeToString(key),
+	), nil
 }
 
 // VerifyPassword fails closed for malformed or unsupported PHC strings. Resource
@@ -64,6 +79,13 @@ func VerifyPassword(encoded, password string) bool {
 	if err != nil || len(key) < 16 || len(key) > 64 {
 		return false
 	}
-	actual := argon2.IDKey([]byte(password), salt, iterations, memory, uint8(parallelism), uint32(len(key)))
+	actual := argon2.IDKey(
+		[]byte(password),
+		salt,
+		iterations,
+		memory,
+		uint8(parallelism),
+		uint32(len(key)),
+	)
 	return subtle.ConstantTimeCompare(actual, key) == 1
 }
