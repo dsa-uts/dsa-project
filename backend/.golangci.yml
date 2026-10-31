@@ -8,6 +8,7 @@ linters:
     - loggercheck
   settings:
     revive:
+      enable-default-rules: true
       rules:
         # Require comments where they explain intent, not for every exported name.
         - name: exported

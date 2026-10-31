@@ -31,7 +31,7 @@ func userAccountResponse(user *store.UserAccount) generated.UserAccount {
 
 func (h *Handler) ListUserAccounts(
 	ctx context.Context,
-	req generated.ListUserAccountsRequestObject,
+	_ generated.ListUserAccountsRequestObject,
 ) (generated.ListUserAccountsResponseObject, error) {
 	users, err := h.auth.ListUsers(ctx)
 	if err != nil {

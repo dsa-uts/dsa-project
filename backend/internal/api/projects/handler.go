@@ -25,7 +25,7 @@ func NewHandler(projects *store.ProjectStore, source *resourceimport.Source) *Ha
 
 func (h *Handler) ListProjects(
 	ctx context.Context,
-	req generated.ListProjectsRequestObject,
+	_ generated.ListProjectsRequestObject,
 ) (generated.ListProjectsResponseObject, error) {
 	projects, err := h.projects.ListProjects(ctx, httpauth.Actor(ctx).Role == "student")
 	if err != nil {
@@ -45,13 +45,13 @@ func (h *Handler) ListProjects(
 			PublishedAt:     p.PublishedAt,
 			Deadline:        p.Deadline,
 			Workflows: make([]struct {
-				Id   string `json:"id"`
+				Id   string `json:"id"` //nolint:revive // Must match the generated anonymous struct.
 				Name string `json:"name"`
 			}, 0, len(snapshot.Workflows)),
 		}
 		for id, workflow := range snapshot.Workflows {
 			item.Workflows = append(item.Workflows, struct {
-				Id   string `json:"id"`
+				Id   string `json:"id"` //nolint:revive // Must match the generated anonymous struct.
 				Name string `json:"name"`
 			}{id, workflow.Name})
 		}
@@ -94,14 +94,14 @@ func projectDetail(p *store.ProjectLatest) generated.ProjectDetail {
 		RequiredFiles:   append([]string{}, snapshot.RequiredFiles...),
 		Workflows: make([]struct {
 			DescriptionMarkdown string `json:"description_markdown"`
-			Id                  string `json:"id"`
+			Id                  string `json:"id"` //nolint:revive // Must match the generated anonymous struct.
 			Name                string `json:"name"`
 		}, 0, len(snapshot.Workflows)),
 	}
 	for id, workflow := range snapshot.Workflows {
 		detail.Workflows = append(detail.Workflows, struct {
 			DescriptionMarkdown string `json:"description_markdown"`
-			Id                  string `json:"id"`
+			Id                  string `json:"id"` //nolint:revive // Must match the generated anonymous struct.
 			Name                string `json:"name"`
 		}{workflow.Description, id, workflow.Name})
 	}

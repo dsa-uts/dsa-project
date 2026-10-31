@@ -97,7 +97,7 @@ func (h *Handler) DeleteSession(
 
 func (h *Handler) GetCurrentUser(
 	ctx context.Context,
-	req generated.GetCurrentUserRequestObject,
+	_ generated.GetCurrentUserRequestObject,
 ) (generated.GetCurrentUserResponseObject, error) {
 	userInfo := httpauth.Actor(ctx)
 	return generated.GetCurrentUser200JSONResponse{
