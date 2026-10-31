@@ -38,9 +38,14 @@ export default defineConfig({
       testMatch: "**/problem-submission.spec.ts",
       dependencies: ["register"],
     },
+    {
+      name: "batch-grading",
+      testMatch: "**/batch-grading.spec.ts",
+      dependencies: ["submit"],
+    },
   ],
   use: {
-    baseURL: process.env.E2E_BASE_URL ?? "http://localhost:5173",
+    baseURL: process.env.E2E_BASE_URL ?? "http://localhost:15173",
     browserName: "chromium",
     trace: "retain-on-failure",
     screenshot: "only-on-failure",

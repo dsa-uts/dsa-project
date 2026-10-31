@@ -3,7 +3,7 @@ DSA サーバーのバックエンドです。
 
 # Requirements
 * Docker
-* Go 1.26+
+* Go 1.27.3+
 
 # Libraries
 * [Echo](https://echo.labstack.com/)
