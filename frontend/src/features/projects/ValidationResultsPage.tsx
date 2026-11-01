@@ -138,9 +138,6 @@ export function ValidationResultsPage() {
       <div className="min-w-0 space-y-5 bg-card p-5 sm:p-8">
         <div>
           <h1 className="break-words text-4xl font-bold">{title}</h1>
-          <p className="mt-2 text-muted-foreground">
-            {projectId ? "この課題" : "全課題"}の提出・最新順
-          </p>
         </div>
         <div className="flex flex-wrap items-center gap-6 rounded-md border bg-muted/30 p-5">
           <label htmlFor="result-filter" className="font-medium">
