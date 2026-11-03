@@ -4,16 +4,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log/slog"
 	"net/http"
 	"time"
 
+	"github.com/dsa-uts/dsa-project/backend/internal/api/httpresponse"
 	"github.com/dsa-uts/dsa-project/backend/internal/auth"
 	"github.com/dsa-uts/dsa-project/backend/internal/store"
 	"github.com/getkin/kin-openapi/openapi3filter"
 	"github.com/google/uuid"
-	"github.com/labstack/echo/v4"
-	echomiddleware "github.com/oapi-codegen/echo-middleware"
 )
 
 type actorContextKey struct{}
@@ -27,25 +25,28 @@ type UserInfo struct {
 
 // Authenticate runs during security validation, before parameters and bodies.
 // ValidateAccessPolicies must have accepted the spec before registering routes.
-func Authenticate(accountStore *store.AccountStore) openapi3filter.AuthenticationFunc {
+func Authenticate(
+	accountStore *store.AccountStore,
+	w http.ResponseWriter,
+) openapi3filter.AuthenticationFunc {
 	return func(ctx context.Context, input *openapi3filter.AuthenticationInput) error {
-		c := echomiddleware.GetEchoContext(ctx)
-		if c == nil || input.SecuritySchemeName != "sessionAuth" {
-			return echo.NewHTTPError(http.StatusInternalServerError, "Invalid API access policy.")
+		r := input.RequestValidationInput.Request
+		if input.SecuritySchemeName != "sessionAuth" {
+			return fmt.Errorf("invalid API access policy: %s", input.SecuritySchemeName)
 		}
 		unauthorized := func() error {
-			c.Response().Header().Set("Set-Cookie", ClearedSessionCookie())
-			return echo.NewHTTPError(http.StatusUnauthorized, "Authentication is required.")
+			w.Header().Set("Set-Cookie", ClearedSessionCookie())
+			return &httpresponse.Error{
+				Code:    http.StatusUnauthorized,
+				Message: "Authentication is required.",
+			}
 		}
-		cookie, err := c.Cookie(auth.SessionCookieName)
+		cookie, err := r.Cookie(auth.SessionCookieName)
 		if err != nil {
 			return unauthorized()
 		}
-		// echo-middleware supplies a background context to this callback. Use the
-		// original request for DB cancellation and install the actor there for strict handlers.
-		requestContext := c.Request().Context()
 		user, err := accountStore.CurrentUser(
-			requestContext,
+			ctx,
 			auth.HashToken(cookie.Value),
 			time.Now(),
 		)
@@ -53,11 +54,7 @@ func Authenticate(accountStore *store.AccountStore) openapi3filter.Authenticatio
 			return unauthorized()
 		}
 		if err != nil {
-			slog.ErrorContext(requestContext, "authenticate session", "error", err)
-			// The middleware preserves direct HTTP errors in SecurityRequirementsError.
-			// Wrapping this error would turn a database failure into a 403.
-			return echo.NewHTTPError(http.StatusInternalServerError, "Internal server error.").
-				SetInternal(err)
+			return fmt.Errorf("authenticate session: %w", err)
 		}
 		// kin-openapi passes the required Roles through its Scopes field.
 		// Startup validation permits at most one minimum Role.
@@ -65,20 +62,18 @@ func Authenticate(accountStore *store.AccountStore) openapi3filter.Authenticatio
 		for _, scope := range input.Scopes {
 			requiredRole := auth.Role(scope)
 			if !auth.AllowsRole(actualRole, requiredRole) {
-				return echo.NewHTTPError(
-					http.StatusForbidden,
-					fmt.Sprintf("%s Role is required.", requiredRole),
-				)
+				return &httpresponse.Error{
+					Code:    http.StatusForbidden,
+					Message: fmt.Sprintf("%s Role is required.", requiredRole),
+				}
 			}
 		}
-		c.SetRequest(
-			c.Request().WithContext(context.WithValue(requestContext, actorContextKey{}, UserInfo{
-				ID:     user.ID,
-				Userid: user.Userid,
-				Name:   user.Name,
-				Role:   actualRole,
-			})),
-		)
+		*r = *r.WithContext(context.WithValue(ctx, actorContextKey{}, UserInfo{
+			ID:     user.ID,
+			Userid: user.Userid,
+			Name:   user.Name,
+			Role:   actualRole,
+		}))
 		return nil
 	}
 }

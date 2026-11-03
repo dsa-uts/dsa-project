@@ -4,7 +4,7 @@ package: generated
 output: gen.go
 generate:
   models: true
-  echo-server: true
+  std-http-server: true
   strict-server: true
   # kin-openapi validation middleware が参照する spec を生成コードに埋め込む
   # (実行時に openapi.yaml ファイルへの依存を持たない)

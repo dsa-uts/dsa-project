@@ -11,9 +11,9 @@ import (
 
 	"github.com/dsa-uts/dsa-project/backend/internal/api/generated"
 	"github.com/dsa-uts/dsa-project/backend/internal/api/httpauth"
+	"github.com/dsa-uts/dsa-project/backend/internal/api/httpresponse"
 	"github.com/dsa-uts/dsa-project/backend/internal/store"
 	resource "github.com/dsa-uts/dsa-resource-spec"
-	"github.com/labstack/echo/v4"
 )
 
 func (h *Handler) GetValidation(
@@ -35,9 +35,9 @@ func (h *Handler) GetValidation(
 func validationReadError(err error) error {
 	switch {
 	case errors.Is(err, store.ErrNotFound):
-		return echo.NewHTTPError(http.StatusNotFound, "Request not found.")
+		return &httpresponse.Error{Code: http.StatusNotFound, Message: "Request not found."}
 	case errors.Is(err, store.ErrRequestNotCompleted):
-		return echo.NewHTTPError(http.StatusConflict, "Request has not completed.")
+		return &httpresponse.Error{Code: http.StatusConflict, Message: "Request has not completed."}
 	default:
 		return fmt.Errorf("read validation: %w", err)
 	}

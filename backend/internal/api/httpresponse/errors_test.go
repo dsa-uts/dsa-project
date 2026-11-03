@@ -7,8 +7,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
-
-	"github.com/labstack/echo/v4"
 )
 
 func TestErrorHandler(t *testing.T) {
@@ -18,19 +16,17 @@ func TestErrorHandler(t *testing.T) {
 		status  int
 		message string
 	}{
-		{"client error", echo.NewHTTPError(409, "Already taken."), 409, "Already taken."},
-		{"wrapped error", fmt.Errorf("request: %w", echo.NewHTTPError(404, "Missing.")), 404, "Missing."},
-		{"non-string message", echo.NewHTTPError(400, map[string]string{"private": "secret"}), 400, "Bad Request"},
+		{"client error", &Error{Code: 409, Message: "Already taken."}, 409, "Already taken."},
+		{"wrapped error", fmt.Errorf("request: %w", &Error{Code: 404, Message: "Missing."}), 404, "Missing."},
 		{"internal error", errors.New("database secret"), 500, "Internal Server Error"},
-		{"HTTP server error", echo.NewHTTPError(503, "upstream secret"), 503, "Service Unavailable"},
+		{"HTTP server error", &Error{Code: 503, Message: "upstream secret"}, 503, "Service Unavailable"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			for _, method := range []string{http.MethodGet, http.MethodHead} {
 				t.Run(method, func(t *testing.T) {
 					rec := httptest.NewRecorder()
-					c := echo.New().
-						NewContext(httptest.NewRequest(method, "/api/example", nil), rec)
-					ErrorHandler(tc.err, c)
+					req := httptest.NewRequest(method, "/api/example", nil)
+					ErrorHandler(rec, req, tc.err)
 					if rec.Code != tc.status || rec.Header().Get("Cache-Control") != "no-store" {
 						t.Fatalf("status=%d headers=%v", rec.Code, rec.Header())
 					}
@@ -54,14 +50,29 @@ func TestErrorHandler(t *testing.T) {
 	}
 }
 
-func TestErrorHandlerPreservesCommittedResponse(t *testing.T) {
-	rec := httptest.NewRecorder()
-	c := echo.New().NewContext(httptest.NewRequest(http.MethodGet, "/api/example", nil), rec)
-	if err := c.String(http.StatusAccepted, "already written"); err != nil {
-		t.Fatal(err)
-	}
-	ErrorHandler(errors.New("late error"), c)
-	if rec.Code != http.StatusAccepted || rec.Body.String() != "already written" {
-		t.Fatalf("overwrote committed response: %d %s", rec.Code, rec.Body)
+func TestResponseErrors(t *testing.T) {
+	for _, committed := range []bool{false, true} {
+		t.Run(fmt.Sprint(committed), func(t *testing.T) {
+			rec := httptest.NewRecorder()
+			req := httptest.NewRequest(http.MethodGet, "/api/example", nil)
+			handler := TrackResponse(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if committed {
+					w.WriteHeader(http.StatusAccepted)
+					_, _ = w.Write([]byte("already written"))
+				}
+				ErrorHandler(w, r, errors.New("encoding or write failure"))
+			}))
+			handler.ServeHTTP(rec, req)
+			if committed {
+				if rec.Code != http.StatusAccepted || rec.Body.String() != "already written" {
+					t.Fatalf("overwrote committed response: %d %s", rec.Code, rec.Body)
+				}
+			} else {
+				if rec.Code != http.StatusInternalServerError ||
+					rec.Body.String() != "{\"code\":500,\"message\":\"Internal Server Error\"}\n" {
+					t.Fatalf("unexpected error response: %d %s", rec.Code, rec.Body)
+				}
+			}
+		})
 	}
 }

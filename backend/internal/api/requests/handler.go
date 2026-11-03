@@ -8,9 +8,9 @@ import (
 
 	"github.com/dsa-uts/dsa-project/backend/internal/api/generated"
 	"github.com/dsa-uts/dsa-project/backend/internal/api/httpauth"
+	"github.com/dsa-uts/dsa-project/backend/internal/api/httpresponse"
 	"github.com/dsa-uts/dsa-project/backend/internal/store"
 	"github.com/google/uuid"
-	"github.com/labstack/echo/v4"
 )
 
 type Handler struct{ requests *store.RequestStore }
@@ -34,13 +34,22 @@ func (h *Handler) CreateValidation(
 		var err error
 		files, hash, err = readUpload(req.MultipartBody)
 		if errors.Is(err, errFilesTooLarge) {
-			return nil, echo.NewHTTPError(http.StatusBadRequest, errFilesTooLarge.Error())
+			return nil, &httpresponse.Error{
+				Code:    http.StatusBadRequest,
+				Message: errFilesTooLarge.Error(),
+			}
 		}
 		if err != nil {
-			return nil, echo.NewHTTPError(http.StatusUnprocessableEntity, err.Error())
+			return nil, &httpresponse.Error{
+				Code:    http.StatusUnprocessableEntity,
+				Message: err.Error(),
+			}
 		}
 	default:
-		return nil, echo.NewHTTPError(http.StatusBadRequest, "Request body is required.")
+		return nil, &httpresponse.Error{
+			Code:    http.StatusBadRequest,
+			Message: "Request body is required.",
+		}
 	}
 	currentUser := httpauth.Actor(ctx)
 	result, err := h.requests.CreateValidation(
@@ -54,14 +63,20 @@ func (h *Handler) CreateValidation(
 	)
 	switch {
 	case errors.Is(err, store.ErrNotFound):
-		return nil, echo.NewHTTPError(http.StatusNotFound, "Project or Submission not found.")
+		return nil, &httpresponse.Error{
+			Code:    http.StatusNotFound,
+			Message: "Project or Submission not found.",
+		}
 	case errors.Is(err, store.ErrSubmissionOwner):
-		return nil, echo.NewHTTPError(http.StatusForbidden, "Submission belongs to another user.")
+		return nil, &httpresponse.Error{
+			Code:    http.StatusForbidden,
+			Message: "Submission belongs to another user.",
+		}
 	case errors.Is(err, store.ErrSubmissionScope):
-		return nil, echo.NewHTTPError(
-			http.StatusUnprocessableEntity,
-			"Submission must belong to this Project and have kind validation.",
-		)
+		return nil, &httpresponse.Error{
+			Code:    http.StatusUnprocessableEntity,
+			Message: "Submission must belong to this Project and have kind validation.",
+		}
 	case err != nil:
 		return nil, fmt.Errorf("create validation: %w", err)
 	}
@@ -80,13 +95,16 @@ func (h *Handler) ListValidation(
 	params := req.Params
 	// OpenAPI validates individual values; cross-parameter exclusions live here.
 	if params.Next != nil && params.Prev != nil {
-		return nil, echo.NewHTTPError(http.StatusBadRequest, "Specify only one of next and prev.")
+		return nil, &httpresponse.Error{
+			Code:    http.StatusBadRequest,
+			Message: "Specify only one of next and prev.",
+		}
 	}
 	if params.Status != nil && params.State != nil {
-		return nil, echo.NewHTTPError(
-			http.StatusBadRequest,
-			"Specify only one of status and state.",
-		)
+		return nil, &httpresponse.Error{
+			Code:    http.StatusBadRequest,
+			Message: "Specify only one of status and state.",
+		}
 	}
 	actor := httpauth.Actor(ctx)
 	page, err := h.requests.ListValidation(
@@ -99,7 +117,7 @@ func (h *Handler) ListValidation(
 		},
 	)
 	if errors.Is(err, store.ErrNotFound) {
-		return nil, echo.NewHTTPError(http.StatusNotFound, "Project not found.")
+		return nil, &httpresponse.Error{Code: http.StatusNotFound, Message: "Project not found."}
 	}
 	if err != nil {
 		return nil, fmt.Errorf("list validation: %w", err)

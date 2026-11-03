@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"net"
+	"net/http"
 	"time"
 
 	"github.com/dsa-uts/dsa-project/backend/internal/config"
@@ -51,6 +52,6 @@ func run() error {
 		}
 	}
 
-	e := server.New(db, source)
-	return e.Start(net.JoinHostPort("", cfg.Port))
+	srv := &http.Server{Addr: net.JoinHostPort("", cfg.Port), Handler: server.New(db, source)}
+	return srv.ListenAndServe()
 }

@@ -7,9 +7,9 @@ import (
 
 	"github.com/dsa-uts/dsa-project/backend/internal/api/generated"
 	"github.com/dsa-uts/dsa-project/backend/internal/api/httpauth"
+	"github.com/dsa-uts/dsa-project/backend/internal/api/httpresponse"
 	"github.com/dsa-uts/dsa-project/backend/internal/auth"
 	"github.com/dsa-uts/dsa-project/backend/internal/store"
-	"github.com/labstack/echo/v4"
 )
 
 // Handler implements Admin User Account operations.
@@ -60,10 +60,10 @@ func (h *Handler) CreateUserAccount(
 	}
 	if err := h.auth.CreateUser(ctx, user); err != nil {
 		if errors.Is(err, store.ErrUseridTaken) {
-			return nil, echo.NewHTTPError(
-				http.StatusConflict,
-				"This User ID is already taken.",
-			)
+			return nil, &httpresponse.Error{
+				Code:    http.StatusConflict,
+				Message: "This User ID is already taken.",
+			}
 		}
 		return nil, err
 	}
@@ -89,15 +89,15 @@ func (h *Handler) UpdateUserAccount(
 	user, err := h.auth.UpdateUser(ctx, actor.ID, req.UserId, update)
 	switch {
 	case errors.Is(err, store.ErrNotFound):
-		return nil, echo.NewHTTPError(
-			http.StatusNotFound,
-			"User Account not found.",
-		)
+		return nil, &httpresponse.Error{
+			Code:    http.StatusNotFound,
+			Message: "User Account not found.",
+		}
 	case errors.Is(err, store.ErrCannotModifySelf):
-		return nil, echo.NewHTTPError(
-			http.StatusConflict,
-			"You cannot modify yourself.",
-		)
+		return nil, &httpresponse.Error{
+			Code:    http.StatusConflict,
+			Message: "You cannot modify yourself.",
+		}
 	case err != nil:
 		return nil, err
 	}
@@ -110,10 +110,10 @@ func (h *Handler) ReorderUserAccounts(
 ) (generated.ReorderUserAccountsResponseObject, error) {
 	err := h.auth.ReorderUsers(ctx, req.Body.UserIds)
 	if errors.Is(err, store.ErrUserIDsMismatch) {
-		return nil, echo.NewHTTPError(
-			http.StatusUnprocessableEntity,
-			"User Accounts changed. Reload the complete list and reorder again.",
-		)
+		return nil, &httpresponse.Error{
+			Code:    http.StatusUnprocessableEntity,
+			Message: "User Accounts changed. Reload the complete list and reorder again.",
+		}
 	}
 	if err != nil {
 		return nil, err

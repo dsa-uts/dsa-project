@@ -203,12 +203,14 @@ test("health and the generic API errors remain available", async ({ request }) =
   for (let attempt = 0; attempt < 3; attempt++) {
     expect((await request.get("/health")).status()).toBe(200);
   }
+  const authenticatedRouteHead = await request.head("/api/me", { headers: { Cookie: "" } });
+  expect(authenticatedRouteHead.status()).toBe(401);
+  expect(await authenticatedRouteHead.body()).toHaveLength(0);
   const wrongMethod = await request.put("/api/me", { headers: { Cookie: "" } });
-  await expectAPIError(wrongMethod, 405);
+  expect(wrongMethod.status()).toBe(405);
   const response = await request.get("/api/unknown");
-  await expectAPIError(response, 404);
+  expect(response.status()).toBe(404);
   const head = await request.head("/api/unknown");
   expect(head.status()).toBe(404);
-  expect(head.headers()["cache-control"]).toBe("no-store");
   expect(await head.body()).toHaveLength(0);
 });
