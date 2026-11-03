@@ -38,7 +38,7 @@ func NewJobQueueStore(db *bun.DB) *JobQueueStore {
 
 func (j *JobQueueStore) FetchJobs(ctx context.Context, status queuestatus.Status, limit int32) ([]model.JobQueue, error) {
 	var jobs []model.JobQueue
-	err := j.db.NewSelect().Model(&jobs).Where("status = ?", status).Limit(int(limit)).Scan(ctx)
+	err := j.db.NewSelect().Model(&jobs).Where("status = ?", status).Limit(int64(limit)).Scan(ctx)
 	return jobs, err
 }
 
@@ -46,7 +46,7 @@ func (j *JobQueueStore) FetchPendingJobsAndMarkFetched(ctx context.Context, limi
 	var jobs []model.JobQueue
 	err := j.db.RunInTx(ctx, &sql.TxOptions{}, func(ctx context.Context, tx bun.Tx) error {
 		// Fetch pending jobs
-		err := tx.NewSelect().Model(&jobs).Where("status = ?", queuestatus.Pending).Limit(int(limit)).Scan(ctx)
+		err := tx.NewSelect().Model(&jobs).Where("status = ?", queuestatus.Pending).Limit(int64(limit)).Scan(ctx)
 		if err != nil {
 			return fmt.Errorf("failed to fetch pending jobs: %w", err)
 		}
@@ -73,7 +73,7 @@ func (j *JobQueueStore) FetchPendingJobsAndMarkFetched(ctx context.Context, limi
 
 func (j *JobQueueStore) FetchResults(ctx context.Context, limit int32) ([]model.ResultQueue, error) {
 	var results []model.ResultQueue
-	err := j.db.NewSelect().Model(&results).Relation("Job").Limit(int(limit)).Scan(ctx)
+	err := j.db.NewSelect().Model(&results).Relation("Job").Limit(int64(limit)).Scan(ctx)
 	return results, err
 }
 
