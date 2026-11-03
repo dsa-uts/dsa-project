@@ -2,60 +2,42 @@ package api
 
 import (
 	"fmt"
-	"mime"
+	"net/http"
 
 	"github.com/dsa-uts/dsa-project/backend/internal/api/generated"
 	"github.com/dsa-uts/dsa-project/backend/internal/api/httpauth"
+	"github.com/dsa-uts/dsa-project/backend/internal/api/httpresponse"
 	"github.com/dsa-uts/dsa-project/backend/internal/resourceimport"
 	"github.com/dsa-uts/dsa-project/backend/internal/store"
-	"github.com/labstack/echo/v4"
 )
 
-// Register assembles API handlers, authorization, and contract validation.
-func Register(
-	e *echo.Echo,
+// NewHandler assembles API handlers, authorization, and contract validation.
+func NewHandler(
 	accountStore *store.AccountStore,
 	projectStore *store.ProjectStore,
 	requestStore *store.RequestStore,
 	source *resourceimport.Source,
-) {
+) http.Handler {
 	spec, err := generated.GetSpec()
 	if err != nil {
 		panic(fmt.Sprintf("load embedded openapi spec: %v", err))
 	}
 	// Deployment hosts are not part of request validation.
 	spec.Servers = nil
-
 	if err := httpauth.ValidateAccessPolicies(spec); err != nil {
 		panic(fmt.Sprintf("invalid API access policy: %v", err))
 	}
-	validator := openAPIValidator(spec, httpauth.Authenticate(accountStore))
-	// Group middleware wraps every generated route, before generated parameter
-	// binding. No operation ID list needs to track future endpoints.
-	g := e.Group("", noStore, normalizeContentType, validator)
-	generated.RegisterHandlers(
-		g,
-		generated.NewStrictHandler(
-			newHandler(accountStore, projectStore, requestStore, source),
-			nil,
-		),
+	strict := generated.NewStrictHandlerWithOptions(
+		newHandler(accountStore, projectStore, requestStore, source),
+		nil,
+		generated.StrictHTTPServerOptions{
+			RequestErrorHandlerFunc:  httpresponse.BadRequest,
+			ResponseErrorHandlerFunc: httpresponse.ErrorHandler,
+		},
 	)
-}
-
-func noStore(next echo.HandlerFunc) echo.HandlerFunc {
-	return func(c echo.Context) error {
-		c.Response().Header().Set("Cache-Control", "no-store")
-		return next(c)
-	}
-}
-
-// Normalize media type casing before OpenAPI validation and generated body dispatch.
-func normalizeContentType(next echo.HandlerFunc) echo.HandlerFunc {
-	return func(c echo.Context) error {
-		req := c.Request()
-		if media, params, err := mime.ParseMediaType(req.Header.Get("Content-Type")); err == nil {
-			req.Header.Set("Content-Type", mime.FormatMediaType(media, params))
-		}
-		return next(c)
-	}
+	handler := generated.HandlerWithOptions(strict, generated.StdHTTPServerOptions{
+		Middlewares:      []generated.MiddlewareFunc{httpresponse.TrackResponse},
+		ErrorHandlerFunc: httpresponse.BadRequest,
+	})
+	return validateAPI(spec, accountStore, handler)
 }

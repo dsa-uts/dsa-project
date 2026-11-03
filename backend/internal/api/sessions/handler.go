@@ -9,9 +9,9 @@ import (
 
 	"github.com/dsa-uts/dsa-project/backend/internal/api/generated"
 	"github.com/dsa-uts/dsa-project/backend/internal/api/httpauth"
+	"github.com/dsa-uts/dsa-project/backend/internal/api/httpresponse"
 	"github.com/dsa-uts/dsa-project/backend/internal/auth"
 	"github.com/dsa-uts/dsa-project/backend/internal/store"
-	"github.com/labstack/echo/v4"
 )
 
 // Handler implements session and current User Account operations.
@@ -45,7 +45,10 @@ func (h *Handler) CreateSession(
 	}
 	passwordOK := auth.VerifyPassword(hash, req.Body.Password)
 	if !loginCapable || !passwordOK {
-		return nil, echo.NewHTTPError(http.StatusUnauthorized, "Invalid userid or password.")
+		return nil, &httpresponse.Error{
+			Code:    http.StatusUnauthorized,
+			Message: "Invalid userid or password.",
+		}
 	}
 
 	now := time.Now()
@@ -62,7 +65,10 @@ func (h *Handler) CreateSession(
 		now.Add(auth.SessionLifetime*time.Second),
 	); err != nil {
 		if errors.Is(err, store.ErrNotFound) {
-			return nil, echo.NewHTTPError(http.StatusUnauthorized, "Invalid userid or password.")
+			return nil, &httpresponse.Error{
+				Code:    http.StatusUnauthorized,
+				Message: "Invalid userid or password.",
+			}
 		}
 		return nil, fmt.Errorf("persist session: %w", err)
 	}

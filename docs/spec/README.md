@@ -148,7 +148,7 @@ flowchart LR
 - Ingress: k3s 内蔵 Traefik (TLS 終端、Frontend / Backend への振り分け)
 - フロントエンド: React (Vite) + TypeScript + TailwindCSS
 - バックエンド: Go
-  - バックエンドフレームワーク: [Echo](https://github.com/labstack/echo)
+  - バックエンド HTTP: Go 標準の `net/http` と `http.ServeMux`
   - ORM: [Bun](https://github.com/uptrace/bun)
   - Validator: [GoPlayground/validator](https://github.com/go-playground/validator)
 - 認証: Backend-managed session cookie

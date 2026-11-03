@@ -3,14 +3,15 @@ package projects
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"sort"
 
 	"github.com/dsa-uts/dsa-project/backend/internal/api/generated"
 	"github.com/dsa-uts/dsa-project/backend/internal/api/httpauth"
+	"github.com/dsa-uts/dsa-project/backend/internal/api/httpresponse"
 	"github.com/dsa-uts/dsa-project/backend/internal/resourceimport"
 	"github.com/dsa-uts/dsa-project/backend/internal/store"
-	"github.com/labstack/echo/v4"
 	"golang.org/x/mod/semver"
 )
 
@@ -73,7 +74,7 @@ func (h *Handler) GetProject(
 		return nil, err
 	}
 	if p == nil {
-		return nil, echo.NewHTTPError(http.StatusNotFound, "Project not found.")
+		return nil, &httpresponse.Error{Code: http.StatusNotFound, Message: "Project not found."}
 	}
 	detail := projectDetail(p)
 	return generated.GetProject200JSONResponse(detail), err
@@ -119,10 +120,10 @@ func (h *Handler) UpdateProjects(
 	updates := make([]store.ProjectUpdate, 0, len(req.Body.Projects))
 	for _, p := range req.Body.Projects {
 		if p.PublishedAt != nil && p.Deadline != nil && p.PublishedAt.After(*p.Deadline) {
-			return nil, echo.NewHTTPError(
-				http.StatusUnprocessableEntity,
-				"Deadline must not precede publication",
-			)
+			return nil, &httpresponse.Error{
+				Code:    http.StatusUnprocessableEntity,
+				Message: "Deadline must not precede publication",
+			}
 		}
 		updates = append(
 			updates,
@@ -131,10 +132,10 @@ func (h *Handler) UpdateProjects(
 	}
 	err := h.projects.UpdateProjects(ctx, updates)
 	if errors.Is(err, store.ErrProjectIDsMismatch) {
-		return nil, echo.NewHTTPError(
-			http.StatusConflict,
-			"Projects changed. Reload the complete list and save again.",
-		)
+		return nil, &httpresponse.Error{
+			Code:    http.StatusConflict,
+			Message: "Projects changed. Reload the complete list and save again.",
+		}
 	}
 	if err != nil {
 		return nil, err
@@ -148,10 +149,10 @@ func (h *Handler) ImportResource(
 ) (generated.ImportResourceResponseObject, error) {
 	id, version := req.Body.ResourceId, req.Body.Version
 	if !resourceimport.ValidVersion(version) {
-		return nil, echo.NewHTTPError(
-			http.StatusUnprocessableEntity,
-			"Version must be a formal vMAJOR.MINOR.PATCH.",
-		)
+		return nil, &httpresponse.Error{
+			Code:    http.StatusUnprocessableEntity,
+			Message: "Version must be a formal vMAJOR.MINOR.PATCH.",
+		}
 	}
 	current, err := h.projects.CurrentVersion(ctx, id)
 	if err != nil {
@@ -189,24 +190,23 @@ func importResponse(p *store.ProjectLatest, changed bool) generated.ImportResour
 func importError(err error) error {
 	switch {
 	case errors.Is(err, store.ErrOlderResourceVersion):
-		return echo.NewHTTPError(
-			http.StatusConflict,
-			"The requested Version is older than the current Version.",
-		)
+		return &httpresponse.Error{
+			Code:    http.StatusConflict,
+			Message: "The requested Version is older than the current Version.",
+		}
 	case errors.Is(err, resourceimport.ErrNotFound):
-		return echo.NewHTTPError(
-			http.StatusNotFound,
-			"The requested Resource Version is not in the index.",
-		)
+		return &httpresponse.Error{
+			Code:    http.StatusNotFound,
+			Message: "The requested Resource Version is not in the index.",
+		}
 	case errors.Is(err, resourceimport.ErrInvalid),
 		errors.Is(err, resourceimport.ErrHashMismatch):
-		return echo.NewHTTPError(
-			http.StatusUnprocessableEntity,
-			"Resource validation failed.",
-		)
+		return &httpresponse.Error{
+			Code:    http.StatusUnprocessableEntity,
+			Message: "Resource validation failed.",
+		}
 	case errors.Is(err, resourceimport.ErrUnavailable):
-		return echo.NewHTTPError(http.StatusServiceUnavailable).
-			SetInternal(err)
+		return fmt.Errorf("%w: %w", &httpresponse.Error{Code: http.StatusServiceUnavailable}, err)
 	default:
 		return err
 	}

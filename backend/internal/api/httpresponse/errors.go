@@ -1,57 +1,91 @@
 package httpresponse
 
 import (
+	"encoding/json"
 	"errors"
 	"log/slog"
 	"net/http"
 
 	"github.com/dsa-uts/dsa-project/backend/internal/api/generated"
-	"github.com/labstack/echo/v4"
 )
 
-func ErrorHandler(err error, c echo.Context) {
-	status := http.StatusInternalServerError
-	message := http.StatusText(status)
+// Error carries an expected HTTP failure from an API handler or authentication.
+type Error struct {
+	Code    int
+	Message string
+}
 
-	if httpErr, ok := errors.AsType[*echo.HTTPError](err); ok {
-		status = httpErr.Code
-		message = http.StatusText(status)
+func (e *Error) Error() string { return e.Message }
 
-		// Don't expose information about internal server error
-		if status < 500 {
-			if text, ok := httpErr.Message.(string); ok {
-				message = text
-			}
-		}
-	}
-
-	if status >= 500 {
-		slog.ErrorContext(c.Request().Context(), "request failed",
-			"method", c.Request().Method,
-			"path", c.Request().URL.Path,
-			"status", status,
-			"error", err,
-		)
-	}
-
-	// Don't overwrite if response is already commited
-	if c.Response().Committed {
+func ErrorHandler(w http.ResponseWriter, r *http.Request, err error) {
+	if tracked, ok := w.(*responseWriter); ok && tracked.written {
+		LogError(w, r, err)
 		return
 	}
-
-	c.Response().Header().Set("Cache-Control", "no-store")
-
-	var writerErr error
-	if c.Request().Method == http.MethodHead {
-		writerErr = c.NoContent(status)
-	} else {
-		writerErr = c.JSON(status, generated.Error{
-			Code:    status,
-			Message: message,
-		})
+	status := http.StatusInternalServerError
+	message := http.StatusText(status)
+	if httpErr, ok := errors.AsType[*Error](err); ok {
+		status = httpErr.Code
+		message = http.StatusText(status)
+		if status < 500 && httpErr.Message != "" {
+			message = httpErr.Message
+		}
 	}
-	if writerErr != nil {
-		slog.ErrorContext(c.Request().Context(),
-			"writer error response", "error", writerErr)
+	if status >= 500 {
+		LogError(w, r, err)
+	}
+	w.Header().Set("Cache-Control", "no-store")
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	if r.Method == http.MethodHead {
+		return
+	}
+	if err := json.NewEncoder(w).
+		Encode(generated.Error{Code: status, Message: message}); err != nil {
+		LogError(w, r, err)
 	}
 }
+
+// LogError handles response write failures without appending another response.
+func LogError(_ http.ResponseWriter, r *http.Request, err error) {
+	slog.ErrorContext(
+		r.Context(),
+		"request failed",
+		"method",
+		r.Method,
+		"path",
+		r.URL.Path,
+		"error",
+		err,
+	)
+}
+
+func BadRequest(w http.ResponseWriter, r *http.Request, err error) {
+	ErrorHandler(w, r, &Error{Code: http.StatusBadRequest, Message: err.Error()})
+}
+
+// TrackResponse records whether the generated response writer has committed headers.
+func TrackResponse(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		next.ServeHTTP(&responseWriter{ResponseWriter: w}, r)
+	})
+}
+
+type responseWriter struct {
+	http.ResponseWriter
+	written bool
+}
+
+func (w *responseWriter) WriteHeader(status int) {
+	if !w.written {
+		w.written = true
+		w.ResponseWriter.WriteHeader(status)
+	}
+}
+
+func (w *responseWriter) Write(data []byte) (int, error) {
+	w.WriteHeader(http.StatusOK)
+	return w.ResponseWriter.Write(data)
+}
+
+func (w *responseWriter) Unwrap() http.ResponseWriter { return w.ResponseWriter }

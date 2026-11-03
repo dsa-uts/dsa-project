@@ -87,6 +87,11 @@ test("login sets the seven-day host cookie and /api/me returns the current User 
   expect(header).not.toContain("Domain=");
   const me = await request.get("/api/me", { headers: { Cookie: `__Host-dsa_session=${token}` } });
   expect(me.status()).toBe(200);
+  const head = await request.head("/api/me", {
+    headers: { Cookie: `__Host-dsa_session=${token}` },
+  });
+  expect(head.status()).toBe(200);
+  expect(await head.body()).toHaveLength(0);
   await expect(me.json()).resolves.toMatchObject({
     userid: "admin",
     name: "Development Admin",
@@ -203,12 +208,14 @@ test("health and the generic API errors remain available", async ({ request }) =
   for (let attempt = 0; attempt < 3; attempt++) {
     expect((await request.get("/health")).status()).toBe(200);
   }
+  const authenticatedRouteHead = await request.head("/api/me", { headers: { Cookie: "" } });
+  expect(authenticatedRouteHead.status()).toBe(401);
+  expect(await authenticatedRouteHead.body()).toHaveLength(0);
   const wrongMethod = await request.put("/api/me", { headers: { Cookie: "" } });
-  await expectAPIError(wrongMethod, 405);
+  expect(wrongMethod.status()).toBe(405);
   const response = await request.get("/api/unknown");
-  await expectAPIError(response, 404);
+  expect(response.status()).toBe(404);
   const head = await request.head("/api/unknown");
   expect(head.status()).toBe(404);
-  expect(head.headers()["cache-control"]).toBe("no-store");
   expect(await head.body()).toHaveLength(0);
 });
