@@ -35,13 +35,9 @@ func NewHandler(
 			ResponseErrorHandlerFunc: httpresponse.ErrorHandler,
 		},
 	)
-	return generated.HandlerWithOptions(strict, generated.StdHTTPServerOptions{
-		BaseRouter: &validatingMux{
-			ServeMux: http.NewServeMux(),
-			spec:     spec,
-			accounts: accountStore,
-		},
+	handler := generated.HandlerWithOptions(strict, generated.StdHTTPServerOptions{
 		Middlewares:      []generated.MiddlewareFunc{httpresponse.TrackResponse},
 		ErrorHandlerFunc: httpresponse.BadRequest,
 	})
+	return validateAPI(spec, accountStore, handler)
 }

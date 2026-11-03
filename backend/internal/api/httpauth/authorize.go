@@ -25,17 +25,13 @@ type UserInfo struct {
 
 // Authenticate runs during security validation, before parameters and bodies.
 // ValidateAccessPolicies must have accepted the spec before registering routes.
-func Authenticate(
-	accountStore *store.AccountStore,
-	w http.ResponseWriter,
-) openapi3filter.AuthenticationFunc {
+func Authenticate(accountStore *store.AccountStore) openapi3filter.AuthenticationFunc {
 	return func(ctx context.Context, input *openapi3filter.AuthenticationInput) error {
 		r := input.RequestValidationInput.Request
 		if input.SecuritySchemeName != "sessionAuth" {
 			return fmt.Errorf("invalid API access policy: %s", input.SecuritySchemeName)
 		}
 		unauthorized := func() error {
-			w.Header().Set("Set-Cookie", ClearedSessionCookie())
 			return &httpresponse.Error{
 				Code:    http.StatusUnauthorized,
 				Message: "Authentication is required.",

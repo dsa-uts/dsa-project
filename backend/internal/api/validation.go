@@ -1,10 +1,10 @@
 package api
 
 import (
+	"context"
 	"errors"
 	"mime"
 	"net/http"
-	"strings"
 
 	"github.com/dsa-uts/dsa-project/backend/internal/api/httpauth"
 	"github.com/dsa-uts/dsa-project/backend/internal/api/httpresponse"
@@ -13,62 +13,61 @@ import (
 	"github.com/getkin/kin-openapi/openapi3filter"
 	"github.com/getkin/kin-openapi/routers"
 	"github.com/google/uuid"
+	middleware "github.com/oapi-codegen/nethttp-middleware"
 )
 
 func init() {
 	openapi3.DefineStringFormatValidator("uuid", openapi3.NewCallbackValidator(uuid.Validate))
 }
 
-// validatingMux wraps generated routes before parameter binding, using ServeMux's
-// own path matching so authentication and dispatch always agree on the operation.
-type validatingMux struct {
-	*http.ServeMux
-	spec     *openapi3.T
-	accounts *store.AccountStore
-}
-
-func (m *validatingMux) HandleFunc(
-	pattern string,
-	handler func(http.ResponseWriter, *http.Request),
-) {
-	method, path, _ := strings.Cut(pattern, " ")
-	pathItem := m.spec.Paths.Value(path)
-	route := &routers.Route{
-		Spec:      m.spec,
-		Path:      path,
-		PathItem:  pathItem,
-		Method:    method,
-		Operation: pathItem.GetOperation(method),
+func validateAPI(spec *openapi3.T, accounts *store.AccountStore, next http.Handler) http.Handler {
+	// ServeMux accepts HEAD wherever GET is registered; validate it with the same policy.
+	for _, item := range spec.Paths.Map() {
+		if item.Head == nil {
+			item.Head = item.Get
+		}
 	}
-	m.ServeMux.HandleFunc(pattern, func(w http.ResponseWriter, r *http.Request) {
+	handler := middleware.OapiRequestValidatorWithOptions(spec, &middleware.Options{
+		Options: openapi3filter.Options{
+			AuthenticationFunc: httpauth.Authenticate(accounts),
+		},
+		ErrorHandlerWithOpts: validationError,
+	})(next)
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Cache-Control", "no-store")
 		if media, params, err := mime.ParseMediaType(r.Header.Get("Content-Type")); err == nil {
 			r.Header.Set("Content-Type", mime.FormatMediaType(media, params))
 		}
-		params := make(map[string]string)
-		for _, definitions := range []openapi3.Parameters{pathItem.Parameters, route.Operation.Parameters} {
-			for _, definition := range definitions {
-				if p := definition.Value; p.In == openapi3.ParameterInPath {
-					params[p.Name] = r.PathValue(p.Name)
-				}
-			}
-		}
-		input := &openapi3filter.RequestValidationInput{
-			Request:    r,
-			PathParams: params,
-			Route:      route,
-			Options: &openapi3filter.Options{
-				AuthenticationFunc: httpauth.Authenticate(m.accounts, w),
-			},
-		}
-		if err := openapi3filter.ValidateRequest(r.Context(), input); err != nil {
-			if _, ok := errors.AsType[*openapi3filter.SecurityRequirementsError](err); ok {
-				httpresponse.ErrorHandler(w, r, err)
-			} else {
-				httpresponse.BadRequest(w, r, err)
-			}
-			return
-		}
-		handler(w, r)
+		handler.ServeHTTP(w, r)
 	})
+}
+
+func validationError(
+	_ context.Context,
+	err error,
+	w http.ResponseWriter,
+	r *http.Request,
+	opts middleware.ErrorHandlerOpts,
+) {
+	switch {
+	case errors.Is(err, routers.ErrMethodNotAllowed):
+		// ErrorHandlerWithOpts suggests 404 for all route lookup failures.
+		http.Error(w, http.StatusText(http.StatusMethodNotAllowed), http.StatusMethodNotAllowed)
+	case errors.Is(err, routers.ErrPathNotFound):
+		http.NotFound(w, r)
+	default:
+		if _, ok := errors.AsType[*openapi3filter.SecurityRequirementsError](err); ok {
+			if failure, ok := errors.AsType[*httpresponse.Error](
+				err,
+			); ok &&
+				failure.Code == http.StatusUnauthorized {
+				w.Header().Set("Set-Cookie", httpauth.ClearedSessionCookie())
+			}
+			httpresponse.ErrorHandler(w, r, err)
+		} else if opts.StatusCode == http.StatusBadRequest {
+			httpresponse.BadRequest(w, r, err)
+		} else {
+			httpresponse.ErrorHandler(w, r, err)
+		}
+	}
 }

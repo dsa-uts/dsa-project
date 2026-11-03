@@ -10,8 +10,8 @@
   - `frontend/src/api/schema.d.ts` — openapi-typescript
 - 再生成コマンドは `task codegen:generate` (生成物はコミットする)。
 - spec と生成コードのドリフトは `task codegen:check` が検出する(CI の `check` job でも実行)。openapi.yaml を変更したら両側を再生成してからコミットすること。
-- backend のハンドラは `StrictServerInterface` の実装として書く。リクエストの形式検証(400)はルートに組み込んだ kin-openapi が spec から自動で行うため、ハンドラ内に手書きの形式チェックを重複させない。
-- ルータが返す 404・405 は標準 `http.ServeMux` に任せ、JSON 形式を保証しない。ハンドラ・認証・入力検証のエラーは共通の JSON 形式で返す。ライブラリ由来の詳細なエラー文言は契約に含めない。
+- backend のハンドラは `StrictServerInterface` の実装として書く。リクエストの形式検証(400)は `nethttp-middleware` (kin-openapi) が spec から自動で行うため、ハンドラ内に手書きの形式チェックを重複させない。
+- OpenAPI にないパス・メソッドの 404・405 は `nethttp-middleware` の入口で返し、JSON 形式を保証しない。ハンドラ・認証・入力検証のエラーは共通の JSON 形式で返す。ライブラリ由来の詳細なエラー文言は契約に含めない。
 
 ## DB スキーマと migration
 

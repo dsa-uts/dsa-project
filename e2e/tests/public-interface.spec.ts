@@ -87,6 +87,11 @@ test("login sets the seven-day host cookie and /api/me returns the current User 
   expect(header).not.toContain("Domain=");
   const me = await request.get("/api/me", { headers: { Cookie: `__Host-dsa_session=${token}` } });
   expect(me.status()).toBe(200);
+  const head = await request.head("/api/me", {
+    headers: { Cookie: `__Host-dsa_session=${token}` },
+  });
+  expect(head.status()).toBe(200);
+  expect(await head.body()).toHaveLength(0);
   await expect(me.json()).resolves.toMatchObject({
     userid: "admin",
     name: "Development Admin",
