@@ -8,8 +8,10 @@
    # nvm(nodeのバージョンマネージャー)をインストール
    # ref: https://github.com/nvm-sh/nvm?tab=readme-ov-file#installing-and-updating
    curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.1/install.sh | bash
-   # nvmを用いて最新のnodeをインストール
-   nvm install node
+   # dsa-frontendで、.nvmrcに指定したNodeをインストール
+   nvm install
+   nvm use
+   npm install -g npm@12.2.2
    # バージョン確認
    node -v
    npm -v
@@ -27,10 +29,11 @@
 4. アプリケーションの起動(dsa-projectのdocker起動時に起動されるので基本的には不要)
    ```sh
    # ディレクトリ移動
-   cd dsa-front
+   cd dsa-frontend
 
    # スタート
-   npm start
+   npm ci
+   npm run dev
    ```
 
 ## ホスト環境でIntellisenseなどを有効にする方法(環境をいじらずに)
