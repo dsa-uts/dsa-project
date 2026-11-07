@@ -54,7 +54,7 @@ const base64UrlDecode = (str: string): string => {
         .join('')
     );
   } catch (e) {
-    throw new Error('Failed to decode base64url string');
+    throw new Error('Failed to decode base64url string', { cause: e });
   }
 };
 
@@ -68,7 +68,7 @@ const parseJWTPayload = (token: string): JWTPayload => {
     const payload = base64UrlDecode(parts[1]);
     return JSON.parse(payload) as JWTPayload;
   } catch (e) {
-    throw new Error('Failed to parse JWT token');
+    throw new Error('Failed to parse JWT token', { cause: e });
   }
 };
 
