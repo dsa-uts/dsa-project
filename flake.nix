@@ -20,7 +20,7 @@
             go_1_26
             air
             go-swag
-            nodejs_24
+            nodejs_26
             rustc
             cargo
             stdenv.cc
