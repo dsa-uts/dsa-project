@@ -566,10 +566,10 @@ func (executor *JobExecutor) executeJudgeTasks(ctx context.Context, job *model.J
 			}
 		}
 
-		if judgeTask.StderrPath != "" {
-			if !match.Match(string(expectedStderrContent), watchdogOutput.Stderr) {
-				resultStatus = resultStatus.Max(requeststatus.WA)
-			}
+		// If no expected stderr file is provided, stderr is expected to be empty
+		// (expectedStderrContent remains empty in that case).
+		if !match.Match(string(expectedStderrContent), watchdogOutput.Stderr) {
+			resultStatus = resultStatus.Max(requeststatus.WA)
 		}
 
 		// Append to judgeLog
