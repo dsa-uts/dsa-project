@@ -2,7 +2,7 @@
 FROM watchdog-builder AS builder
 
 # 実行ステージ
-FROM ubuntu:24.04
+FROM ubuntu:26.04
 
 # libc6-dev: for glibc
 # libasan8: for AddressSanitizer
